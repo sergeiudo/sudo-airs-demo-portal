@@ -17,6 +17,8 @@ const pageTransition = {
 }
 
 export function MainLayout({ children, viewKey }) {
+  const isIframeView = viewKey === 'claudeHooks'
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-base-950 grid-bg">
       {/* Sidebar */}
@@ -28,19 +30,25 @@ export function MainLayout({ children, viewKey }) {
 
         {/* View content */}
         <main className="flex-1 overflow-hidden relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={viewKey}
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              className="absolute inset-0 overflow-hidden"
-            >
+          {isIframeView ? (
+            <div className="absolute inset-0 overflow-hidden">
               {children}
-            </motion.div>
-          </AnimatePresence>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={viewKey}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={pageTransition}
+                className="absolute inset-0 overflow-hidden"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </main>
       </div>
     </div>
