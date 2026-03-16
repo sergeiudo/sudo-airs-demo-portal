@@ -312,20 +312,70 @@ No reboot required.
 
 ---
 
-## Updating the App (after a git push)
+## Deploying Code Changes
+
+### Workflow overview
+
+```
+Your laptop (local dev)
+    │
+    ├── make changes
+    ├── test locally with npm run dev
+    └── git commit && git push
+            │
+            ▼
+     GitHub (main branch)
+            │
+            ▼
+  EC2 server(s): git pull + rebuild
+```
+
+### Step 1 — On your laptop: commit and push
+
+```bash
+# In /Users/sudovenko/sudo-airs-local-demo-vertex-bedrock
+git add .
+git commit -m "your change description"
+git push
+```
+
+### Step 2 — On the EC2 server: pull and rebuild
+
+SSH in, then:
 
 ```bash
 cd /opt/sudo-airs-demo
 git pull
-npm install
-npm run build
+npm install          # only needed if package.json changed
+npm run build        # always rebuild the React frontend
 pm2 restart airs-server
 ```
 
-The scanner only needs restarting if `scanner_server.py` changed:
+If `scanner_server.py` changed:
 ```bash
 pm2 restart airs-scanner
 ```
+
+If Python dependencies changed (new packages in the venv):
+```bash
+airs-model-scanner-main/.venv/bin/pip install -r airs-model-scanner-main/requirements.txt
+pm2 restart airs-scanner
+```
+
+### Quick one-liner (frontend + server changes only)
+
+```bash
+cd /opt/sudo-airs-demo && git pull && npm run build && pm2 restart airs-server && echo "Deployed"
+```
+
+### Verify after deploy
+
+```bash
+curl -s http://localhost:3001/api/health
+pm2 status
+```
+
+> **Note:** Your local laptop runs `npm run dev` (Vite dev server on port 5173). The EC2 server serves the built `dist/` via Nginx. Always run `npm run build` on the server after pulling — the dev server output is never used in production.
 
 ---
 
