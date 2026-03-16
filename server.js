@@ -30,6 +30,7 @@ const VERTEX_MODELS = [
 
 // ─── AWS credential helper ────────────────────────────────────────────────────
 function awsCredentials() {
+  if (!process.env.AWS_ACCESS_KEY_ID) return undefined // use EC2 instance role / default provider chain
   const creds = {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -98,9 +99,10 @@ async function callVertexAI(prompt, modelId) {
 
 // ─── Bedrock helper ───────────────────────────────────────────────────────────
 function makeBedrockRuntime() {
+  const creds = awsCredentials()
   return new BedrockRuntimeClient({
     region: process.env.AWS_REGION || 'us-east-1',
-    credentials: awsCredentials(),
+    ...(creds && { credentials: creds }),
   })
 }
 
@@ -337,9 +339,10 @@ app.get('/api/models/vertex', (_req, res) => {
 // ─── GET /api/models/bedrock ──────────────────────────────────────────────────
 app.get('/api/models/bedrock', async (_req, res) => {
   try {
+    const creds = awsCredentials()
     const client = new BedrockClient({
       region: process.env.AWS_REGION || 'us-east-1',
-      credentials: awsCredentials(),
+      ...(creds && { credentials: creds }),
     })
     const cmd = new ListFoundationModelsCommand({ byOutputModality: 'TEXT' })
     const result = await client.send(cmd)
