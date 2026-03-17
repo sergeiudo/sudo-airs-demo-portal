@@ -75,7 +75,10 @@ html.light #root {
   color: #1a2035;
 }
 
-/* ── All base-9xx backgrounds → white / near-white ── */
+/* ── All base-8xx and base-9xx backgrounds → white / near-white ── */
+html.light [class*="bg-base-8"] {
+  background-color: #ffffff !important;
+}
 html.light [class*="bg-base-9"] {
   background-color: #ffffff !important;
 }
@@ -158,6 +161,11 @@ html.light .hover\:bg-white\/5:hover     { background-color: rgba(0, 48, 135, 0.
 /* ── Stronger inner borders for readability ── */
 html.light [class*="border-white\/"] {
   border-color: rgba(0, 48, 135, 0.14) !important;
+}
+
+/* ── Model selector dropdown shadow ── */
+html.light .shadow-black\/60 {
+  box-shadow: 0 8px 32px rgba(0, 48, 135, 0.14) !important;
 }
 
 /* ── Scrollbar ── */
