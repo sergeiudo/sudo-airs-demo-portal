@@ -4,8 +4,10 @@ import { useAppContext } from '../context/AppContext'
 const SCM_BASE = 'https://stratacloudmanager.paloaltonetworks.com/ai-security/runtime/ai-sessions'
 
 function buildScmUrl(inputScan) {
-  if (!inputScan?.tr_id || !inputScan?.profile_id || !inputScan?.scan_id) return null
-  return `${SCM_BASE}/${inputScan.tr_id}/${inputScan.profile_id}/CITADEL/transactions/${inputScan.scan_id}/0#date=24hr`
+  if (!inputScan?.tr_id || !inputScan?.profile_id) return null
+  const profileName = inputScan.profile_name || 'AIRS'
+  const tsgParam = inputScan.tsg_id ? `?tsg_id=${inputScan.tsg_id}` : ''
+  return `${SCM_BASE}/${inputScan.tr_id}/${inputScan.profile_id}/${profileName}${tsgParam}#date=24hr`
 }
 
 function makeErrorMessage(blockReason) {

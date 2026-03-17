@@ -178,6 +178,7 @@ function buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelL
       session_id: airsPromptScan.data.session_id ?? null,
       profile_id: airsPromptScan.data.profile_id,
       profile_name: airsPromptScan.data.profile_name,
+      tsg_id:     process.env.SCM_TSG_ID || null,
       category:   airsPromptScan.data.category,
       action:     airsPromptScan.data.action,
       timeout:    airsPromptScan.data.timeout,
