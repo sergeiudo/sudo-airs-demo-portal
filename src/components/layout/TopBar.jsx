@@ -22,7 +22,7 @@ export function TopBar() {
     <header className="flex items-center h-16 px-6 border-b border-white/10 bg-base-900/60 backdrop-blur-md flex-shrink-0">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 flex-1">
-        <span className="text-xs text-slate-500">SUDO AIRS Demo</span>
+        <button onClick={() => dispatch({ type: 'SET_VIEW', payload: 'home' })} className="text-xs text-blue-400 hover:text-blue-300 hover:underline transition-colors cursor-pointer">SUDO AIRS Demo</button>
         <ChevronRight size={12} className="text-slate-700" />
         <AnimatePresence mode="wait">
           <motion.div
