@@ -186,9 +186,6 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
                 )}
               </div>
             )}
-            {message.content && !isBlocked && message.verdict !== 'ERROR' && (
-              <CopyButton text={message.content} />
-            )}
           </div>
         </div>
       </motion.div>
