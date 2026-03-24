@@ -12,9 +12,24 @@ const messageVariants = {
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
   const handleCopy = () => {
-    navigator.clipboard.writeText(text)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+    } else {
+      fallbackCopy(text)
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+  const fallbackCopy = (str) => {
+    const el = document.createElement('textarea')
+    el.value = str
+    el.style.position = 'fixed'
+    el.style.opacity = '0'
+    document.body.appendChild(el)
+    el.focus()
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
   }
   return (
     <button
