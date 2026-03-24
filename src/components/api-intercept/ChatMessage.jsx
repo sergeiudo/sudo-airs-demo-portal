@@ -1,12 +1,31 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ShieldX, ShieldCheck, Zap, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages } from 'lucide-react'
+import { ShieldX, ShieldCheck, Zap, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
 const messageVariants = {
   initial: { opacity: 0, y: 12, scale: 0.97 },
   animate: { opacity: 1, y: 0, scale: 1 },
   transition: { type: 'spring', stiffness: 400, damping: 30 },
+}
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 text-[9px] text-slate-600 hover:text-slate-300 transition-colors"
+      title="Copy message"
+    >
+      {copied ? <Check size={9} className="text-emerald-400" /> : <Copy size={9} />}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  )
 }
 
 export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTranslating }) {
@@ -79,6 +98,7 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
                 He
               </button>
             )}
+            <CopyButton text={message.content} />
           </div>
         </div>
       </motion.div>
@@ -165,6 +185,9 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
                   </span>
                 )}
               </div>
+            )}
+            {message.content && !isBlocked && message.verdict !== 'ERROR' && (
+              <CopyButton text={message.content} />
             )}
           </div>
         </div>
