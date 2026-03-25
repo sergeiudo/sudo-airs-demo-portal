@@ -83,9 +83,17 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
             </div>
           )}
           <div className="rounded-xl rounded-tr-sm bg-white/10 border border-white/15 px-3 py-2.5">
-            <p className="text-xs text-slate-200 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
+            {(() => {
+              const isHebrew = /[\u0590-\u05FF]/.test(message.content)
+              return (
+                <p
+                  className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap break-words"
+                  style={isHebrew ? { fontFamily: 'Arial, sans-serif', direction: 'rtl', textAlign: 'right', fontSize: '13px' } : { fontFamily: 'monospace' }}
+                >
+                  {message.content}
+                </p>
+              )
+            })()}
           </div>
           <div className="flex items-center justify-end gap-3 mt-1">
             <span className="text-[9px] text-slate-600">
