@@ -185,7 +185,7 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
                 </p>
               </div>
             ) : (
-              {(() => {
+              (() => {
                 const isHebrew = /[\u0590-\u05FF]/.test(message.content)
                 return (
                   <p
@@ -195,7 +195,7 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
                     {message.content}
                   </p>
                 )
-              })()}
+              })()
             )}
           </div>
 
