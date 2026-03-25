@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { ShieldX, ShieldCheck, Zap, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
@@ -58,7 +58,6 @@ function SystemMessage({ message }) {
 
 // ─── User bubble (iMessage style) ─────────────────────────────────────────────
 function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslating }) {
-  const [hovered, setHovered] = useState(false)
   const hebrew = isHebrewText(message.content)
 
   const severityColor = message.attackMeta?.severity === 'critical'
@@ -73,8 +72,6 @@ function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslati
       animate={{ opacity: 1, x: 0, scale: 1 }}
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
       className="flex flex-col items-end px-4"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       {/* Attack badge */}
       {message.attackMeta && (
@@ -131,53 +128,33 @@ function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslati
         />
       </div>
 
-      {/* Action row */}
-      <AnimatePresence>
-        {hovered && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
-            className="flex items-center gap-3 mt-1.5 text-[9px] text-slate-500"
+      {/* Action row — always visible */}
+      <div className="flex items-center gap-3 mt-1.5 text-[9px] text-slate-500">
+        <span className="text-slate-600">{new Date(message.timestamp).toLocaleTimeString()}</span>
+        {onResend && (
+          <button
+            onClick={onResend}
+            disabled={isLoading}
+            className="flex items-center gap-1 hover:text-slate-300 transition-colors disabled:opacity-30"
+            title="Resend"
           >
-            <span className="text-slate-600">{new Date(message.timestamp).toLocaleTimeString()}</span>
-            {onResend && (
-              <button
-                onClick={onResend}
-                disabled={isLoading}
-                className="flex items-center gap-1 hover:text-slate-300 transition-colors disabled:opacity-30"
-                title="Resend"
-              >
-                <RefreshCw size={9} className={isLoading && !isTranslating ? 'animate-spin' : ''} />
-                Resend
-              </button>
-            )}
-            {onResendHebrew && (
-              <button
-                onClick={onResendHebrew}
-                disabled={isLoading}
-                className="flex items-center gap-1 text-blue-400/70 hover:text-blue-300 transition-colors disabled:opacity-30"
-                title="Translate to Hebrew"
-              >
-                <Languages size={9} className={isTranslating ? 'animate-spin' : ''} />
-                He
-              </button>
-            )}
-            <CopyButton text={message.content} />
-          </motion.div>
+            <RefreshCw size={9} className={isLoading && !isTranslating ? 'animate-spin' : ''} />
+            Resend
+          </button>
         )}
-        {!hovered && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="mt-1 text-[9px] text-slate-600 pr-1"
+        {onResendHebrew && (
+          <button
+            onClick={onResendHebrew}
+            disabled={isLoading}
+            className="flex items-center gap-1 text-blue-400/70 hover:text-blue-300 transition-colors disabled:opacity-30"
+            title="Translate to Hebrew"
           >
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </motion.div>
+            <Languages size={9} className={isTranslating ? 'animate-spin' : ''} />
+            He
+          </button>
         )}
-      </AnimatePresence>
+        <CopyButton text={message.content} />
+      </div>
     </motion.div>
   )
 }
