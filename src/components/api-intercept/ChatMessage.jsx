@@ -185,7 +185,17 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
                 </p>
               </div>
             ) : (
-              <p className="text-xs text-slate-200 leading-relaxed">{message.content}</p>
+              {(() => {
+                const isHebrew = /[\u0590-\u05FF]/.test(message.content)
+                return (
+                  <p
+                    className="text-xs text-slate-200 leading-relaxed"
+                    style={isHebrew ? { fontFamily: 'Arial, sans-serif', direction: 'rtl', textAlign: 'right', fontSize: '13px' } : {}}
+                  >
+                    {message.content}
+                  </p>
+                )
+              })()}
             )}
           </div>
 
