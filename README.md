@@ -1,8 +1,8 @@
-# SUDO AIRS Local Demo — Vertex & Bedrock
+# SUDO AIRS Local Demo — Vertex, Bedrock & Azure OpenAI
 
 **Created by Sergei (SUDO) Udovenko, Palo Alto Networks**
 
-An interactive demo that shows how **Prisma AI Runtime Security (AIRS)** protects AI applications from attacks — and what happens when it doesn't. Toggle protection on and off in real time to compare a vulnerable deployment against a secured one, using live LLMs on Google Vertex AI and AWS Bedrock. Includes a fourth pillar demonstrating real-time AIRS protection for AI code assistants (Claude Code) via native CLI hooks.
+An interactive demo that shows how **Prisma AI Runtime Security (AIRS)** protects AI applications from attacks — and what happens when it doesn't. Toggle protection on and off in real time to compare a vulnerable deployment against a secured one, using live LLMs across **three major cloud providers**: Google Vertex AI, AWS Bedrock, and Azure OpenAI (via Azure AI Foundry). Includes a fourth pillar demonstrating real-time AIRS protection for AI code assistants (Claude Code) via native CLI hooks.
 
 ![Home screen — four pillars](docs/sudo-demo-portal.png)
 
@@ -24,7 +24,7 @@ With **protection on**, AIRS evaluates the prompt before it reaches the model. I
 
 With **protection off**, the same attacks go straight through to the LLM with no inspection. The model's response is returned unfiltered.
 
-The attack library on the left contains curated examples across categories (prompt injection, jailbreak, data exfiltration) that you can fire one-click against Vertex AI (Gemini) or Bedrock (Claude).
+The attack library on the left contains curated examples across categories (prompt injection, jailbreak, data exfiltration) that you can fire one-click against Vertex AI (Gemini), Bedrock (Claude), or Azure OpenAI (GPT, DeepSeek, Grok).
 
 ### Pillar 2 — Model Scanning
 
@@ -106,6 +106,12 @@ The toggle affects both the visual theme and whether AIRS API calls are made. Th
   ```
 - **STS temporary credentials** (keys starting with `ASIA`) also require `AWS_SESSION_TOKEN` via the same method. Exporting in the shell is recommended since STS tokens expire and you won't need to edit `.env` each time.
 
+### Azure OpenAI (via Azure AI Foundry)
+
+- An **Azure subscription** with an Azure OpenAI or AI Foundry resource created
+- At least one **model deployment** created in [Azure AI Foundry](https://ai.azure.com) (e.g. gpt-5.4-nano, DeepSeek-V3.2, Grok)
+- The resource **endpoint** and **API key** from the Azure Portal → your resource → Keys and Endpoint
+
 ---
 
 ## Setup
@@ -180,6 +186,28 @@ npm run dev
 - Claude 4.x requires a cross-region inference profile ID: `us.anthropic.claude-opus-4-6-v1:0`
 - Claude 3.x works with direct IDs: `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
+#### Azure OpenAI
+
+```
+AZURE_OPENAI_ENDPOINT        # e.g. https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY         # Key 1 or Key 2 from Azure Portal → Keys and Endpoint
+AZURE_OPENAI_API_VERSION     # Use 2025-04-01-preview for Foundry / latest models
+AZURE_OPENAI_DEPLOYMENT      # Default deployment name used when none is selected
+```
+
+The model list in the UI is driven by the `AZURE_DEPLOYMENTS` array in `server.js`. Add an entry there for each deployment you create in Azure AI Foundry:
+
+```js
+const AZURE_DEPLOYMENTS = [
+  { id: 'gpt-5.4-nano',                label: 'GPT-5.4 Nano',   provider: 'OpenAI',   status: 'available' },
+  { id: 'DeepSeek-V3.2',               label: 'DeepSeek V3.2',  provider: 'DeepSeek', status: 'available' },
+  { id: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast',  provider: 'xAI',      status: 'available' },
+  // add your deployments here
+]
+```
+
+> **Note:** Use API version `2025-04-01-preview` for Azure AI Foundry resources. Older versions (e.g. `2024-12-01-preview`) will return 404 for Foundry deployments.
+
 ### 4. Run
 
 ```bash
@@ -246,3 +274,13 @@ Temporary STS credentials require `AWS_SESSION_TOKEN`. Export it in the same she
 **Vertex AI: 404 on model**
 
 Only models explicitly enabled in your GCP project work. Verify in the Google Cloud Console → Vertex AI → Model Garden.
+
+**Azure: "The API deployment for this resource does not exist"**
+
+Two common causes:
+1. The deployment name in `AZURE_DEPLOYMENTS` doesn't match exactly what's in Azure AI Foundry (case-sensitive). Check your deployment names under Foundry → Deployments.
+2. Wrong API version — use `2025-04-01-preview` for Foundry resources, not `2024-12-01-preview`.
+
+**Azure: adding new models**
+
+Create a deployment in [Azure AI Foundry](https://ai.azure.com) → Deployments → Deploy model, then add a matching entry to `AZURE_DEPLOYMENTS` in `server.js` and restart.
