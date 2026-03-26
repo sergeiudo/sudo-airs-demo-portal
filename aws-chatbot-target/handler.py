@@ -67,7 +67,7 @@ def handler(event, context):
         return _response(502, {"error": str(e)})
 
     return _response(200, {
-        "response": reply,
+        "output": reply,
         "model": "claude-3-haiku",
         "request_id": str(uuid.uuid4()),
     })
