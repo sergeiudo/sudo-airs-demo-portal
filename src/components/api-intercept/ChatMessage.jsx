@@ -110,7 +110,7 @@ function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslati
               ...(hebrew
                 ? { fontFamily: 'Arial, sans-serif', direction: 'rtl', textAlign: 'right', fontSize: '13px' }
                 : { fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: '12px' }),
-              color: 'rgba(15, 30, 80, 0.9)',
+              color: document.documentElement.classList.contains('light') ? 'rgba(15, 30, 80, 0.9)' : 'rgba(220, 230, 255, 0.92)',
             }}
           >
             {message.content}

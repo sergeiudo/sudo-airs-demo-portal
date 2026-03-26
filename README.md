@@ -1,76 +1,53 @@
-# SUDO AIRS Local Demo — Vertex, Bedrock & Azure OpenAI
+# SUDO AIRS Demo Portal
 
 **Created by Sergei (SUDO) Udovenko, Palo Alto Networks**
 
-An interactive demo that shows how **Prisma AI Runtime Security (AIRS)** protects AI applications from attacks — and what happens when it doesn't. Toggle protection on and off in real time to compare a vulnerable deployment against a secured one, using live LLMs across **three major cloud providers**: Google Vertex AI, AWS Bedrock, and Azure OpenAI (via Azure AI Foundry). Includes a fourth pillar demonstrating real-time AIRS protection for AI code assistants (Claude Code) via native CLI hooks.
+An interactive demo portal showing how **Prisma AI Runtime Security (AIRS)** protects AI applications from real-world attacks. Toggle protection on/off to see the difference between a secured and vulnerable deployment — using live LLMs across **Google Vertex AI**, **AWS Bedrock**, and **Azure OpenAI**.
 
-![Home screen — four pillars](docs/sudo-demo-portal.png)
+![Home screen](docs/sudo-demo-portal.png)
 
-![API Intercept — DAN attack blocked by AIRS](docs/screenshot-api-intercept.png)
+![API Intercept](docs/sudo-api-intercept-home.png)
 
----
-
-## What This Demo Shows
-
-AI systems face security threats that traditional tools weren't built for: malicious prompts designed to manipulate model behavior, compromised model files distributed through public registries, and adversarial inputs that slowly erode a model's guardrails across a conversation. This demo makes those threats tangible and shows how AIRS addresses each one.
-
-The demo is built around four pillars, each accessible from the home screen:
-
-### Pillar 1 — API Intercept
-
-Simulates real attacks against a live LLM (prompt injection, jailbreaks, data exfiltration attempts) and shows AIRS scanning every request and response in the traffic path.
-
-With **protection on**, AIRS evaluates the prompt before it reaches the model. If the prompt is malicious, it's blocked and the LLM is never called. If it passes, AIRS also scans the model's response before it's returned to the user. The telemetry panel shows the full scan result — verdict, threat category, latency, token counts — and links directly to the transaction in Strata Cloud Manager.
-
-With **protection off**, the same attacks go straight through to the LLM with no inspection. The model's response is returned unfiltered.
-
-The attack library on the left contains curated examples across categories (prompt injection, jailbreak, data exfiltration) that you can fire one-click against Vertex AI (Gemini), Bedrock (Claude), or Azure OpenAI (GPT, DeepSeek, Grok).
-
-### Pillar 2 — Model Scanning
-
-Scans AI model files for embedded threats before they're deployed — malware, backdoors, pickle exploits, and unsafe tensor serialization.
-
-You can submit a model two ways: paste a HuggingFace model URI (e.g. `org/model-name`) or upload a local file. The Prisma AIRS Model Security SDK submits it to a scan group in your tenant and returns a vulnerability report with rule violations and CVE matches.
-
-> Requires Model Security credentials (`bash setup-scanner.sh`). Without them the scanner starts in stub mode and this pillar shows a "not configured" message.
-
-### Pillar 3 — Red Teaming
-
-Runs automated adversarial campaigns across multiple attack categories — DAN variants, role-play escapes, multi-turn manipulation — and tracks how well the model holds up over time via a robustness score gauge.
-
-> The Red Teaming pillar is UI-simulated (no backend calls). Campaign logs and the gauge are generated client-side. This lets it run without additional credentials and keeps the focus on the campaign interface and reporting UX.
-
-### Pillar 4 — AI Code Assistant Protection
-
-Demonstrates how to protect the **Claude Code CLI** using Prisma AIRS native hook scripts — with zero changes to Claude Code or any application code. Four hook scripts intercept every surface of a Claude Code session:
-
-| Hook | Script | What it scans |
-|------|--------|---------------|
-| `UserPromptSubmit` | `scan-user-input.sh` | Every user message before Claude sees it |
-| `PreToolUse` (WebFetch/WebSearch) | `scan-url.sh` | URLs before they are fetched |
-| `PreToolUse` (MCP tools) | `scan-mcp-request.sh` | MCP tool parameters |
-| `PostToolUse` | `scan-response-enhanced.sh` | Tool responses before Claude reads them |
-
-The pillar includes a full integration guide with a visual architecture diagram, six AI-specific attack scenarios with test commands (prompt injection, DLP, EICAR, indirect injection, URL attacks, MCP content attacks), setup instructions, and a suggested demo script.
+![Chat with AIRS](docs/sudo-api-intercept-chat.png)
 
 ---
 
-## How the Toggle Works
+## Four Pillars
 
-The **protection toggle** in the sidebar switches between two modes across the entire app:
+### 1 — API Intercept
+Fire curated attacks (prompt injection, jailbreaks, data exfiltration) against a live LLM and watch AIRS scan every request and response in real time. With protection **on**, malicious prompts are blocked before reaching the model. With protection **off**, attacks pass through unfiltered. Full telemetry panel shows scan verdict, threat category, latency, and a direct link to the transaction in Strata Cloud Manager.
 
-| Mode | Behavior | Visual theme |
-|------|----------|-------------|
-| Protected | AIRS scans every prompt and response | Emerald / blue |
-| Unprotected | LLM called directly, no scanning | Red |
+Supports all three cloud backends — switch between Gemini, Claude, GPT, DeepSeek, Grok, and more.
 
-The toggle affects both the visual theme and whether AIRS API calls are made. The app never calls cloud services from the browser — all credentials stay on the Express proxy server.
+### 2 — Model Scanning
+Scan AI model files for embedded threats before deployment — malware, backdoors, pickle exploits, unsafe tensor serialization. Submit a HuggingFace model URI or upload a local file. Returns a full vulnerability report with CVE matches.
+
+> Requires Model Security credentials. Without them the scanner runs in stub mode.
+
+### 3 — Red Teaming
+Run automated adversarial campaigns (DAN variants, role-play escapes, multi-turn manipulation) against a target model and track robustness over time via a score gauge.
+
+> Campaign UI is simulated client-side — no extra credentials needed.
+
+### 4 — AI Code Assistant Protection
+Shows how to protect **Claude Code CLI** with Prisma AIRS hook scripts — zero changes to the app. Four hooks intercept every surface: user prompts, URLs fetched, MCP tool calls, and tool responses.
+
+---
+
+## Protection Toggle
+
+The sidebar toggle switches the entire app between two modes:
+
+| Mode | What happens | Theme |
+|------|-------------|-------|
+| **Protected** | AIRS scans every prompt + response | Emerald / blue |
+| **Unprotected** | LLM called directly, no scanning | Red |
+
+All credentials stay server-side — the browser never touches cloud APIs directly.
 
 ---
 
 ## Prerequisites
-
-### Tools
 
 | Tool | Version |
 |------|---------|
@@ -78,45 +55,13 @@ The toggle affects both the visual theme and whether AIRS API calls are made. Th
 | npm | 9+ |
 | Python | 3.10+ |
 
-### Google Cloud (Vertex AI)
-
-- A GCP project with the **Vertex AI API** enabled
-- Model Garden access for the models you want to use — some models (e.g. Gemini 2.0) require you to request access in the GCP Console under Vertex AI → Model Garden
-- A **service account** with the `Vertex AI User` role, and a downloaded JSON key file. Set the path in `.env`:
-  ```
-  GOOGLE_APPLICATION_CREDENTIALS=/path/to/your-key.json
-  ```
-- **Alternative (no key file):** run `gcloud auth application-default login` and leave `GOOGLE_APPLICATION_CREDENTIALS` unset. Application Default Credentials are picked up automatically.
-
-### AWS (Bedrock)
-
-- An AWS account with **Amazon Bedrock** enabled in your target region, and model access granted for the models you want to use (AWS Console → Bedrock → Model access)
-- IAM credentials with Bedrock permissions (`AmazonBedrockFullAccess` or a scoped equivalent)
-- Two ways to provide credentials — pick one:
-  ```bash
-  # Option A: export in your shell before running npm run dev
-  export AWS_ACCESS_KEY_ID=...
-  export AWS_SECRET_ACCESS_KEY=...
-  export AWS_REGION=us-east-1
-
-  # Option B: add directly to .env
-  AWS_ACCESS_KEY_ID=...
-  AWS_SECRET_ACCESS_KEY=...
-  AWS_REGION=us-east-1
-  ```
-- **STS temporary credentials** (keys starting with `ASIA`) also require `AWS_SESSION_TOKEN` via the same method. Exporting in the shell is recommended since STS tokens expire and you won't need to edit `.env` each time.
-
-### Azure OpenAI (via Azure AI Foundry)
-
-- An **Azure subscription** with an Azure OpenAI or AI Foundry resource created
-- At least one **model deployment** created in [Azure AI Foundry](https://ai.azure.com) (e.g. gpt-5.4-nano, DeepSeek-V3.2, Grok)
-- The resource **endpoint** and **API key** from the Azure Portal → your resource → Keys and Endpoint
+You need accounts and credentials for the cloud providers you want to use. Each section is independent — the app works with any combination.
 
 ---
 
 ## Setup
 
-### 1. Clone and install
+### 1. Clone & install
 
 ```bash
 git clone <repo-url>
@@ -124,89 +69,70 @@ cd sudo-airs-local-demo-vertex-bedrock
 npm install
 ```
 
-### 2. Set up Python environment
-
-The scanner process runs inside a Python virtual environment. Create it and install base dependencies (no credentials required):
+### 2. Python environment (required even without Model Scanner)
 
 ```bash
 python3 -m venv airs-model-scanner-main/.venv
 airs-model-scanner-main/.venv/bin/pip install fastapi "uvicorn[standard]" requests python-dotenv python-multipart
 ```
 
-This is required even if you're not using the Model Scanner — the scanner process starts in stub mode and still needs `fastapi` and `uvicorn` to run.
-
-### 3. Configure credentials
+### 3. Configure `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the values for the services you want to use. All three credential sections are independent — the app works with any combination of Vertex AI and Bedrock.
-
-#### Prisma AIRS (required for protection mode)
-
-Get these from [Strata Cloud Manager](https://stratacloudmanager.paloaltonetworks.com) → AI Security:
-
+#### Prisma AIRS *(required for protection mode)*
+Get from [Strata Cloud Manager](https://stratacloudmanager.paloaltonetworks.com) → AI Security:
 ```
-AIRS_API_KEY         # SCM → AI Security → API Applications
-AIRS_PROFILE_NAME    # SCM → AI Security → Security Profiles
-AIRS_BASE_URL        # Pick your region (US/EU/India/Singapore — see .env.example)
+AIRS_API_KEY=
+AIRS_PROFILE_NAME=
+AIRS_BASE_URL=        # https://service.api.aisecurity.paloaltonetworks.com
 ```
 
 #### Google Vertex AI
-
 ```
-GCP_PROJECT_ID       # Your GCP project ID
-GCP_REGION           # e.g. us-central1
-VERTEX_MODEL         # e.g. gemini-2.0-flash-001
-GOOGLE_APPLICATION_CREDENTIALS   # Path to service account JSON key file
+GCP_PROJECT_ID=
+GCP_REGION=           # e.g. us-central1
+VERTEX_MODEL=         # e.g. gemini-2.0-flash-001
+GOOGLE_APPLICATION_CREDENTIALS=   # path to service account JSON
 ```
-
-**Alternative to a key file:** run `gcloud auth application-default login` and leave `GOOGLE_APPLICATION_CREDENTIALS` blank.
-
-Confirmed working model: `gemini-2.0-flash-001`. Versioned IDs like `gemini-1.5-pro-002` may 404 depending on your project.
+Or skip the key file and run `gcloud auth application-default login`.
 
 #### AWS Bedrock
-
 ```
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_REGION           # e.g. us-east-1
-BEDROCK_MODEL_ID     # e.g. us.anthropic.claude-opus-4-6-v1:0
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_SESSION_TOKEN=    # required if key starts with ASIA (STS temporary creds)
+AWS_REGION=           # e.g. us-east-1
+BEDROCK_MODEL_ID=     # e.g. us.anthropic.claude-opus-4-6-v1:0
 ```
-
-**STS temporary credentials** (keys starting with `ASIA`): also set `AWS_SESSION_TOKEN`. You can export it in your shell before running — dotenv will not overwrite already-exported variables:
-
-```bash
-export AWS_SESSION_TOKEN=<token>
-npm run dev
-```
-
-**Bedrock model ID format:**
-- Claude 4.x requires a cross-region inference profile ID: `us.anthropic.claude-opus-4-6-v1:0`
-- Claude 3.x works with direct IDs: `anthropic.claude-3-5-sonnet-20241022-v2:0`
+> Claude 4.x models require cross-region inference profile IDs (`us.anthropic.*`). Claude 3.x uses direct IDs.
 
 #### Azure OpenAI
-
 ```
-AZURE_OPENAI_ENDPOINT        # e.g. https://your-resource.openai.azure.com/
-AZURE_OPENAI_API_KEY         # Key 1 or Key 2 from Azure Portal → Keys and Endpoint
-AZURE_OPENAI_API_VERSION     # Use 2025-04-01-preview for Foundry / latest models
-AZURE_OPENAI_DEPLOYMENT      # Default deployment name used when none is selected
+AZURE_OPENAI_ENDPOINT=        # https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_API_VERSION=     # 2025-04-01-preview
+AZURE_OPENAI_DEPLOYMENT=      # default deployment name
 ```
-
-The model list in the UI is driven by the `AZURE_DEPLOYMENTS` array in `server.js`. Add an entry there for each deployment you create in Azure AI Foundry:
-
+Add your Foundry deployments to `AZURE_DEPLOYMENTS` in `server.js`:
 ```js
 const AZURE_DEPLOYMENTS = [
-  { id: 'gpt-5.4-nano',                label: 'GPT-5.4 Nano',   provider: 'OpenAI',   status: 'available' },
-  { id: 'DeepSeek-V3.2',               label: 'DeepSeek V3.2',  provider: 'DeepSeek', status: 'available' },
-  { id: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast',  provider: 'xAI',      status: 'available' },
-  // add your deployments here
+  { id: 'gpt-5.4-nano',                label: 'GPT-5.4 Nano',  provider: 'OpenAI',   status: 'available' },
+  { id: 'DeepSeek-V3.2',               label: 'DeepSeek V3.2', provider: 'DeepSeek', status: 'available' },
+  { id: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast', provider: 'xAI',      status: 'available' },
 ]
 ```
 
-> **Note:** Use API version `2025-04-01-preview` for Azure AI Foundry resources. Older versions (e.g. `2024-12-01-preview`) will return 404 for Foundry deployments.
+#### Model Scanner *(optional)*
+```
+MODEL_SECURITY_CLIENT_ID=
+MODEL_SECURITY_CLIENT_SECRET=
+TSG_ID=
+LOCAL_SCAN_GROUP_UUID=
+```
+Then run once: `bash setup-scanner.sh`
 
 ### 4. Run
 
@@ -214,73 +140,24 @@ const AZURE_DEPLOYMENTS = [
 npm run dev
 ```
 
-This starts three processes concurrently:
+Opens three processes: Vite frontend (`5173`), Express proxy (`3001`), Python scanner (`8001`).
 
-| Port | Process |
-|------|---------|
-| 5173 | Vite dev server (React frontend) |
-| 3001 | Express proxy (server.js) |
-| 8001 | Python model scanner (scanner_server.py) |
-
-Open [http://localhost:5173](http://localhost:5173).
-
----
-
-## Optional: Model Scanner
-
-The Model Scanning pillar requires a Prisma AIRS Model Security service account. Without it, the scanner starts in stub mode (returns helpful errors instead of crashing).
-
-To enable it, add these to `.env`:
-
-```
-MODEL_SECURITY_CLIENT_ID
-MODEL_SECURITY_CLIENT_SECRET
-TSG_ID
-LOCAL_SCAN_GROUP_UUID
-HF_SCAN_GROUP_UUID       # optional, falls back to LOCAL_SCAN_GROUP_UUID
-```
-
-Then run the one-time setup:
-
-```bash
-bash setup-scanner.sh
-```
-
-This authenticates with Palo Alto Networks, retrieves a private PyPI URL, and installs the `model-security-client` SDK. Re-run only if credentials change.
+Visit **http://localhost:5173**
 
 ---
 
 ## Troubleshooting
 
-**Page goes blank / API returns nothing**
-
-Stale processes may be holding ports. Kill them all before restarting:
-
+**Blank page / no API response** — stale processes on ports. Kill and restart:
 ```bash
-lsof -ti tcp:3001 | xargs kill -9 2>/dev/null
-lsof -ti tcp:5173 | xargs kill -9 2>/dev/null
-lsof -ti tcp:8001 | xargs kill -9 2>/dev/null
+lsof -ti tcp:3001 | xargs kill -9 2>/dev/null; lsof -ti tcp:5173 | xargs kill -9 2>/dev/null; lsof -ti tcp:8001 | xargs kill -9 2>/dev/null
 npm run dev
 ```
 
-**AWS: "on-demand throughput not supported"**
+**AWS "on-demand throughput not supported"** — use `us.anthropic.*` inference profile ID for Claude 4.x.
 
-You're using a direct model ID for a Claude 4.x model. Switch to the cross-region inference profile format: `us.anthropic.claude-opus-4-6-v1:0`.
+**AWS auth error with ASIA keys** — export `AWS_SESSION_TOKEN` in your shell before `npm run dev`.
 
-**AWS: authentication errors with ASIA keys**
+**Vertex AI 404** — enable the model in GCP Console → Vertex AI → Model Garden first.
 
-Temporary STS credentials require `AWS_SESSION_TOKEN`. Export it in the same shell session before `npm run dev`.
-
-**Vertex AI: 404 on model**
-
-Only models explicitly enabled in your GCP project work. Verify in the Google Cloud Console → Vertex AI → Model Garden.
-
-**Azure: "The API deployment for this resource does not exist"**
-
-Two common causes:
-1. The deployment name in `AZURE_DEPLOYMENTS` doesn't match exactly what's in Azure AI Foundry (case-sensitive). Check your deployment names under Foundry → Deployments.
-2. Wrong API version — use `2025-04-01-preview` for Foundry resources, not `2024-12-01-preview`.
-
-**Azure: adding new models**
-
-Create a deployment in [Azure AI Foundry](https://ai.azure.com) → Deployments → Deploy model, then add a matching entry to `AZURE_DEPLOYMENTS` in `server.js` and restart.
+**Azure "deployment does not exist"** — deployment name in `AZURE_DEPLOYMENTS` must match exactly (case-sensitive) what's in Foundry. Use API version `2025-04-01-preview`.
