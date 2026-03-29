@@ -16,3 +16,6 @@ excalidraw.log
 # AWS Chatbot Red Team Target
 aws-chatbot-target/
 
+# Superpowers brainstorming sessions
+.superpowers/
+
