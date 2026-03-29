@@ -357,6 +357,31 @@ app.post('/api/chat', async (req, res) => {
   }
 })
 
+// ─── POST /api/redteam/proxy ──────────────────────────────────────────────────
+// Thin wrapper for the Prisma Red Team API. Returns { reply } shape the
+// Red Team service expects. Accepts the same request body as /api/chat.
+app.post('/api/redteam/proxy', async (req, res) => {
+  const { prompt, model, backend = 'vertex', airsEnabled = false } = req.body
+  const message = prompt || req.body.message
+  if (!message) return res.status(400).json({ error: 'prompt is required' })
+
+  const resolvedModelId = model || req.body.modelId || (
+    backend === 'vertex'  ? process.env.VERTEX_MODEL :
+    backend === 'azure'   ? process.env.AZURE_OPENAI_DEPLOYMENT :
+    process.env.BEDROCK_MODEL_ID
+  )
+
+  try {
+    const r = backend === 'vertex'  ? await callVertexAI(message, resolvedModelId)
+            : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
+            : await callBedrock(message, resolvedModelId)
+    return res.json({ reply: r.text })
+  } catch (err) {
+    console.error('[redteam/proxy] Error:', err.message)
+    return res.status(502).json({ error: err.message })
+  }
+})
+
 // ─── GET /api/models/vertex ───────────────────────────────────────────────────
 app.get('/api/models/vertex', (_req, res) => {
   // Return the known publisher model list — no API call needed

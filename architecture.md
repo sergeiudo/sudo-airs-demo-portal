@@ -6,7 +6,7 @@
 
 ## Purpose
 
-An interactive security demonstration that shows how **Prisma AI Runtime Security (AIRS)** protects AI applications across three attack surfaces. Users can toggle AIRS protection on and off in real time to see the difference between a vulnerable and a secured AI deployment.
+An interactive security demonstration that shows how **Prisma AI Runtime Security (AIRS)** protects AI applications across four attack surfaces. Users can toggle AIRS protection on and off in real time to see the difference between a vulnerable and a secured AI deployment.
 
 ---
 
@@ -21,6 +21,7 @@ An interactive security demonstration that shows how **Prisma AI Runtime Securit
 | LLM — AWS | Bedrock Runtime (`@aws-sdk/client-bedrock-runtime`) — Anthropic Claude family |
 | AI Security | Prisma AIRS REST API (`/v1/scan/sync/request`) |
 | Model security | Prisma AIRS Model Security SDK (`model-security-client`) |
+| Red Teaming | Prisma AIRS Red Team API (mgmt-plane + data-plane via OAuth2) |
 
 ---
 
@@ -43,16 +44,17 @@ Three processes start together via `npm run dev` (using `concurrently`):
         │                               │
    ┌────┴────┐                 ┌────────┴────────┐
    │Vertex AI│  AWS Bedrock    │  AIRS Model     │
-   │(GCP)    │  (us-east-1)    │  Security SDK   │
+   │(GCP)    │  (us-west-2)    │  Security SDK   │
    └─────────┘  └─────────┘   └─────────────────┘
         │
-   Prisma AIRS
-   REST API
+   Prisma AIRS REST API
+   Prisma AIRS Red Team API
 ```
 
 - The browser **never calls cloud services directly** — all credentials stay server-side.
 - Vite proxies `/api/*` → port 3001 and `/scan-model` → port 8001.
 - The Python scanner starts in **stub mode** (returns 503) if credentials or the SDK are missing, so `npm run dev` never fails.
+- Default AWS region is **us-west-2** (changed from us-east-1).
 
 ---
 
@@ -132,11 +134,49 @@ The scanner authenticates with Palo Alto Networks OAuth2 (`MODEL_SECURITY_CLIENT
 
 ## Pillar 3 — Red Teaming
 
-Runs automated adversarial campaigns across multiple attack categories (DAN variants, role-play escapes, multi-turn manipulation) and tracks robustness scores in real time.
+Runs automated adversarial campaigns against live AI targets via the **Prisma AIRS Red Team API** (not simulated). Tracks scan status, attack logs, and robustness scores in real time.
 
 ### Implementation
 
-Red Teaming is **UI-simulated** — campaign state, attack logs, and the robustness gauge are generated client-side in `RedTeamingView.jsx` using `setInterval`. No backend calls are made. This lets the pillar run without any additional credentials and focuses the demo on the campaign UX and reporting interface.
+`RedTeamingView.jsx` manages campaign state locally and calls the real `/api/redteam/*` endpoints. The Express server proxies all requests to the Prisma Red Team API using OAuth2 client-credentials tokens (`MODEL_SECURITY_CLIENT_ID` / `CLIENT_SECRET`).
+
+### Server endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/redteam/targets` | List registered attack targets |
+| `POST /api/redteam/targets` | Register a new target |
+| `GET /api/redteam/targets/:id` | Get target details |
+| `POST /api/redteam/scan` | Launch a scan campaign |
+| `GET /api/redteam/scan` | List scan jobs |
+| `GET /api/redteam/scan/:id` | Poll scan status |
+| `POST /api/redteam/scan/:id/abort` | Abort a running scan |
+| `GET /api/redteam/scan/:id/report` | Fetch final report |
+| `GET /api/redteam/scan/:id/attacks` | Fetch individual attack results |
+
+### Red Team proxy endpoint
+
+`POST /api/redteam/proxy` — thin wrapper that accepts `{ prompt, model, backend }` and returns `{ reply: "..." }`. Used to register the demo portal itself as a Red Team attack target, matching the `{ "reply": "{RESPONSE}" }` response shape the Prisma Red Team API expects.
+
+### AWS IT Helpdesk chatbot target (`aws-chatbot-target/`)
+
+A separate deployable Red Team target — a deliberately unguarded IT Helpdesk chatbot running on **AWS Lambda + API Gateway**, deployed via AWS SAM. Persona: ACME Corp IT Helpdesk Assistant with implied access to internal systems.
+
+- **Deploy:** `cd aws-chatbot-target && bash deploy.sh` (~2 min)
+- **Runtime:** Python, Claude 3 Haiku via Bedrock (us-east-1), 1024 MB Lambda
+- **Auth:** API Gateway API key (printed on deploy)
+- **Request shape:** `{ "message": "{INPUT}" }` / **Response path:** `$.response`
+- **Teardown:** `aws cloudformation delete-stack --stack-name sudo-airs-chatbot --region us-east-1`
+
+---
+
+## Pillar 4 — IDE Protection (Claude Code Hooks)
+
+Intercepts AI-generated code at write time using **Claude Code hooks** (`PreToolUse` on `Write`/`Edit` events). Every file write triggers a Prisma AIRS scan; insecure code is flagged or blocked before it touches the filesystem.
+
+### Implementation
+
+`ClaudeHooksView.jsx` renders `public/hooks-guide.html` in a full-screen iframe. The guide walks through hook configuration, the scan shell script, and example block events. No backend calls — the hooks run inside the user's Claude Code environment, not the demo server.
 
 ---
 
@@ -149,7 +189,7 @@ Global state lives in `AppContext` (React `useReducer`). No external state libra
 | State field | Type | Purpose |
 |---|---|---|
 | `isProtected` | boolean | Toggles AIRS scanning and the visual theme |
-| `activeView` | string | Which pillar is shown (`home`, `apiIntercept`, `modelScanning`, `redTeaming`) |
+| `activeView` | string | Which pillar is shown (`home`, `apiIntercept`, `modelScanning`, `redTeaming`, `claudeHooks`) |
 | `scmUrl` | string \| null | SCM deep-link, set after each AIRS scan |
 
 ### Theme system
@@ -172,6 +212,7 @@ Global state lives in `AppContext` (React `useReducer`). No external state libra
 | **API Intercept** | 3-column — 260 px attack library + flex chat + resizable telemetry sidebar (drag handle) |
 | **Model Scanning** | 2-column — 340 px model registry + flex scanner panel |
 | **Red Teaming** | 2-column — 340 px campaign builder + flex log feed + gauge |
+| **IDE Protection** | Full-width iframe rendering `public/hooks-guide.html` |
 
 ---
 
@@ -201,15 +242,15 @@ Global state lives in `AppContext` (React `useReducer`). No external state libra
 | `AWS_ACCESS_KEY_ID` | IAM access key (`ASIA…` = STS temporary) |
 | `AWS_SECRET_ACCESS_KEY` | IAM secret |
 | `AWS_SESSION_TOKEN` | Required when using STS temporary credentials |
-| `AWS_REGION` | Bedrock region (default `us-east-1`) |
+| `AWS_REGION` | Bedrock region (default `us-west-2`) |
 | `BEDROCK_MODEL_ID` | Default model ID |
 
-### Model Scanner
+### Model Scanner & Red Teaming
 
 | Variable | Required | Description |
 |---|---|---|
-| `MODEL_SECURITY_CLIENT_ID` | Yes | Service account client ID |
-| `MODEL_SECURITY_CLIENT_SECRET` | Yes | Service account client secret |
+| `MODEL_SECURITY_CLIENT_ID` | Yes | OAuth2 client ID (model scanner + red team) |
+| `MODEL_SECURITY_CLIENT_SECRET` | Yes | OAuth2 client secret |
 | `TSG_ID` | Yes | Tenant Service Group ID |
 | `LOCAL_SCAN_GROUP_UUID` | Yes | Security group UUID for local / uploaded models |
 | `HF_SCAN_GROUP_UUID` | No | Security group UUID for HuggingFace scans (falls back to `LOCAL_SCAN_GROUP_UUID`) |
