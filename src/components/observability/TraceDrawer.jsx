@@ -64,6 +64,8 @@ export function TraceDrawer({ traceId, onClose }) {
 
   useEffect(() => {
     if (!traceId) return
+    setTrace(null)
+    setShowRaw(false)
     setLoading(true)
     fetch(`/api/traces/${traceId}`)
       .then(r => r.json())

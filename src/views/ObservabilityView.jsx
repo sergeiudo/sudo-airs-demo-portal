@@ -61,7 +61,7 @@ export function ObservabilityView() {
       setActiveTab('traces')
       dispatch({ type: 'SET_SELECTED_TRACE', payload: null })
     }
-  }, [state.selectedTraceId])
+  }, [state.selectedTraceId, dispatch])
 
   const isEmpty = !loading && metrics?.total_requests === 0
 
