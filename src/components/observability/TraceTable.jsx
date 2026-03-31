@@ -69,11 +69,6 @@ export function TraceTable({ traces, selectedId, onSelect, onDelete }) {
         >
           <button onClick={() => onSelect(trace.id)} className="contents text-left">
             <span className="text-xs text-slate-400 truncate pr-2 flex items-center gap-1">
-              {trace.attack_severity && (
-                <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full border uppercase mr-1 flex-shrink-0 ${SEVERITY_COLORS[trace.attack_severity] ?? 'bg-white/[0.06] text-slate-400 border-white/[0.08]'}`}>
-                  {trace.attack_severity}
-                </span>
-              )}
               {trace.attack_label
                 ? <><span className="text-orange-400 font-semibold mr-1.5">[{trace.attack_label}]</span>{trace.prompt?.slice(0, 60)}{trace.prompt?.length > 60 ? '…' : ''}</>
                 : <>{trace.prompt?.slice(0, 80) ?? '—'}{trace.prompt?.length > 80 ? '…' : ''}</>}
