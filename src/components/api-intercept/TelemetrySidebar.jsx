@@ -4,11 +4,12 @@ import {
   ChevronDown, Activity, Cpu, Hash,
   Zap, ArrowDownToLine, ArrowUpFromLine,
   AlertTriangle, CheckCircle2, ShieldX, ShieldCheck,
-  Layers, FileCode,
+  Layers, FileCode, Clock, History,
 } from 'lucide-react'
 import { CodeBlock } from '../shared/CodeBlock'
 import { SDK_SNIPPETS } from '../../data/mockData'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
+import { useAppContext } from '../../context/AppContext'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n, unit = '') {
@@ -288,6 +289,56 @@ function ScanBlock({ scan, type }) {
   )
 }
 
+// ─── Recent Traces mini-list ───────────────────────────────────────────────────
+function RecentTraces() {
+  const { dispatch } = useAppContext()
+  const [traces, setTraces] = React.useState([])
+
+  React.useEffect(() => {
+    const load = () =>
+      fetch('/api/traces?limit=5')
+        .then(r => r.ok ? r.json() : { traces: [] })
+        .then(d => setTraces(d.traces ?? []))
+        .catch(() => {})
+    load()
+    const id = setInterval(load, 5000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (!traces.length) return (
+    <p className="text-[10px] text-slate-700 py-2 text-center">No traces yet</p>
+  )
+
+  const goToTrace = (traceId) => {
+    dispatch({ type: 'SET_SELECTED_TRACE', payload: traceId })
+    dispatch({ type: 'SET_VIEW', payload: 'observability' })
+  }
+
+  return (
+    <div className="space-y-1">
+      {traces.map(t => (
+        <button
+          key={t.id}
+          onClick={() => goToTrace(t.id)}
+          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/[0.04] transition-colors group text-left"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.verdict === 'BLOCKED' ? 'bg-red-500' : t.verdict === 'ALLOWED' ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+          <span className="flex-1 text-[10px] text-slate-500 truncate group-hover:text-slate-400 transition-colors">
+            {t.attack_label ?? t.prompt?.slice(0, 32) ?? '—'}
+          </span>
+          <span className="text-[9px] font-mono text-slate-700">{t.total_ms != null ? `${t.total_ms}ms` : ''}</span>
+        </button>
+      ))}
+      <button
+        onClick={() => dispatch({ type: 'SET_VIEW', payload: 'observability' })}
+        className="w-full text-center text-[9px] text-teal-600 hover:text-teal-400 transition-colors pt-1"
+      >
+        View all in Observability →
+      </button>
+    </div>
+  )
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export function TelemetrySidebar({ telemetry }) {
   const [sdkTab, setSdkTab] = useState('python')
@@ -526,6 +577,11 @@ export function TelemetrySidebar({ telemetry }) {
             />
           </Section>
         )}
+
+        {/* ── Recent Traces ── */}
+        <Section title="Recent Traces" icon={History} iconColor="text-teal-400" defaultOpen={false}>
+          <RecentTraces />
+        </Section>
 
       </div>
     </div>
