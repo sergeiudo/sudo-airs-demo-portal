@@ -12,6 +12,7 @@ import {
   ListFoundationModelsCommand,
 } from '@aws-sdk/client-bedrock'
 import { AzureOpenAI } from 'openai'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics } from './src/traceStore.js'
 
 const app = express()
 app.use(cors())
@@ -275,6 +276,75 @@ function buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelL
   }
 }
 
+// ─── Persist trace + spans to SQLite ─────────────────────────────────────────
+function persistTrace({ message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta }) {
+  const traceId = `trace_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const timing  = telemetry.timing ?? {}
+  const llm     = telemetry.llm ?? {}
+  const summary = telemetry.summary ?? {}
+
+  const verdict   = summary.verdict ?? (airsEnabled ? 'ALLOWED' : 'DIRECT')
+  const category  = summary.category ?? 'benign'
+  const threats   = summary.threats_detected ?? []
+
+  const airsInMs  = timing.airs_input_scan_ms  ?? 0
+  const llmMs     = timing.llm_ms              ?? 0
+  const airsOutMs = timing.airs_output_ms      ?? timing.airs_output_scan_ms ?? 0
+  const totalMs   = timing.total_ms            ?? (airsInMs + llmMs + airsOutMs)
+
+  try {
+    insertTrace({
+      id: traceId,
+      prompt: message,
+      response: chatResponse?.content ?? null,
+      backend,
+      model: resolvedModelId ?? backend,
+      verdict,
+      category,
+      threats_detected: threats,
+      airs_enabled: airsEnabled,
+      total_ms: totalMs,
+      airs_input_ms: airsInMs || null,
+      llm_ms: llmMs || null,
+      airs_output_ms: airsOutMs || null,
+      tokens_in: llm.tokens_in ?? null,
+      tokens_out: llm.tokens_out ?? null,
+      profile: summary.profile ?? process.env.AIRS_PROFILE_NAME ?? null,
+      attack_label: attackMeta?.label ?? null,
+      attack_severity: attackMeta?.severity ?? null,
+    })
+
+    // Build spans
+    const spans = []
+    let cursor = 0
+
+    spans.push({ trace_id: traceId, name: 'user_prompt_received', start_ms: 0, end_ms: 0, latency_ms: 0, status: 'success', metadata: null })
+
+    if (airsEnabled && airsInMs) {
+      spans.push({ trace_id: traceId, name: 'airs_input_scan', start_ms: cursor, end_ms: cursor + airsInMs, latency_ms: airsInMs, status: verdict === 'BLOCKED' && !llmMs ? 'blocked' : 'success', metadata: telemetry.inputScan ? { scan_id: telemetry.inputScan.scan_id, category: telemetry.inputScan.category, action: telemetry.inputScan.action } : null })
+      cursor += airsInMs
+    }
+
+    if (llmMs) {
+      spans.push({ trace_id: traceId, name: 'llm_inference', start_ms: cursor, end_ms: cursor + llmMs, latency_ms: llmMs, status: 'success', metadata: { model: llm.model, tokens_in: llm.tokens_in, tokens_out: llm.tokens_out } })
+      cursor += llmMs
+    }
+
+    if (airsEnabled && airsOutMs) {
+      spans.push({ trace_id: traceId, name: 'airs_output_scan', start_ms: cursor, end_ms: cursor + airsOutMs, latency_ms: airsOutMs, status: verdict === 'BLOCKED' && llmMs ? 'blocked' : 'success', metadata: telemetry.outputScan ? { scan_id: telemetry.outputScan.scan_id, category: telemetry.outputScan.category, action: telemetry.outputScan.action } : null })
+      cursor += airsOutMs
+    }
+
+    spans.push({ trace_id: traceId, name: 'response_delivered', start_ms: cursor, end_ms: cursor, latency_ms: 0, status: verdict === 'BLOCKED' ? 'blocked' : 'success', metadata: null })
+
+    for (const s of spans) insertSpan(s)
+  } catch (err) {
+    console.error('[TraceStore] Failed to persist trace:', err.message)
+    // Non-fatal — don't break the chat response
+  }
+  return traceId
+}
+
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
   const { message, backend = 'vertex', modelId, airsEnabled = false } = req.body
@@ -297,7 +367,7 @@ app.post('/api/chat', async (req, res) => {
               : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
               : await callBedrock(message, resolvedModelId)
       console.log(`[LLM] Response received (${r.latencyMs}ms, ${r.tokens?.total ?? '?'} tokens) — no AIRS scan`)
-      return res.json({
+      const responsePayload = {
         summary: null,
         inputScan: null,
         outputScan: null,
@@ -313,7 +383,9 @@ app.post('/api/chat', async (req, res) => {
           finish_reason: r.finishReason ?? null,
         },
         chatResponse: { role: 'assistant', content: r.text, blocked: false, block_reason: null },
-      })
+      }
+      persistTrace({ message, chatResponse: responsePayload.chatResponse, telemetry: responsePayload, backend, resolvedModelId, airsEnabled: false, attackMeta: req.body.attackMeta ?? null })
+      return res.json(responsePayload)
     } catch (err) {
       console.error('[LLM] Error:', err.message)
       return res.status(502).json({ error: `LLM call failed: ${err.message}` })
@@ -328,7 +400,9 @@ app.post('/api/chat', async (req, res) => {
     console.log(`[AIRS] Prompt verdict: ${airsPromptScan.data.action} / ${airsPromptScan.data.category}`)
 
     if (airsPromptScan.data.action === 'block') {
-      return res.json(buildTelemetry({ airsPromptScan, airsResponseScan: null, llmLatencyMs: null, modelLabel, llmText: null, llmTokens: null, llmFinishReason: null }))
+      const telemetry = buildTelemetry({ airsPromptScan, airsResponseScan: null, llmLatencyMs: null, modelLabel, llmText: null, llmTokens: null, llmFinishReason: null })
+      persistTrace({ message, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
+      return res.json(telemetry)
     }
 
     // Step 2: Call LLM
@@ -350,7 +424,9 @@ app.post('/api/chat', async (req, res) => {
     const airsResponseScan = await airscan(message, llmText, modelLabel)
     console.log(`[AIRS] Response verdict: ${airsResponseScan.data.action} / ${airsResponseScan.data.category}`)
 
-    return res.json(buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelLabel, llmText, llmTokens, llmFinishReason }))
+    const telemetry = buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelLabel, llmText, llmTokens, llmFinishReason })
+    persistTrace({ message, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
+    return res.json(telemetry)
   } catch (err) {
     console.error('[server] Unhandled error:', err)
     res.status(500).json({ error: err.message })
@@ -577,6 +653,40 @@ app.get('/api/health', (_req, res) => {
       hfGroupSet: !!process.env.HF_SCAN_GROUP_UUID,
     },
   })
+})
+
+// ─── GET /api/traces ──────────────────────────────────────────────────────────
+app.get('/api/traces', (req, res) => {
+  try {
+    const { status, model, search, limit = '50', offset = '0' } = req.query
+    const traces = getTraces({ status, model, search, limit: parseInt(limit), offset: parseInt(offset) })
+    res.json({ traces, total: traces.length })
+  } catch (err) {
+    console.error('[traces] Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── GET /api/traces/metrics ──────────────────────────────────────────────────
+app.get('/api/traces/metrics', (req, res) => {
+  try {
+    res.json(getMetrics())
+  } catch (err) {
+    console.error('[traces/metrics] Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── GET /api/traces/:id ──────────────────────────────────────────────────────
+app.get('/api/traces/:id', (req, res) => {
+  try {
+    const trace = getTrace(req.params.id)
+    if (!trace) return res.status(404).json({ error: 'trace not found' })
+    res.json(trace)
+  } catch (err) {
+    console.error('[traces/:id] Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 app.listen(PORT, () => {

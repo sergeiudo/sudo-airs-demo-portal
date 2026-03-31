@@ -58,6 +58,7 @@ export function useAttackSimulator() {
           backend,
           modelId,
           airsEnabled: isProtected,
+          attackMeta: attackMeta ?? null,
         }),
       })
 
