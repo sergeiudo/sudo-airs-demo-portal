@@ -123,7 +123,6 @@ function TimingWaterfall({ timing }) {
         </div>
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-blue-400 font-mono">{llm}ms LLM</span>
-          <span className="text-slate-500">{latencyLabel(llm).label}</span>
         </div>
       </div>
     )

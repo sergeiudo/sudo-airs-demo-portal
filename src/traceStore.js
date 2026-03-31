@@ -83,7 +83,7 @@ export function getTraces({ status, model, search, limit = 50, offset = 0 } = {}
   let where = '1=1'
   const params = []
   if (status)  { where += ' AND verdict = ?';                params.push(status) }
-  if (model)   { where += ' AND model LIKE ?';               params.push(`%${model}%`) }
+  if (model)   { where += ' AND backend LIKE ?';             params.push(`%${model}%`) }
   if (search)  { where += ' AND (prompt LIKE ? OR model LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
   const rows = db().prepare(
     `SELECT * FROM traces WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
