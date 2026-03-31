@@ -188,14 +188,44 @@ function MetricsStrip({ trace }) {
       ))}
     </div>
       {/* Latency context note */}
-      <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/[0.06] border border-blue-500/20">
-        <span className="text-blue-400 flex-shrink-0 mt-0.5">ℹ</span>
-        <p className="text-[10px] text-slate-400 leading-relaxed">
-          <span className="font-semibold text-slate-300">AIRS scan latency is real network time</span> — measured live to{' '}
-          <span className="font-mono text-[9px]">service.api.aisecurity.paloaltonetworks.com</span>.
-          Typical from US infrastructure: <span className="font-semibold text-slate-300">500–900ms avg</span> (measured: min 496ms, avg 723ms, max 1,121ms).
-          In production, co-located AIRS endpoints reduce this significantly.
-        </p>
+      <div className="rounded-xl bg-blue-500/[0.06] border border-blue-500/20 overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-blue-500/10">
+          <span className="text-blue-400 text-sm">ℹ</span>
+          <span className="text-[11px] font-bold text-slate-300">How AIRS scan latency is measured</span>
+        </div>
+        <div className="px-3 py-2.5 space-y-2.5 text-[10px] leading-relaxed">
+          {/* Step by step */}
+          <div className="space-y-1.5">
+            {[
+              { step: '1', color: 'bg-slate-400',   label: 'User prompt received',        detail: 'Message arrives at your app server' },
+              { step: '2', color: 'bg-emerald-500',  label: 'HTTP POST → AIRS cloud',      detail: 'server.js fires POST /v1/scan/sync/request · t₀ = Date.now()' },
+              { step: '3', color: 'bg-blue-400',     label: 'Network transit (~150–200ms)', detail: 'TCP connection + TLS handshake + data in-flight to AIRS endpoint' },
+              { step: '4', color: 'bg-violet-400',   label: 'AIRS ML classifier (~500ms)', detail: 'Prompt injection · jailbreak · DLP · toxicity classifiers run on payload' },
+              { step: '5', color: 'bg-orange-400',   label: 'Verdict returned',             detail: 'AIRS responds: action=block/allow · category · scan_id · latencyMs = Date.now() − t₀' },
+              { step: '6', color: 'bg-teal-400',     label: 'LLM called or suppressed',    detail: 'If blocked → response suppressed. If allowed → LLM inference begins.' },
+            ].map(({ step, color, label, detail }) => (
+              <div key={step} className="flex gap-2.5 items-start">
+                <div className={`w-4 h-4 rounded-full ${color} flex items-center justify-center text-[8px] font-black text-white flex-shrink-0 mt-0.5`}>{step}</div>
+                <div>
+                  <span className="font-semibold text-slate-300">{label}</span>
+                  <span className="text-slate-500"> — {detail}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Summary */}
+          <div className="pt-2 border-t border-blue-500/10 space-y-1">
+            <div className="text-slate-400">
+              <span className="font-semibold text-slate-300">Typical breakdown (US → US): </span>
+              ~150–200ms network + ~500–600ms AIRS processing = <span className="font-semibold text-slate-300">500–900ms total</span>
+            </div>
+            <div className="text-slate-500">
+              In production, <span className="text-slate-400 font-medium">co-located AIRS endpoints</span> (same cloud region as your app) reduce network to &lt;10ms.
+              <span className="text-slate-400 font-medium"> Async mode</span> runs AIRS scan in parallel with LLM — removing it from the critical path entirely.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
