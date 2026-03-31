@@ -20,79 +20,120 @@ const TABS = [
   { id: 'traces',   label: 'Prompt History Log',   icon: Activity },
 ]
 
+function latencyColor(ms) {
+  if (ms == null) return { text: 'text-slate-400', bar: 'bg-slate-400' }
+  if (ms < 400)  return { text: 'text-emerald-500', bar: 'bg-emerald-500' }
+  if (ms < 800)  return { text: 'text-orange-400',  bar: 'bg-orange-400' }
+  return { text: 'text-red-400', bar: 'bg-red-500' }
+}
+
+function latencyLabel(ms) {
+  if (ms == null) return 'Unreachable'
+  if (ms < 400)  return 'Excellent'
+  if (ms < 800)  return 'Normal'
+  return 'High'
+}
+
+function RegionCard({ region, activeEndpoint }) {
+  const isActive = activeEndpoint?.includes(
+    region.id === 'us' ? 'service.api' :
+    region.id === 'eu' ? 'service-de' :
+    region.id === 'in' ? 'service-in' : 'service-sg'
+  )
+  const clr = latencyColor(region.avg_ms)
+
+  return (
+    <div className={`p-4 rounded-xl border flex flex-col gap-2 ${isActive ? 'border-teal-500/40 bg-teal-500/[0.06]' : 'border-white/[0.08] bg-white/[0.03]'}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{region.flag}</span>
+          <div>
+            <div className="text-xs font-bold text-slate-300">{region.label}</div>
+            {isActive && <div className="text-[8px] text-teal-400 font-semibold uppercase tracking-wider">● Active endpoint</div>}
+          </div>
+        </div>
+        {region.avg_ms != null
+          ? <span className={`text-xl font-black font-mono ${clr.text}`}>{region.avg_ms}<span className="text-[10px] font-normal text-slate-500 ml-0.5">ms</span></span>
+          : <span className="text-[10px] text-slate-600">Unreachable</span>
+        }
+      </div>
+
+      {/* Min/Max */}
+      {region.avg_ms != null && (
+        <div className="flex items-center gap-3 text-[9px] text-slate-500">
+          <span>min <span className="font-mono font-semibold text-slate-400">{region.min_ms}ms</span></span>
+          <span>max <span className="font-mono font-semibold text-slate-400">{region.max_ms}ms</span></span>
+          <span className={`ml-auto font-semibold text-[9px] ${clr.text}`}>{latencyLabel(region.avg_ms)}</span>
+        </div>
+      )}
+
+      {/* Sample bars */}
+      {region.samples && (
+        <div className="flex gap-1 mt-0.5">
+          {region.samples.map((ms, i) => (
+            <div key={i} className="flex-1">
+              <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                {ms != null && <div className={`h-full rounded-full ${latencyColor(ms).bar} opacity-80`}
+                  style={{ width: `${Math.min((ms / 1500) * 100, 100)}%` }} />}
+              </div>
+              <div className="text-[7px] text-slate-600 mt-0.5 text-center">#{i+1}{ms ? ` ${ms}ms` : ' ✗'}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AirsProbeCard({ probeState, probeResult, onRun }) {
   const state = probeState
   const result = probeResult
 
-  const latencyColor = result?.avg_ms
-    ? result.avg_ms < 400 ? 'text-emerald-500' : result.avg_ms < 800 ? 'text-orange-400' : 'text-red-400'
-    : 'text-slate-300'
-
   return (
-    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] p-4 flex flex-col gap-3">
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.03] p-4 space-y-3">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Wifi size={14} className="text-blue-400" />
-          <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Live AIRS Latency Probe</span>
+          <div>
+            <span className="text-[12px] font-bold text-slate-300">Live AIRS Regional Latency Probe</span>
+            <p className="text-[10px] text-slate-500 mt-0.5">Fires 3 real scan requests to each regional endpoint from this server simultaneously.</p>
+          </div>
         </div>
         <button
           onClick={onRun}
           disabled={state === 'running'}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ml-4"
         >
           {state === 'running'
-            ? <><Loader2 size={11} className="animate-spin" /> Probing…</>
+            ? <><Loader2 size={11} className="animate-spin" /> Probing all regions…</>
             : <><Wifi size={11} /> Run Probe</>}
         </button>
       </div>
 
-      {state === 'idle' && (
-        <p className="text-[10px] text-slate-500 leading-relaxed">
-          Fires 3 real scan requests to <span className="font-mono text-[9px] text-slate-400">service.api.aisecurity.paloaltonetworks.com</span> from this server and measures actual round-trip latency.
-        </p>
-      )}
-
+      {/* Running state */}
       {state === 'running' && (
-        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-          <Loader2 size={12} className="animate-spin text-blue-400" />
-          Sending 3 probe requests to AIRS endpoint…
+        <div className="grid grid-cols-4 gap-3">
+          {['🇺🇸 US', '🇩🇪 EU', '🇮🇳 IN', '🇸🇬 SG'].map(r => (
+            <div key={r} className="p-3 rounded-xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-center gap-2 text-[11px] text-slate-500">
+              <Loader2 size={11} className="animate-spin text-blue-400" />{r}
+            </div>
+          ))}
         </div>
       )}
 
-      {state === 'done' && result && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: 'Min', value: result.min_ms },
-              { label: 'Avg', value: result.avg_ms },
-              { label: 'Max', value: result.max_ms },
-            ].map(({ label, value }) => (
-              <div key={label} className="text-center p-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-                <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">{label}</div>
-                <div className={`text-lg font-black font-mono ${latencyColor}`}>{value.toLocaleString()}<span className="text-[10px] font-normal text-slate-500 ml-0.5">ms</span></div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-1">
-            {result.samples.map((ms, i) => (
-              <div key={i} className="flex-1 text-center">
-                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                  <div className={`h-full rounded-full ${ms < 400 ? 'bg-emerald-500' : ms < 800 ? 'bg-orange-400' : 'bg-red-500'}`}
-                    style={{ width: `${Math.min((ms / 1500) * 100, 100)}%` }} />
-                </div>
-                <div className="text-[8px] text-slate-600 mt-0.5">#{i+1} {ms}ms</div>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-slate-500">
-            Measured from <span className="font-semibold text-slate-400">this server</span> → AIRS cloud.
-            {result.avg_ms < 400 ? ' Excellent — likely co-located.' : result.avg_ms < 800 ? ' Normal for cross-region deployment.' : ' High — cross-continent or cold endpoint.'}
-          </p>
+      {/* Results */}
+      {state === 'done' && result?.regions && (
+        <div className="grid grid-cols-4 gap-3">
+          {result.regions.map(region => (
+            <RegionCard key={region.id} region={region} activeEndpoint={result.active_endpoint} />
+          ))}
         </div>
       )}
 
       {state === 'error' && (
-        <p className="text-[10px] text-red-400">Probe failed: {result?.error}</p>
+        <p className="text-[10px] text-red-400">Probe failed: {probeResult?.error}</p>
       )}
     </div>
   )

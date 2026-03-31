@@ -640,38 +640,53 @@ app.get('/api/scanner/health', async (_req, res) => {
   }
 })
 
-// ─── GET /api/airs-probe — live latency test to AIRS scan endpoint ───────────
+// ─── GET /api/airs-probe — live latency test to all AIRS regional endpoints ───
 app.get('/api/airs-probe', async (_req, res) => {
-  if (!process.env.AIRS_API_KEY || !process.env.AIRS_BASE_URL) {
+  if (!process.env.AIRS_API_KEY) {
     return res.status(503).json({ error: 'AIRS not configured' })
   }
-  const RUNS = 3
-  const times = []
+
+  const REGIONS = [
+    { id: 'us', label: 'United States', flag: '🇺🇸', base: 'https://service.api.aisecurity.paloaltonetworks.com' },
+    { id: 'eu', label: 'EU (Germany)',  flag: '🇩🇪', base: 'https://service-de.api.aisecurity.paloaltonetworks.com' },
+    { id: 'in', label: 'India',         flag: '🇮🇳', base: 'https://service-in.api.aisecurity.paloaltonetworks.com' },
+    { id: 'sg', label: 'Singapore',     flag: '🇸🇬', base: 'https://service-sg.api.aisecurity.paloaltonetworks.com' },
+  ]
+
   const probeBody = {
     tr_id: `probe-${Date.now()}`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
     metadata: { app_name: 'SUDO AIRS Demo', ai_model: 'probe', app_user: 'latency-probe' },
     contents: [{ prompt: 'hello' }],
   }
-  for (let i = 0; i < RUNS; i++) {
-    const t0 = Date.now()
-    try {
-      await fetch(`${process.env.AIRS_BASE_URL}/v1/scan/sync/request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-pan-token': process.env.AIRS_API_KEY },
-        body: JSON.stringify(probeBody),
-      })
-    } catch {}
-    times.push(Date.now() - t0)
+
+  const probeRegion = async (region) => {
+    const times = []
+    for (let i = 0; i < 3; i++) {
+      const t0 = Date.now()
+      try {
+        await fetch(`${region.base}/v1/scan/sync/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-pan-token': process.env.AIRS_API_KEY },
+          body: JSON.stringify(probeBody),
+        })
+      } catch { times.push(9999); continue }
+      times.push(Date.now() - t0)
+    }
+    const valid = times.filter(t => t < 9999)
+    return {
+      ...region,
+      min_ms: valid.length ? Math.min(...times) : null,
+      avg_ms: valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : null,
+      max_ms: valid.length ? Math.max(...valid) : null,
+      samples: times.map(t => t === 9999 ? null : t),
+      reachable: valid.length > 0,
+    }
   }
-  res.json({
-    runs: RUNS,
-    min_ms: Math.min(...times),
-    avg_ms: Math.round(times.reduce((a, b) => a + b, 0) / times.length),
-    max_ms: Math.max(...times),
-    samples: times,
-    endpoint: process.env.AIRS_BASE_URL,
-  })
+
+  // Run all regions in parallel
+  const results = await Promise.all(REGIONS.map(probeRegion))
+  res.json({ regions: results, active_endpoint: process.env.AIRS_BASE_URL })
 })
 
 // ─── GET /api/health ─────────────────────────────────────────────────────────
