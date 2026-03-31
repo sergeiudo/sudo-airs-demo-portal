@@ -17,7 +17,7 @@ import { TraceDrawer } from '../components/observability/TraceDrawer'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart2 },
-  { id: 'traces',   label: 'Traces',   icon: Activity },
+  { id: 'traces',   label: 'Prompt History Log',   icon: Activity },
 ]
 
 function ChartCard({ title, children }) {
