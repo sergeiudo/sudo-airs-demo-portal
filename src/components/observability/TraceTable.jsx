@@ -47,10 +47,10 @@ export function TraceTable({ traces, selectedId, onSelect, onDelete }) {
   )
 
   const SEVERITY_COLORS = {
-    critical: 'bg-red-600/20 text-red-400 border-red-600/30',
-    high:     'bg-red-500/20 text-red-300 border-red-500/30',
-    medium:   'bg-orange-500/20 text-orange-300 border-orange-500/30',
-    low:      'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+    critical: 'bg-red-600 text-white border-red-700',
+    high:     'bg-red-500 text-white border-red-600',
+    medium:   'bg-orange-500 text-white border-orange-600',
+    low:      'bg-yellow-500 text-white border-yellow-600',
   }
 
   return (

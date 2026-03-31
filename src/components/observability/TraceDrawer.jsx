@@ -135,7 +135,7 @@ function VerdictBanner({ trace }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className={`text-base font-black tracking-wide ${styles.text}`}>{trace.verdict}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+          <div className="text-[11px] text-slate-400 mt-0.5 truncate font-medium">
             {trace.backend} · {trace.model ?? trace.backend}
             {trace.profile ? ` · ${trace.profile}` : ''}
              · {new Date(trace.created_at).toLocaleString()}
@@ -176,13 +176,13 @@ function MetricsStrip({ trace }) {
         <div key={label} className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
           <div className="flex items-center gap-1.5 mb-1.5">
             <Icon size={11} className={color} />
-            <span className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">{label}</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">{label}</span>
           </div>
           <div className={`text-xl font-black font-mono leading-none ${color}`}>
             {value.toLocaleString()}
             <span className="text-xs font-normal text-slate-500 ml-1">ms</span>
           </div>
-          <div className="text-[9px] text-slate-600 mt-1">{sub}</div>
+          <div className="text-[10px] text-slate-400 mt-1 font-medium">{sub}</div>
         </div>
       ))}
     </div>
@@ -228,11 +228,11 @@ function TokenBar({ trace }) {
       </div>
 
       <div className="flex items-center gap-4 mt-2">
-        <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block" />
           {tokens_in ?? '—'} input tokens
         </span>
-        <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
           <span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block" />
           {tokens_out ?? '—'} output tokens
         </span>
@@ -286,11 +286,11 @@ function FlowNode({ span, totalMs, isLast }) {
               )}
             </div>
             {detail && (
-              <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">{detail}</div>
+              <div className="text-[11px] text-slate-400 mt-1 leading-relaxed font-medium">{detail}</div>
             )}
             {span.metadata?.scan_id && (
               <span className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9px] font-mono text-slate-600 truncate">{span.metadata.scan_id.slice(0, 16)}…</span>
+                <span className="text-[9px] font-mono text-slate-500 truncate">{span.metadata.scan_id.slice(0, 16)}…</span>
                 <CopyButton text={span.metadata.scan_id} />
               </span>
             )}
@@ -375,7 +375,7 @@ function RawJsonToggle({ data }) {
 // ─── Section label ────────────────────────────────────────────────────────────
 function SectionLabel({ children }) {
   return (
-    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{children}</div>
+    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{children}</div>
   )
 }
 
