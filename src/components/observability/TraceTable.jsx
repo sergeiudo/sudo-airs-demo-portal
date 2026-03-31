@@ -66,7 +66,7 @@ export function TraceTable({ traces, selectedId, onSelect }) {
         <button
           key={trace.id}
           onClick={() => onSelect(trace.id)}
-          className={`w-full grid grid-cols-[1fr_90px_100px_90px_70px_70px_90px] gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 text-left transition-colors hover:bg-white/[0.04] ${selectedId === trace.id ? 'bg-teal-500/[0.07] border-l-2 border-l-teal-500/50' : ''}`}
+          className={`w-full grid grid-cols-[1fr_90px_100px_90px_70px_70px_90px] gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 text-left transition-all duration-100 hover:bg-teal-500/[0.06] hover:border-l-2 hover:border-l-teal-500/40 ${selectedId === trace.id ? 'bg-teal-500/[0.10] border-l-2 border-l-teal-500/60' : ''}`}
         >
           <span className="text-xs text-slate-400 truncate pr-2 flex items-center gap-1">
             {trace.attack_severity && (
