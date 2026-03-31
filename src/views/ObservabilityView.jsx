@@ -68,10 +68,15 @@ function RegionCard({ region, activeEndpoint }) {
                   className="w-3.5 h-3.5 rounded-full bg-white/[0.08] border border-white/[0.12] flex items-center justify-center text-[8px] font-bold text-slate-500 hover:text-slate-300 transition-colors"
                 >?</button>
                 {showTip && (
-                  <div className="absolute left-1/2 -translate-x-1/2 top-5 z-50 w-64 p-2.5 rounded-xl bg-slate-900 border border-white/[0.15] shadow-2xl text-[10px] text-slate-300 leading-relaxed pointer-events-none">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-5 z-50 w-72 p-3 rounded-xl bg-slate-900 border border-white/[0.15] shadow-2xl text-[10px] text-slate-300 leading-relaxed pointer-events-none">
                     <div className="font-bold text-slate-200 mb-1">Probe endpoint</div>
-                    <div className="font-mono text-[10px] font-black text-blue-400 break-all">{endpoint}</div>
-                    <div className="mt-1.5 text-slate-500">3 POST requests to <span className="text-slate-400">/v1/scan/sync/request</span> with a benign "hello" prompt. Measures full round-trip including TLS handshake.</div>
+                    <div className="font-mono text-[10px] font-black text-blue-400 break-all mb-2">{endpoint}</div>
+                    <div className="space-y-1.5 text-slate-400">
+                      <div><span className="text-slate-200 font-semibold">What:</span> 3 real HTTP POST requests to <span className="font-mono text-[9px] text-slate-300">/v1/scan/sync/request</span> with a benign "hello" payload.</div>
+                      <div><span className="text-slate-200 font-semibold">LLM involved?</span> <span className="text-emerald-400 font-semibold">No.</span> The probe hits AIRS only — no LLM call is made. AIRS scans the prompt and returns a verdict.</div>
+                      <div><span className="text-slate-200 font-semibold">What it measures:</span> Pure AIRS scanning latency — identical to the <span className="font-mono text-[9px] text-slate-300">airs_input_ms</span> you see on real traces. Includes DNS, TLS handshake, and AIRS processing time.</div>
+                      <div><span className="text-slate-200 font-semibold">Accuracy:</span> Highly accurate for AIRS overhead. Does not include LLM inference time.</div>
+                    </div>
                   </div>
                 )}
               </div>
