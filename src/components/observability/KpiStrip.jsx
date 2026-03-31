@@ -27,8 +27,8 @@ function TooltipIcon({ text }) {
       </button>
       {pos && (
         <div
-          className="fixed z-[9999] w-64 p-3 rounded-xl bg-slate-900 border border-white/[0.15] shadow-2xl text-[11px] text-slate-300 leading-relaxed pointer-events-none"
-          style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
+          className="fixed z-[9999] w-64 p-3 rounded-xl shadow-2xl text-[11px] leading-relaxed pointer-events-none"
+          style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)', backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0' }}
         >
           {text}
         </div>

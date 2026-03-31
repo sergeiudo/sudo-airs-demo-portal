@@ -68,7 +68,7 @@ function RegionCard({ region, activeEndpoint }) {
                   className="w-3.5 h-3.5 rounded-full bg-white/[0.08] border border-white/[0.12] flex items-center justify-center text-[8px] font-bold text-slate-500 hover:text-slate-300 transition-colors"
                 >?</button>
                 {showTip && (
-                  <div className="absolute left-1/2 -translate-x-1/2 top-5 z-50 w-72 p-3 rounded-xl bg-slate-900 border border-white/[0.15] shadow-2xl text-[10px] text-slate-300 leading-relaxed pointer-events-none">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-5 z-50 w-72 p-3 rounded-xl shadow-2xl text-[10px] leading-relaxed pointer-events-none" style={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0' }}>
                     <div className="font-bold text-slate-200 mb-1">Probe endpoint</div>
                     <div className="font-mono text-[10px] font-black text-blue-400 break-all mb-2">{endpoint}</div>
                     <div className="space-y-1.5 text-slate-400">
