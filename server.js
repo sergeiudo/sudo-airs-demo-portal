@@ -653,23 +653,13 @@ app.get('/api/airs-probe', async (_req, res) => {
     { id: 'sg', label: 'Singapore',     flag: '🇸🇬', base: 'https://service-sg.api.aisecurity.paloaltonetworks.com' },
   ]
 
-  const probeBody = {
-    tr_id: `probe-${Date.now()}`,
-    ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
-    metadata: { app_name: 'SUDO AIRS Demo', ai_model: 'probe', app_user: 'latency-probe' },
-    contents: [{ prompt: 'hello' }],
-  }
-
   const probeRegion = async (region) => {
     const times = []
     for (let i = 0; i < 3; i++) {
       const t0 = Date.now()
       try {
-        await fetch(`${region.base}/v1/scan/sync/request`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-pan-token': process.env.AIRS_API_KEY },
-          body: JSON.stringify(probeBody),
-        })
+        // Pure HTTP GET — no credentials, no scan, measures network round-trip only
+        await fetch(`${region.base}/`, { method: 'GET', signal: AbortSignal.timeout(5000) })
       } catch { times.push(9999); continue }
       times.push(Date.now() - t0)
     }

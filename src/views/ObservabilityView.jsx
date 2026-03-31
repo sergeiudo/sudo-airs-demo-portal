@@ -72,10 +72,10 @@ function RegionCard({ region, activeEndpoint }) {
                     <div className="font-bold text-slate-200 mb-1">Probe endpoint</div>
                     <div className="font-mono text-[10px] font-black text-blue-400 break-all mb-2">{endpoint}</div>
                     <div className="space-y-1.5 text-slate-400">
-                      <div><span className="text-slate-200 font-semibold">What:</span> 3 real HTTP POST requests to <span className="font-mono text-[9px] text-slate-300">/v1/scan/sync/request</span> with a benign "hello" payload.</div>
-                      <div><span className="text-slate-200 font-semibold">LLM involved?</span> <span className="text-emerald-400 font-semibold">No.</span> The probe hits AIRS only — no LLM call is made. AIRS scans the prompt and returns a verdict.</div>
-                      <div><span className="text-slate-200 font-semibold">What it measures:</span> Pure AIRS scanning latency — identical to the <span className="font-mono text-[9px] text-slate-300">airs_input_ms</span> you see on real traces. Includes DNS, TLS handshake, and AIRS processing time.</div>
-                      <div><span className="text-slate-200 font-semibold">Accuracy:</span> Highly accurate for AIRS overhead. Does not include LLM inference time.</div>
+                      <div><span className="text-slate-200 font-semibold">What:</span> 3 HTTP GET requests to the base endpoint — equivalent to <span className="font-mono text-[9px] text-slate-300">curl -o /dev/null -s -w "%{"{"{"}time_total{"}"}"}" {endpoint}</span></div>
+                      <div><span className="text-slate-200 font-semibold">Credentials?</span> <span className="text-emerald-400 font-semibold">None.</span> No API key used — pure network connectivity test.</div>
+                      <div><span className="text-slate-200 font-semibold">LLM involved?</span> <span className="text-emerald-400 font-semibold">No.</span> No scan, no processing — just measures how long it takes to reach the endpoint.</div>
+                      <div><span className="text-slate-200 font-semibold">What it measures:</span> DNS resolution + TCP connect + TLS handshake + first byte. Pure network round-trip latency to this region.</div>
                     </div>
                   </div>
                 )}
@@ -129,7 +129,7 @@ function AirsProbeCard({ probeState, probeResult, onRun }) {
           <Wifi size={14} className="text-blue-400" />
           <div>
             <span className="text-[12px] font-bold text-slate-300">Live AIRS Regional Latency Probe</span>
-            <p className="text-[10px] text-slate-500 mt-0.5">Fires 3 real scan requests to each regional endpoint from this server simultaneously.</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Measures pure network round-trip to each regional endpoint (HTTP GET, no credentials, no scan). Hover <span className="font-bold text-slate-400">?</span> on each region for details.</p>
           </div>
         </div>
         <button
