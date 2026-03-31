@@ -11,12 +11,13 @@ const VIEW_LABELS = {
   modelScanning: { label: 'Model Scanning',               sublabel: 'AI model vulnerability assessment',          text: 'text-blue-400' },
   redTeaming:    { label: 'Red Teaming',                  sublabel: 'Automated adversarial campaign runner',      text: 'text-orange-400' },
   claudeHooks:   { label: 'AI Code Assistant Protection', sublabel: 'Claude Code hooks integration guide',        text: 'text-purple-400' },
+  observability: { label: 'LLM Telemetry',                sublabel: 'Prompt history, metrics & pipeline traces',  text: 'text-teal-400' },
 }
 
 export function TopBar() {
   const { state, dispatch } = useAppContext()
   const theme = useProtectionTheme()
-  const view = VIEW_LABELS[state.activeView] || VIEW_LABELS.apiIntercept
+  const view = VIEW_LABELS[state.activeView] ?? VIEW_LABELS.apiIntercept
 
   return (
     <header className="flex items-center h-16 px-6 border-b border-white/10 bg-base-900/60 backdrop-blur-md flex-shrink-0">
