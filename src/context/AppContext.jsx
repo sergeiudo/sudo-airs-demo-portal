@@ -7,6 +7,7 @@ const initialState = {
   activeView: 'home',
   scmUrl: null,
   isDark: false,
+  selectedTraceId: null,
 }
 
 function appReducer(state, action) {
@@ -19,6 +20,8 @@ function appReducer(state, action) {
       return { ...state, scmUrl: action.payload }
     case 'TOGGLE_THEME':
       return { ...state, isDark: !state.isDark }
+    case 'SET_SELECTED_TRACE':
+      return { ...state, selectedTraceId: action.payload }
     default:
       return state
   }
