@@ -1,15 +1,37 @@
 // src/components/observability/KpiStrip.jsx
-import React from 'react'
+import React, { useState } from 'react'
 import { Activity, Clock, TrendingUp, ShieldX, Zap, Hash, Shield } from 'lucide-react'
+
+function TooltipIcon({ text }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="relative ml-auto flex-shrink-0">
+      <button
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        className="w-4 h-4 rounded-full bg-white/[0.08] border border-white/[0.12] flex items-center justify-center text-[9px] font-bold text-slate-500 hover:text-slate-300 hover:bg-white/[0.14] transition-colors"
+      >
+        ?
+      </button>
+      {show && (
+        <div className="absolute right-0 top-6 z-50 w-56 p-3 rounded-xl bg-slate-900 border border-white/[0.12] shadow-xl text-[11px] text-slate-300 leading-relaxed pointer-events-none">
+          <div className="absolute -top-1.5 right-1.5 w-3 h-3 bg-slate-900 border-l border-t border-white/[0.12] rotate-45" />
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function KpiCard({ label, value, sub, tooltip, icon: Icon, color = 'text-slate-200', bgColor = 'bg-white/[0.04]', borderColor = 'border-white/[0.08]' }) {
   return (
-    <div title={tooltip} className={`flex flex-col gap-2 p-4 rounded-2xl border ${bgColor} ${borderColor} flex-1 min-w-0 cursor-help`}>
+    <div className={`flex flex-col gap-2 p-4 rounded-2xl border ${bgColor} ${borderColor} flex-1 min-w-0`}>
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center">
           <Icon size={14} className={color} />
         </div>
         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold truncate">{label}</span>
+        {tooltip && <TooltipIcon text={tooltip} />}
       </div>
       <span className={`text-3xl font-bold font-mono leading-none ${color}`}>{value ?? '—'}</span>
       {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
