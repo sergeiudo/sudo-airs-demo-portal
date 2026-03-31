@@ -12,6 +12,7 @@
     "@aws-sdk/client-bedrock": "^3.0.0",
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@google-cloud/vertexai": "^1.0.0",
+    "better-sqlite3": "^12.8.0",
     "concurrently": "^8.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
@@ -20,7 +21,8 @@
     "lucide-react": "^0.344.0",
     "openai": "^6.33.0",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^18.3.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
