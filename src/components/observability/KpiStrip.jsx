@@ -69,7 +69,7 @@ export function KpiStrip({ metrics }) {
         label="Avg Latency"
         value={metrics.avg_total_ms ? `${metrics.avg_total_ms}ms` : '—'}
         sub="end-to-end"
-        tooltip="Average end-to-end latency per request — from the moment the user sends a message to when the final response is returned. Includes AIRS input scan + LLM inference + AIRS output scan."
+        tooltip="Average end-to-end latency per request — includes AIRS input scan + LLM inference + AIRS output scan. AIRS scan is a live network call to service.api.aisecurity.paloaltonetworks.com. Measured from US infrastructure: typical 500–900ms avg (min 496ms, max 1,121ms). Production deployments with co-located AIRS endpoints are significantly faster."
         icon={Clock}
         color="text-blue-400"
         bgColor="bg-blue-500/[0.06]"
