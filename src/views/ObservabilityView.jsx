@@ -228,17 +228,6 @@ export function ObservabilityView() {
           ))}
         </div>
 
-        {/* AIRS probe button */}
-        <button
-          onClick={runProbe}
-          disabled={probeState === 'running'}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {probeState === 'running'
-            ? <><Loader2 size={11} className="animate-spin" /> Probing…</>
-            : <><Wifi size={11} /> Probe AIRS Latency</>}
-        </button>
-
         {/* Time range + live indicator */}
         <div className="ml-auto flex items-center gap-3">
           {/* RPM */}
