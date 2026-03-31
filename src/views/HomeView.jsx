@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Crosshair, ScanSearch, Swords, Shield, ArrowRight, ChevronRight, Terminal, Sun, Moon, BarChart2 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
@@ -58,11 +58,11 @@ const PILLARS = [
 ]
 
 const COLOR_MAP = {
-  red:    { text: 'text-red-400',    border: 'border-red-500/30',    bg: 'bg-red-500/10',    tag: 'bg-red-500/15 text-red-400',    btn: 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border-red-500/30' },
-  blue:   { text: 'text-blue-400',   border: 'border-blue-500/30',   bg: 'bg-blue-500/10',   tag: 'bg-blue-500/15 text-blue-400',   btn: 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border-blue-500/30' },
-  orange: { text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/10', tag: 'bg-orange-500/15 text-orange-400', btn: 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border-orange-500/30' },
-  purple: { text: 'text-purple-400', border: 'border-purple-500/30', bg: 'bg-purple-500/10', tag: 'bg-purple-500/15 text-purple-400', btn: 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-500/30' },
-  teal:   { text: 'text-teal-400',   border: 'border-teal-500/30',   bg: 'bg-teal-500/10',   tag: 'bg-teal-500/15 text-teal-400',   btn: 'bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border-teal-500/30' },
+  red:    { text: 'text-red-400',    border: 'border-red-500/30',    bg: 'bg-red-500/10',    tag: 'bg-red-500/15 text-red-400',    btn: 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border-red-500/30',    hoverBg: 'rgba(239,68,68,0.08)',    hoverBorder: 'rgba(239,68,68,0.40)' },
+  blue:   { text: 'text-blue-400',   border: 'border-blue-500/30',   bg: 'bg-blue-500/10',   tag: 'bg-blue-500/15 text-blue-400',   btn: 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border-blue-500/30',   hoverBg: 'rgba(59,130,246,0.08)',   hoverBorder: 'rgba(59,130,246,0.40)' },
+  orange: { text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/10', tag: 'bg-orange-500/15 text-orange-400', btn: 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border-orange-500/30', hoverBg: 'rgba(249,115,22,0.08)', hoverBorder: 'rgba(249,115,22,0.40)' },
+  purple: { text: 'text-purple-400', border: 'border-purple-500/30', bg: 'bg-purple-500/10', tag: 'bg-purple-500/15 text-purple-400', btn: 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-500/30', hoverBg: 'rgba(168,85,247,0.08)', hoverBorder: 'rgba(168,85,247,0.40)' },
+  teal:   { text: 'text-teal-400',   border: 'border-teal-500/30',   bg: 'bg-teal-500/10',   tag: 'bg-teal-500/15 text-teal-400',   btn: 'bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border-teal-500/30',   hoverBg: 'rgba(20,184,166,0.08)',   hoverBorder: 'rgba(20,184,166,0.40)' },
 }
 
 const containerVariants = {
@@ -73,6 +73,61 @@ const containerVariants = {
 const itemVariants = {
   hidden:  { opacity: 0, y: 24, filter: 'blur(6px)' },
   visible: { opacity: 1, y: 0,  filter: 'blur(0px)', transition: { duration: 0.45, ease: [0.4, 0, 0.2, 1] } },
+}
+
+function PillarCard({ pillar, c, navigate }) {
+  const [hovered, setHovered] = useState(false)
+  const Icon = pillar.icon
+
+  return (
+    <motion.div
+      variants={itemVariants}
+      onClick={() => navigate(pillar.id)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      animate={{ scale: hovered ? 1.04 : 1, y: hovered ? -4 : 0 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      className="group flex flex-col rounded-xl border backdrop-blur-md p-6 cursor-pointer shadow-sm transition-shadow duration-200"
+      style={{
+        borderColor: hovered ? c.hoverBorder : undefined,
+        backgroundColor: hovered ? c.hoverBg : undefined,
+        boxShadow: hovered ? `0 8px 32px ${c.hoverBg}` : undefined,
+      }}
+    >
+      {/* Icon + tag */}
+      <div className="flex items-start justify-between mb-4">
+        <div className={`flex items-center justify-center w-10 h-10 rounded-lg border ${c.border} ${c.bg}`}>
+          <Icon size={18} className={c.text} strokeWidth={1.8} />
+        </div>
+        <span className={`text-[9px] font-semibold tracking-widest uppercase px-2 py-1 rounded-full border ${c.border} ${c.bg} ${c.text}`}>
+          {pillar.tag}
+        </span>
+      </div>
+
+      {/* Title */}
+      <h2 className={`text-lg font-bold ${c.text} mb-2`}>{pillar.title}</h2>
+
+      {/* Description */}
+      <p className="text-xs text-slate-400 leading-relaxed flex-1">{pillar.description}</p>
+
+      {/* Highlights */}
+      <ul className="mt-4 space-y-1.5">
+        {pillar.highlights.map((h) => (
+          <li key={h} className="flex items-center gap-2 text-[11px] text-slate-500">
+            <ChevronRight size={10} className={c.text} />
+            {h}
+          </li>
+        ))}
+      </ul>
+
+      {/* CTA */}
+      <button className={`mt-5 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg border text-xs font-semibold transition-all duration-200 ${c.btn}`}>
+        Launch {pillar.title}
+        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+      </button>
+    </motion.div>
+  )
 }
 
 export function HomeView() {
@@ -153,55 +208,8 @@ export function HomeView() {
         animate="visible"
       >
         {PILLARS.map((pillar) => {
-          const Icon = pillar.icon
           const c = COLOR_MAP[pillar.color]
-
-          return (
-            <motion.div
-              key={pillar.id}
-              variants={itemVariants}
-              onClick={() => navigate(pillar.id)}
-              whileHover={{ scale: 1.04, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className={`group flex flex-col rounded-xl border ${c.border} bg-base-900/70 backdrop-blur-md p-6 cursor-pointer
-                hover:bg-base-900/90 hover:shadow-xl transition-colors duration-200`}
-            >
-              {/* Icon + tag */}
-              <div className="flex items-start justify-between mb-4">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-lg border ${c.border} ${c.bg}`}>
-                  <Icon size={18} className={c.text} strokeWidth={1.8} />
-                </div>
-                <span className={`text-[9px] font-semibold tracking-widest uppercase px-2 py-1 rounded-full border ${c.border} ${c.bg} ${c.text}`}>
-                  {pillar.tag}
-                </span>
-              </div>
-
-              {/* Title */}
-              <h2 className={`text-lg font-bold ${c.text} mb-2`}>{pillar.title}</h2>
-
-              {/* Description */}
-              <p className="text-xs text-slate-400 leading-relaxed flex-1">{pillar.description}</p>
-
-              {/* Highlights */}
-              <ul className="mt-4 space-y-1.5">
-                {pillar.highlights.map((h) => (
-                  <li key={h} className="flex items-center gap-2 text-[11px] text-slate-500">
-                    <ChevronRight size={10} className={c.text} />
-                    {h}
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
-              <button
-                className={`mt-5 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg border text-xs font-semibold transition-all duration-200 ${c.btn}`}
-              >
-                Launch {pillar.title}
-                <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </motion.div>
-          )
+          return <PillarCard key={pillar.id} pillar={pillar} c={c} navigate={navigate} />
         })}
       </motion.div>
 
