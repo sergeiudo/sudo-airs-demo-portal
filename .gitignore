@@ -20,3 +20,5 @@ aws-chatbot-target/
 .superpowers/
 
 traces.db
+traces.db-shm
+traces.db-wal

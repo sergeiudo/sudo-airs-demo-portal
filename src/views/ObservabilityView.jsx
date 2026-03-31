@@ -66,7 +66,7 @@ export function ObservabilityView() {
   const isEmpty = !loading && metrics?.total_requests === 0
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-base-950">
       {/* Header */}
       <div className="flex items-center gap-4 px-6 py-4 border-b border-white/[0.08] flex-shrink-0">
         <BarChart2 size={16} className="text-teal-400" />

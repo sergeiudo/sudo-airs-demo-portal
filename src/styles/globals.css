@@ -192,6 +192,10 @@ html.light textarea {
 /* ── Dividers ── */
 html.light .divide-white\/10 > * + * { border-color: rgba(0, 48, 135, 0.10) !important; }
 
+/* ── Observability + TraceDrawer — override hardcoded slate backgrounds ── */
+html.light .bg-slate-950 { background-color: #ffffff !important; }
+html.light .bg-slate-900 { background-color: #f8fafc !important; }
+
 /* ── Verdict hero cards — replace dark gradients with vivid light-mode colors ── */
 
 /* BLOCKED — strong red */
