@@ -640,6 +640,40 @@ app.get('/api/scanner/health', async (_req, res) => {
   }
 })
 
+// ─── GET /api/airs-probe — live latency test to AIRS scan endpoint ───────────
+app.get('/api/airs-probe', async (_req, res) => {
+  if (!process.env.AIRS_API_KEY || !process.env.AIRS_BASE_URL) {
+    return res.status(503).json({ error: 'AIRS not configured' })
+  }
+  const RUNS = 3
+  const times = []
+  const probeBody = {
+    tr_id: `probe-${Date.now()}`,
+    ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
+    metadata: { app_name: 'SUDO AIRS Demo', ai_model: 'probe', app_user: 'latency-probe' },
+    contents: [{ prompt: 'hello' }],
+  }
+  for (let i = 0; i < RUNS; i++) {
+    const t0 = Date.now()
+    try {
+      await fetch(`${process.env.AIRS_BASE_URL}/v1/scan/sync/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-pan-token': process.env.AIRS_API_KEY },
+        body: JSON.stringify(probeBody),
+      })
+    } catch {}
+    times.push(Date.now() - t0)
+  }
+  res.json({
+    runs: RUNS,
+    min_ms: Math.min(...times),
+    avg_ms: Math.round(times.reduce((a, b) => a + b, 0) / times.length),
+    max_ms: Math.max(...times),
+    samples: times,
+    endpoint: process.env.AIRS_BASE_URL,
+  })
+})
+
 // ─── GET /api/health ─────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({
