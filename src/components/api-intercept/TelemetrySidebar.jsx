@@ -316,7 +316,7 @@ function RecentTraces() {
 
   return (
     <div className="space-y-1">
-      {traces.map(t => (
+      {traces.slice(0, 5).map(t => (
         <button
           key={t.id}
           onClick={() => goToTrace(t.id)}
