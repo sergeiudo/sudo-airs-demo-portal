@@ -50,6 +50,7 @@ function db() {
 }
 
 export function insertTrace(t) {
+  const id = t.id ?? `trace_${randomUUID()}`
   db().prepare(`
     INSERT INTO traces (id, created_at, prompt, response, backend, model, verdict, category,
       threats_detected, airs_enabled, total_ms, airs_input_ms, llm_ms, airs_output_ms,
@@ -58,13 +59,13 @@ export function insertTrace(t) {
       @threats_detected, @airs_enabled, @total_ms, @airs_input_ms, @llm_ms, @airs_output_ms,
       @tokens_in, @tokens_out, @profile, @attack_label, @attack_severity)
   `).run({
-    id: `trace_${randomUUID()}`,
+    ...t,
+    id,
     created_at: new Date().toISOString(),
     threats_detected: JSON.stringify(t.threats_detected ?? []),
     airs_enabled: t.airs_enabled ? 1 : 0,
-    ...t,
   })
-  return t.id ?? `trace_${randomUUID()}`
+  return id
 }
 
 export function insertSpan(s) {
@@ -72,9 +73,9 @@ export function insertSpan(s) {
     INSERT INTO spans (id, trace_id, name, start_ms, end_ms, latency_ms, status, metadata)
     VALUES (@id, @trace_id, @name, @start_ms, @end_ms, @latency_ms, @status, @metadata)
   `).run({
+    ...s,
     id: `span_${randomUUID()}`,
     metadata: s.metadata ? JSON.stringify(s.metadata) : null,
-    ...s,
   })
 }
 
