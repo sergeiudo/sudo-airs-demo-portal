@@ -72,7 +72,7 @@ function RegionCard({ region, activeEndpoint }) {
                     <div className="font-bold text-slate-200 mb-1">Probe endpoint</div>
                     <div className="font-mono text-[10px] font-black text-blue-400 break-all mb-2">{endpoint}</div>
                     <div className="space-y-1.5 text-slate-400">
-                      <div><span className="text-slate-200 font-semibold">What:</span> 3 HTTP GET requests to the base endpoint — equivalent to <span className="font-mono text-[9px] text-slate-300">curl -o /dev/null -s -w "%{"{"{"}time_total{"}"}"}" {endpoint}</span></div>
+                      <div><span className="text-slate-200 font-semibold">What:</span> 3 HTTP GET requests to the base endpoint — equivalent to <span className="font-mono text-[9px] text-slate-300">{'curl -o /dev/null -s -w "%{time_total}" ' + endpoint}</span></div>
                       <div><span className="text-slate-200 font-semibold">Credentials?</span> <span className="text-emerald-400 font-semibold">None.</span> No API key used — pure network connectivity test.</div>
                       <div><span className="text-slate-200 font-semibold">LLM involved?</span> <span className="text-emerald-400 font-semibold">No.</span> No scan, no processing — just measures how long it takes to reach the endpoint.</div>
                       <div><span className="text-slate-200 font-semibold">What it measures:</span> DNS resolution + TCP connect + TLS handshake + first byte. Pure network round-trip latency to this region.</div>
