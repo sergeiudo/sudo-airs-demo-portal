@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, ShieldX, ShieldCheck, Zap, AlertTriangle,
-  ChevronDown, Clock, Cpu, Activity, ArrowRight,
+  ChevronDown, Clock, Cpu, Activity,
 } from 'lucide-react'
 
 // ─── Span config ──────────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ function FlowNode({ span, totalMs, isLast }) {
       </div>
 
       {/* Right: content */}
-      <div className={`flex-1 pb-3 ${isLast ? '' : ''}`}>
+      <div className="flex-1 pb-3">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-bold ${cfg.text}`}>{cfg.label}</span>
@@ -257,9 +257,9 @@ function FlowNode({ span, totalMs, isLast }) {
 }
 
 // ─── PipelineFlow ─────────────────────────────────────────────────────────────
-function PipelineFlow({ spans }) {
+function PipelineFlow({ spans, traceTotalMs }) {
   if (!spans?.length) return null
-  const totalMs = spans.reduce((max, s) => Math.max(max, s.end_ms), 1)
+  const totalMs = traceTotalMs || spans.reduce((max, s) => Math.max(max, s.end_ms), 0) || 1
 
   return (
     <div>
@@ -282,7 +282,7 @@ function MessageBubble({ text, variant = 'default' }) {
     : 'bg-white/[0.03] border-white/[0.06]'
 
   return (
-    <div className={`relative p-3 rounded-xl border ${bg} text-xs text-slate-400 font-mono leading-relaxed max-h-[120px] overflow-hidden`}>
+    <div className={`p-3 rounded-xl border ${bg} text-xs text-slate-400 font-mono leading-relaxed`}>
       <div className="overflow-y-auto max-h-[120px] pr-1 whitespace-pre-wrap break-words">{text}</div>
     </div>
   )
@@ -375,7 +375,7 @@ export function TraceDrawer({ traceId, onClose }) {
 
                 <div className="space-y-3">
                   <SectionLabel>Pipeline Flow</SectionLabel>
-                  <PipelineFlow spans={trace.spans} />
+                  <PipelineFlow spans={trace.spans} traceTotalMs={trace.total_ms} />
                 </div>
 
                 {trace.prompt && (
