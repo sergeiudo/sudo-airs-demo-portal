@@ -1,7 +1,7 @@
 // src/views/ObservabilityView.jsx
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart2, Activity, Crosshair } from 'lucide-react'
+import { BarChart2, Activity, Crosshair, Trash2 } from 'lucide-react'
 import { useObservability } from '../hooks/useObservability'
 import { useAppContext } from '../context/AppContext'
 import { KpiStrip } from '../components/observability/KpiStrip'
@@ -52,7 +52,7 @@ function EmptyState({ dispatch }) {
 export function ObservabilityView() {
   const [activeTab, setActiveTab]       = useState('overview')
   const [selectedTraceId, setSelectedTraceId] = useState(null)
-  const { metrics, traces, loading, filters, setFilters, since, setSince } = useObservability()
+  const { metrics, traces, loading, filters, setFilters, since, setSince, refresh } = useObservability()
   const { dispatch, state } = useAppContext()
 
   // If a trace was pre-selected from the TelemetrySidebar, open it
@@ -159,8 +159,32 @@ export function ObservabilityView() {
           {/* Traces tab */}
           {activeTab === 'traces' && (
             <motion.div key="traces" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-              <FilterBar filters={filters} setFilters={setFilters} />
-              <TraceTable traces={traces} selectedId={selectedTraceId} onSelect={setSelectedTraceId} />
+              <div className="flex items-center gap-3">
+                <div className="flex-1"><FilterBar filters={filters} setFilters={setFilters} /></div>
+                {traces.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Delete all ${traces.length} traces? This cannot be undone.`)) return
+                      await fetch('/api/traces', { method: 'DELETE' })
+                      setSelectedTraceId(null)
+                      refresh()
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-400 border border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/20 transition-colors flex-shrink-0"
+                  >
+                    <Trash2 size={12} /> Clear All
+                  </button>
+                )}
+              </div>
+              <TraceTable
+                traces={traces}
+                selectedId={selectedTraceId}
+                onSelect={setSelectedTraceId}
+                onDelete={async (id) => {
+                  await fetch(`/api/traces/${id}`, { method: 'DELETE' })
+                  if (selectedTraceId === id) setSelectedTraceId(null)
+                  refresh()
+                }}
+              />
             </motion.div>
           )}
         </div>

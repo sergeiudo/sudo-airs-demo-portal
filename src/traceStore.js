@@ -104,6 +104,18 @@ export function getTrace(id) {
   }
 }
 
+export function deleteTrace(id) {
+  const d = db()
+  d.prepare('DELETE FROM spans WHERE trace_id = ?').run(id)
+  d.prepare('DELETE FROM traces WHERE id = ?').run(id)
+}
+
+export function deleteAllTraces() {
+  const d = db()
+  d.prepare('DELETE FROM spans').run()
+  d.prepare('DELETE FROM traces').run()
+}
+
 export function getMetrics(since = '-20 minutes') {
   const d = db()
   const total = d.prepare('SELECT COUNT(*) as n FROM traces').get().n

@@ -12,7 +12,7 @@ import {
   ListFoundationModelsCommand,
 } from '@aws-sdk/client-bedrock'
 import { AzureOpenAI } from 'openai'
-import { insertTrace, insertSpan, getTraces, getTrace, getMetrics } from './src/traceStore.js'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces } from './src/traceStore.js'
 
 const app = express()
 app.use(cors())
@@ -687,6 +687,28 @@ app.get('/api/traces/:id', (req, res) => {
     res.json(trace)
   } catch (err) {
     console.error('[traces/:id] Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── DELETE /api/traces ───────────────────────────────────────────────────────
+app.delete('/api/traces', (req, res) => {
+  try {
+    deleteAllTraces()
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[traces] DELETE Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── DELETE /api/traces/:id ───────────────────────────────────────────────────
+app.delete('/api/traces/:id', (req, res) => {
+  try {
+    deleteTrace(req.params.id)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[traces/:id] DELETE Error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })

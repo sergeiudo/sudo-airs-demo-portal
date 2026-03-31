@@ -1,6 +1,6 @@
 // src/components/observability/TraceTable.jsx
 import React from 'react'
-import { ShieldX, ShieldCheck, Zap, AlertTriangle, ShieldOff } from 'lucide-react'
+import { ShieldX, ShieldCheck, Zap, AlertTriangle, ShieldOff, Trash2 } from 'lucide-react'
 
 function VerdictBadge({ verdict }) {
   if (verdict === 'BLOCKED') return (
@@ -36,7 +36,7 @@ function CategoryBadge({ category }) {
   )
 }
 
-export function TraceTable({ traces, selectedId, onSelect }) {
+export function TraceTable({ traces, selectedId, onSelect, onDelete }) {
   if (!traces.length) return (
     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
       <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
@@ -56,40 +56,49 @@ export function TraceTable({ traces, selectedId, onSelect }) {
   return (
     <div className="rounded-xl border border-white/[0.08] overflow-hidden">
       {/* Header */}
-      <div className="grid grid-cols-[1fr_90px_100px_90px_70px_70px_90px] gap-3 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06]">
-        {['Prompt', 'Category', 'Verdict', 'Protection', 'Total', 'LLM', 'Time'].map(h => (
+      <div className="grid grid-cols-[1fr_90px_100px_90px_70px_70px_90px_32px] gap-3 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06]">
+        {['Prompt', 'Category', 'Verdict', 'Protection', 'Total', 'LLM', 'Time', ''].map(h => (
           <span key={h} className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">{h}</span>
         ))}
       </div>
       {/* Rows */}
       {traces.map(trace => (
-        <button
+        <div
           key={trace.id}
-          onClick={() => onSelect(trace.id)}
-          className={`w-full grid grid-cols-[1fr_90px_100px_90px_70px_70px_90px] gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 text-left transition-all duration-100 hover:bg-teal-500/[0.06] hover:border-l-2 hover:border-l-teal-500/40 ${selectedId === trace.id ? 'bg-teal-500/[0.10] border-l-2 border-l-teal-500/60' : ''}`}
+          className={`group relative grid grid-cols-[1fr_90px_100px_90px_70px_70px_90px_32px] gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 transition-all duration-100 hover:bg-teal-500/[0.06] hover:border-l-2 hover:border-l-teal-500/40 ${selectedId === trace.id ? 'bg-teal-500/[0.10] border-l-2 border-l-teal-500/60' : ''}`}
         >
-          <span className="text-xs text-slate-400 truncate pr-2 flex items-center gap-1">
-            {trace.attack_severity && (
-              <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full border uppercase mr-1 flex-shrink-0 ${SEVERITY_COLORS[trace.attack_severity] ?? 'bg-white/[0.06] text-slate-400 border-white/[0.08]'}`}>
-                {trace.attack_severity}
-              </span>
-            )}
-            {trace.attack_label
-              ? <><span className="text-orange-400 font-semibold mr-1.5">[{trace.attack_label}]</span>{trace.prompt?.slice(0, 60)}{trace.prompt?.length > 60 ? '…' : ''}</>
-              : <>{trace.prompt?.slice(0, 80) ?? '—'}{trace.prompt?.length > 80 ? '…' : ''}</>}
-          </span>
-          <span><CategoryBadge category={trace.category} /></span>
-          <span><VerdictBadge verdict={trace.verdict} /></span>
-          <span className="flex items-center">
-            {trace.airs_enabled
-              ? <ShieldCheck size={12} className="text-emerald-400" />
-              : <ShieldOff size={12} className="text-red-400" />
-            }
-          </span>
-          <span className="text-[10px] font-mono text-slate-400">{trace.total_ms != null ? `${trace.total_ms}ms` : '—'}</span>
-          <span className="text-[10px] font-mono text-blue-400">{trace.llm_ms != null ? `${trace.llm_ms}ms` : '—'}</span>
-          <span className="text-[9px] text-slate-600">{new Date(trace.created_at).toLocaleTimeString()}</span>
-        </button>
+          <button onClick={() => onSelect(trace.id)} className="contents text-left">
+            <span className="text-xs text-slate-400 truncate pr-2 flex items-center gap-1">
+              {trace.attack_severity && (
+                <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full border uppercase mr-1 flex-shrink-0 ${SEVERITY_COLORS[trace.attack_severity] ?? 'bg-white/[0.06] text-slate-400 border-white/[0.08]'}`}>
+                  {trace.attack_severity}
+                </span>
+              )}
+              {trace.attack_label
+                ? <><span className="text-orange-400 font-semibold mr-1.5">[{trace.attack_label}]</span>{trace.prompt?.slice(0, 60)}{trace.prompt?.length > 60 ? '…' : ''}</>
+                : <>{trace.prompt?.slice(0, 80) ?? '—'}{trace.prompt?.length > 80 ? '…' : ''}</>}
+            </span>
+            <span><CategoryBadge category={trace.category} /></span>
+            <span><VerdictBadge verdict={trace.verdict} /></span>
+            <span className="flex items-center">
+              {trace.airs_enabled
+                ? <ShieldCheck size={12} className="text-emerald-400" />
+                : <ShieldOff size={12} className="text-red-400" />
+              }
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">{trace.total_ms != null ? `${trace.total_ms}ms` : '—'}</span>
+            <span className="text-[10px] font-mono text-blue-400">{trace.llm_ms != null ? `${trace.llm_ms}ms` : '—'}</span>
+            <span className="text-[9px] text-slate-600">{new Date(trace.created_at).toLocaleTimeString()}</span>
+          </button>
+          {/* Delete button — appears on row hover */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete?.(trace.id) }}
+            className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-slate-600 hover:text-red-400"
+            title="Delete trace"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       ))}
     </div>
   )
