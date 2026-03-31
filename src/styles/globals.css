@@ -196,6 +196,21 @@ html.light .divide-white\/10 > * + * { border-color: rgba(0, 48, 135, 0.10) !imp
 html.light .bg-slate-950 { background-color: #ffffff !important; }
 html.light .bg-slate-900 { background-color: #f8fafc !important; }
 
+/* ── TraceDrawer — solid opaque background + strong text in light mode ── */
+html.light .backdrop-blur-xl {
+  background-color: #f8fafc !important;
+  backdrop-filter: none !important;
+  border-left-color: rgba(0, 48, 135, 0.15) !important;
+  box-shadow: -4px 0 40px rgba(0, 48, 135, 0.12) !important;
+}
+
+/* Force readable text colors inside the drawer */
+html.light .backdrop-blur-xl .text-slate-300 { color: #0f172a !important; }
+html.light .backdrop-blur-xl .text-slate-400 { color: #1e293b !important; }
+html.light .backdrop-blur-xl .text-slate-500 { color: #334155 !important; }
+html.light .backdrop-blur-xl .text-slate-600 { color: #475569 !important; }
+html.light .backdrop-blur-xl .font-mono      { color: #0f172a !important; }
+
 /* ── Verdict hero cards — replace dark gradients with vivid light-mode colors ── */
 
 /* BLOCKED — strong red */
