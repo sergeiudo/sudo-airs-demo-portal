@@ -9,65 +9,85 @@ import {
 // ─── Span config ──────────────────────────────────────────────────────────────
 const SPAN_CFG = {
   user_prompt_received: {
-    label: 'User Prompt',
-    dot:   'bg-slate-400 border-slate-400',
-    bar:   'bg-slate-400',
-    text:  'text-slate-400',
-    line:  '#94a3b8',
-    detail: () => 'Message sent to protected endpoint',
+    label:   'User Prompt',
+    icon:    '👤',
+    dotBg:   'bg-slate-100 border-slate-300',
+    iconBg:  'bg-slate-100',
+    bar:     'bg-slate-400',
+    text:    'text-slate-600',
+    cardBg:  'bg-white/[0.06] border-white/[0.10]',
+    line:    '#94a3b8',
+    badge:   'received',
+    detail:  () => 'Message sent to the protected LLM endpoint',
   },
   airs_input_scan: {
-    label: 'AIRS Input Scan',
-    dot:   'bg-emerald-500 border-emerald-500',
-    bar:   'bg-emerald-500',
-    text:  'text-emerald-400',
-    line:  '#34d399',
-    detail: (span) => {
+    label:   'AIRS Input Scan',
+    icon:    '🔍',
+    dotBg:   'bg-emerald-50 border-emerald-300',
+    iconBg:  'bg-emerald-50',
+    bar:     'bg-emerald-500',
+    text:    'text-emerald-600',
+    cardBg:  'bg-emerald-500/[0.06] border-emerald-500/20',
+    line:    '#34d399',
+    badge:   null,
+    detail:  (span) => {
       const m = span.metadata ?? {}
       const parts = []
       if (m.action) parts.push(`action: ${m.action}`)
       if (m.category) parts.push(m.category)
       if (m.scan_id) parts.push(`scan: ${m.scan_id.slice(0, 8)}…`)
-      return parts.join(' · ') || 'Prompt scanned by Prisma AIRS'
+      return parts.join(' · ') || 'Prompt scanned · Prisma AIRS'
     },
   },
   llm_inference: {
-    label: 'LLM Inference',
-    dot:   'bg-blue-500 border-blue-500',
-    bar:   'bg-blue-500',
-    text:  'text-blue-400',
-    line:  '#60a5fa',
-    detail: (span) => {
+    label:   'LLM Inference',
+    icon:    '🤖',
+    dotBg:   'bg-blue-50 border-blue-300',
+    iconBg:  'bg-blue-50',
+    bar:     'bg-blue-500',
+    text:    'text-blue-600',
+    cardBg:  'bg-blue-500/[0.06] border-blue-500/20',
+    line:    '#60a5fa',
+    badge:   null,
+    detail:  (span) => {
       const m = span.metadata ?? {}
       const parts = []
       if (m.model) parts.push(m.model)
       if (m.tokens_in != null && m.tokens_out != null)
-        parts.push(`${m.tokens_in} in / ${m.tokens_out} out tok`)
-      if (m.finish_reason) parts.push(`stop: ${m.finish_reason}`)
+        parts.push(`${m.tokens_in} in / ${m.tokens_out} out tokens`)
+      if (m.finish_reason) parts.push(`stop reason: ${m.finish_reason}`)
       return parts.join(' · ') || 'LLM processing'
     },
   },
   airs_output_scan: {
-    label: 'AIRS Output Scan',
-    dot:   'bg-violet-500 border-violet-500',
-    bar:   'bg-violet-500',
-    text:  'text-violet-400',
-    line:  '#a78bfa',
-    detail: (span) => {
+    label:   'AIRS Output Scan',
+    icon:    '🔍',
+    dotBg:   'bg-violet-50 border-violet-300',
+    iconBg:  'bg-violet-50',
+    bar:     'bg-violet-500',
+    text:    'text-violet-600',
+    cardBg:  'bg-violet-500/[0.06] border-violet-500/20',
+    line:    '#a78bfa',
+    badge:   null,
+    detail:  (span) => {
       const m = span.metadata ?? {}
       const parts = []
       if (m.action) parts.push(`action: ${m.action}`)
       if (m.category) parts.push(m.category)
-      return parts.join(' · ') || 'Response scanned by Prisma AIRS'
+      return parts.join(' · ') || 'Response scanned · Prisma AIRS'
     },
   },
   response_delivered: {
-    label: 'Response Delivered',
-    dot:   'bg-teal-500 border-teal-500',
-    bar:   'bg-teal-500',
-    text:  'text-teal-400',
-    line:  '#14b8a6',
-    detail: (span) =>
+    label:   'Response Delivered',
+    icon:    '✅',
+    dotBg:   'bg-teal-50 border-teal-300',
+    iconBg:  'bg-teal-50',
+    bar:     'bg-teal-500',
+    text:    'text-teal-600',
+    cardBg:  'bg-teal-500/[0.06] border-teal-500/20',
+    line:    '#14b8a6',
+    badge:   null,
+    detail:  (span) =>
       span.status === 'blocked'
         ? 'Blocked — response suppressed'
         : 'Clean response returned to user',
@@ -160,25 +180,25 @@ function TokenBar({ trace }) {
   return (
     <div className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Token Usage</span>
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-mono font-bold text-slate-300">{total.toLocaleString()} total</span>
+        <span className="text-[11px] font-semibold text-slate-400">Token distribution</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono font-bold text-slate-300">{total.toLocaleString()} total</span>
           {tps != null && (
-            <span className="text-[9px] text-slate-500">{tps} tok/s</span>
+            <span className="text-[10px] font-bold text-slate-500">{tps} tok/s</span>
           )}
         </div>
       </div>
 
       {/* Split bar */}
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-white/[0.06] gap-px">
+      <div className="flex h-3 rounded-lg overflow-hidden bg-black/[0.06] gap-px">
         <motion.div
-          className="bg-blue-500/80 rounded-l-full"
+          className="bg-blue-500/80"
           initial={{ width: 0 }}
           animate={{ width: `${inPct}%` }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
         />
         <motion.div
-          className="bg-violet-500/80 rounded-r-full"
+          className="bg-violet-500/80"
           initial={{ width: 0 }}
           animate={{ width: `${outPct}%` }}
           transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }}
@@ -187,13 +207,16 @@ function TokenBar({ trace }) {
 
       <div className="flex items-center gap-4 mt-2">
         <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
-          <span className="w-2 h-2 rounded bg-blue-500/80 inline-block" />
-          {tokens_in ?? '—'} input
+          <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block" />
+          {tokens_in ?? '—'} input tokens
         </span>
         <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
-          <span className="w-2 h-2 rounded bg-violet-500/80 inline-block" />
-          {tokens_out ?? '—'} output
+          <span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block" />
+          {tokens_out ?? '—'} output tokens
         </span>
+        {tps != null && (
+          <span className="ml-auto text-[10px] font-bold text-slate-400">{tps} tok/s throughput</span>
+        )}
       </div>
     </div>
   )
@@ -202,8 +225,10 @@ function TokenBar({ trace }) {
 // ─── FlowNode ─────────────────────────────────────────────────────────────────
 function FlowNode({ span, totalMs, isLast }) {
   const cfg = SPAN_CFG[span.name] ?? {
-    label: span.name, dot: 'bg-slate-500 border-slate-500', bar: 'bg-slate-500',
-    text: 'text-slate-400', line: '#94a3b8', detail: () => '',
+    label: span.name, icon: '●', dotBg: 'bg-slate-100 border-slate-300',
+    bar: 'bg-slate-400', text: 'text-slate-600',
+    cardBg: 'bg-white/[0.06] border-white/[0.10]',
+    line: '#94a3b8', badge: null, detail: () => '',
   }
   const isBlocked = span.status === 'blocked'
   const barPct    = totalMs > 0 && span.latency_ms > 0
@@ -212,39 +237,47 @@ function FlowNode({ span, totalMs, isLast }) {
   const detail    = cfg.detail(span)
 
   return (
-    <div className="flex gap-3">
-      {/* Left: dot + line */}
-      <div className="flex flex-col items-center" style={{ width: 24, flexShrink: 0 }}>
-        <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 z-10 ${cfg.dot} ${isBlocked ? 'ring-2 ring-red-500 ring-offset-1 ring-offset-transparent' : ''}`} />
+    <div className="flex gap-3 items-stretch">
+      {/* Left: icon circle + connector line */}
+      <div className="flex flex-col items-center flex-shrink-0" style={{ width: 44 }}>
+        <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center text-lg flex-shrink-0 z-10 ${cfg.dotBg} ${isBlocked ? 'ring-2 ring-red-400' : ''}`}>
+          {cfg.icon}
+        </div>
         {!isLast && (
-          <div className="w-0.5 flex-1 mt-0.5" style={{ background: cfg.line, opacity: 0.35, minHeight: 12 }} />
+          <div className="w-0.5 flex-1 mt-1" style={{ background: cfg.line, opacity: 0.4, minHeight: 16 }} />
         )}
       </div>
 
-      {/* Right: content */}
-      <div className="flex-1 pb-3">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-bold ${cfg.text}`}>{cfg.label}</span>
-            {isBlocked && (
-              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 text-[8px] font-bold">
-                <AlertTriangle size={7} />BLOCKED
-              </span>
+      {/* Right: bordered card */}
+      <div className={`flex-1 mb-3 p-3 rounded-xl border ${cfg.cardBg}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[12px] font-bold ${cfg.text}`}>{cfg.label}</span>
+              {cfg.badge && (
+                <span className="text-[10px] text-slate-400">{cfg.badge}</span>
+              )}
+              {isBlocked && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 text-[8px] font-bold">
+                  <AlertTriangle size={7} />BLOCKED
+                </span>
+              )}
+            </div>
+            {detail && (
+              <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">{detail}</div>
             )}
           </div>
           {span.latency_ms > 0 && (
-            <span className="text-[10px] font-mono font-bold text-slate-400">{span.latency_ms}ms</span>
+            <span className={`text-[11px] font-mono font-bold flex-shrink-0 ${cfg.text}`}>
+              {span.latency_ms.toLocaleString()}ms
+            </span>
           )}
         </div>
 
-        {detail && (
-          <div className="text-[10px] text-slate-500 mb-1.5 leading-relaxed">{detail}</div>
-        )}
-
         {barPct > 0 && (
-          <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+          <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mt-2.5">
             <motion.div
-              className={`h-full rounded-full ${cfg.bar} opacity-60`}
+              className={`h-full rounded-full ${cfg.bar} opacity-70`}
               initial={{ width: 0 }}
               animate={{ width: `${barPct}%` }}
               transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -266,9 +299,9 @@ function PipelineFlow({ spans, traceTotalMs }) {
       {spans.map((span, i) => (
         <FlowNode key={span.id} span={span} totalMs={totalMs} isLast={i === spans.length - 1} />
       ))}
-      <div className="flex items-center justify-between text-[10px] pt-2 mt-1 border-t border-white/[0.06]">
-        <span className="text-slate-500 font-semibold">Total round-trip</span>
-        <span className="font-mono font-bold text-slate-300">{totalMs}ms</span>
+      <div className="flex items-center justify-between text-[11px] pt-3 mt-1 border-t border-white/[0.08]">
+        <span className="text-slate-400 font-bold">Total round-trip</span>
+        <span className="font-mono font-bold text-slate-300">{totalMs.toLocaleString()}ms</span>
       </div>
     </div>
   )
@@ -370,8 +403,28 @@ export function TraceDrawer({ traceId, onClose }) {
             {!loading && trace && (
               <>
                 <VerdictBanner trace={trace} />
-                <MetricsStrip trace={trace} />
-                <TokenBar trace={trace} />
+
+                {/* Model pill */}
+                {(trace.model || trace.backend) && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/[0.04] border border-white/[0.08] w-fit">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {trace.model && trace.model !== trace.backend
+                        ? `${trace.model} · ${trace.backend === 'vertex' ? 'Vertex AI' : trace.backend === 'bedrock' ? 'AWS Bedrock' : trace.backend === 'azure' ? 'Azure OpenAI' : trace.backend}`
+                        : trace.backend}
+                    </span>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <SectionLabel>Performance Metrics</SectionLabel>
+                  <MetricsStrip trace={trace} />
+                </div>
+
+                <div className="space-y-2">
+                  <SectionLabel>Token Usage</SectionLabel>
+                  <TokenBar trace={trace} />
+                </div>
 
                 <div className="space-y-3">
                   <SectionLabel>Pipeline Flow</SectionLabel>
@@ -387,7 +440,7 @@ export function TraceDrawer({ traceId, onClose }) {
 
                 {trace.response && (
                   <div className="space-y-1.5">
-                    <SectionLabel>Response</SectionLabel>
+                    <SectionLabel>LLM Response</SectionLabel>
                     <MessageBubble text={trace.response} variant="response" />
                   </div>
                 )}
