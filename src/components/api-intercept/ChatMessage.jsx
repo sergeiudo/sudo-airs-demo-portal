@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ShieldX, ShieldCheck, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check } from 'lucide-react'
+import { ShieldX, ShieldCheck, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check, Activity } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslati
 }
 
 // ─── Assistant bubble ─────────────────────────────────────────────────────────
-function AssistantMessage({ message }) {
+function AssistantMessage({ message, onOpenTelemetry }) {
   const isBlocked = message.blocked
   const isError = message.verdict === 'ERROR'
 const hebrew = isHebrewText(message.content || '')
@@ -259,13 +259,23 @@ const hebrew = isHebrewText(message.content || '')
             <ArrowUpFromLine size={9} />{message.tokensOut.toLocaleString()} out
           </span>
         )}
+        {message.telemetry && onOpenTelemetry && (
+          <button
+            onClick={() => onOpenTelemetry(message.telemetry)}
+            className="flex items-center gap-1 text-slate-500 hover:text-blue-400 transition-colors"
+            title="View prompt telemetry"
+          >
+            <Activity size={9} />
+            Prompt Telemetry
+          </button>
+        )}
       </div>
     </motion.div>
   )
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
-export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTranslating }) {
+export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTranslating, onOpenTelemetry }) {
   if (message.role === 'system') return <SystemMessage message={message} />
   if (message.role === 'user') return (
     <UserMessage
@@ -276,6 +286,6 @@ export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTr
       isTranslating={isTranslating}
     />
   )
-  if (message.role === 'assistant') return <AssistantMessage message={message} />
+  if (message.role === 'assistant') return <AssistantMessage message={message} onOpenTelemetry={onOpenTelemetry} />
   return null
 }
