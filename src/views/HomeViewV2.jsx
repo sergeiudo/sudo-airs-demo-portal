@@ -425,40 +425,21 @@ export function HomeViewV2() {
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 flex flex-col items-center text-center px-8 pt-12 pb-10 flex-shrink-0"
+        className="relative z-10 flex flex-col items-center text-center px-8 pt-8 pb-6 flex-shrink-0"
       >
-        <div className="mb-4">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-[10px] font-semibold tracking-widest text-emerald-400 uppercase">
-            <motion.span
-              className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-            Prisma AI Runtime Security
-          </span>
-        </div>
-
-        <h1
-          className="text-5xl font-black tracking-tight mb-4 leading-none"
-          style={{
-            background: 'linear-gradient(135deg, #ffffff 40%, #94a3b8 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
+        <h1 className="text-4xl font-black tracking-tight text-white mb-3">
           SUDO AIRS Demo
         </h1>
 
-        <p className="max-w-2xl text-[14px] text-slate-500 leading-[1.8]">
+        <p className="max-w-xl text-sm text-slate-400 leading-relaxed">
           An interactive security demonstration showing how{' '}
-          <span className="text-slate-300 font-medium">Prisma AIRS</span> protects AI applications
+          <span className="text-white font-medium">Prisma AIRS</span> protects AI applications
           across six pillars — runtime API interception, model supply-chain scanning, automated
           red teaming, Claude Code CLI protection, full LLM telemetry, and developer integration.{' '}
           Toggle protection on and off to see the difference in real time.
         </p>
 
-        <p className="mt-3 text-[11px] text-slate-600 tracking-wide">
+        <p className="mt-2 text-[11px] text-slate-600">
           Click any card to expand · Launch to enter the demo
         </p>
       </motion.div>
