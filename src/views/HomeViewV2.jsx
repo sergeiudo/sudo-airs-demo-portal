@@ -123,6 +123,7 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
         border: `1px solid ${hovered ? pillar.accent + '55' : (isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)')}`,
         boxShadow: hovered ? `0 8px 40px ${pillar.glow}, 0 0 0 1px ${pillar.accent}20` : (isDark ? 'none' : '0 2px 12px rgba(0,0,0,0.06)'),
         transition: 'background 0.2s, border 0.2s, box-shadow 0.2s',
+        minHeight: 380,
       }}
     >
       {/* Top accent bar */}
@@ -450,7 +451,7 @@ export function HomeViewV2() {
       <div className="relative z-10 flex-1 overflow-y-auto px-8 pb-8 min-h-0">
         <div
           className="grid gap-4"
-          style={{ gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '1fr' }}
+          style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
         >
           {PILLARS.map((pillar, i) => (
             <MiniCard
