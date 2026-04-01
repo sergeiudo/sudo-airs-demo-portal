@@ -4,6 +4,7 @@ import { ChatCenter } from '../components/api-intercept/ChatCenter'
 import { TelemetrySidebar } from '../components/api-intercept/TelemetrySidebar'
 import { useAttackSimulator } from '../hooks/useAttackSimulator'
 import { useProtectionTheme } from '../hooks/useProtectionTheme'
+import { PromptTelemetryDrawer } from '../components/api-intercept/PromptTelemetryDrawer'
 
 const DEFAULT_MODELS = {
   vertex:  'gemini-2.0-flash-001',
@@ -26,6 +27,7 @@ export function ApiInterceptView() {
   // Right telemetry sidebar
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_RIGHT)
   const [isDragging, setIsDragging] = useState(false)
+  const [telemetryDrawer, setTelemetryDrawer] = useState(null)
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(0)
 
@@ -129,6 +131,7 @@ export function ApiInterceptView() {
           onClear={clearChat}
           backend={backend}
           model={model}
+          onOpenTelemetry={setTelemetryDrawer}
         />
       </div>
 
@@ -167,6 +170,12 @@ export function ApiInterceptView() {
       >
         <TelemetrySidebar telemetry={activeTelemetry} />
       </div>
+
+      {/* Prompt Telemetry Drawer */}
+      <PromptTelemetryDrawer
+        telemetry={telemetryDrawer}
+        onClose={() => setTelemetryDrawer(null)}
+      />
     </div>
   )
 }
