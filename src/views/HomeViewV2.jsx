@@ -354,8 +354,16 @@ export function HomeViewV2() {
     return () => document.removeEventListener('keydown', handler)
   }, [])
 
+  // Allow normal page scroll for this view (globals.css sets overflow:hidden on root)
+  useEffect(() => {
+    const root = document.getElementById('root')
+    const prev = root?.style.overflow || ''
+    if (root) root.style.overflow = 'auto'
+    return () => { if (root) root.style.overflow = prev }
+  }, [])
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-base-950 grid-bg relative select-none">
+    <div className="flex flex-col min-h-screen w-screen bg-base-950 grid-bg relative select-none" style={{ overflowY: 'auto', overflowX: 'hidden' }}>
 
       {/* ── Ambient color spotlight when a card is selected ── */}
       <AnimatePresence>
@@ -448,7 +456,7 @@ export function HomeViewV2() {
       </motion.div>
 
       {/* ── 3×2 Grid ── */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-8 pb-8 min-h-0">
+      <div className="relative z-10 px-8 pb-8">
         <div
           className="grid gap-4"
           style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
