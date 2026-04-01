@@ -403,20 +403,20 @@ function SubTabBar({ tabs, active, onChange }) {
 
 function Table({ headers, rows }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+    <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
       <table className="w-full text-[11px]">
         <thead>
-          <tr className="border-b border-white/[0.08]" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             {headers.map(h => (
-              <th key={h} className="px-3 py-2.5 text-left font-bold text-slate-400 uppercase tracking-wider text-[10px]">{h}</th>
+              <th key={h} className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-[10px]" style={{ color: '#475569' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
+            <tr key={i} className="hover:bg-slate-50 transition-colors" style={{ borderBottom: '1px solid #f1f5f9' }}>
               {row.map((cell, j) => (
-                <td key={j} className="px-3 py-2.5 text-slate-400 font-mono">{cell}</td>
+                <td key={j} className="px-3 py-2.5 font-mono" style={{ color: '#334155' }}>{cell}</td>
               ))}
             </tr>
           ))}
@@ -518,7 +518,7 @@ else:
     <div className="space-y-6">
       <SectionTitle icon={Zap} color="#f59e0b" title="Quick Start" subtitle="Get Prisma AIRS scanning in under 5 minutes" />
 
-      <div className="p-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] mb-6">
+      <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 mb-6">
         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Integration Architecture</div>
         <FlowDiagram />
         <div className="text-[10px] text-slate-600 mt-2">Every prompt passes through AIRS before reaching the LLM. Every response passes through AIRS before reaching the user.</div>
@@ -619,12 +619,12 @@ function RestSection() {
       <SectionTitle icon={Globe} color="#10b981" title="REST API" subtitle="Language-agnostic — works with any stack via HTTP POST" />
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="p-3 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Authentication</div>
           <code className="text-[11px] font-mono text-emerald-400">x-pan-token: {'<your-API-key>'}</code>
           <div className="text-[10px] text-slate-600 mt-1">Or: Authorization: Bearer {'<oauth-token>'} for RBAC</div>
         </div>
-        <div className="p-3 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Endpoint</div>
           <code className="text-[11px] font-mono text-blue-400">POST /v1/scan/sync/request</code>
           <div className="text-[10px] text-slate-600 mt-1">Max payload: 2MB · Rate: standard · Latency: ~500-900ms</div>
@@ -833,14 +833,14 @@ export function DeveloperCornerView() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Hero */}
-      <div className="flex-shrink-0 px-8 py-5 border-b border-white/[0.08]" style={{ background: 'rgba(99,102,241,0.05)' }}>
+      <div className="flex-shrink-0 px-8 py-5 flex-shrink-0" style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)' }}>
             <Code2 size={20} style={{ color: '#818cf8' }} />
           </div>
           <div>
-            <h1 className="text-lg font-black text-slate-100">Prisma AIRS Integration Guide</h1>
-            <p className="text-[12px] text-slate-500">Everything your team needs to add AI Runtime Security to any application</p>
+            <h1 className="text-lg font-black" style={{ color: '#0f172a' }}>Prisma AIRS Integration Guide</h1>
+            <p className="text-[12px]" style={{ color: '#64748b' }}>Everything your team needs to add AI Runtime Security to any application</p>
           </div>
           <div className="ml-auto flex items-center gap-4">
             {[
@@ -860,7 +860,7 @@ export function DeveloperCornerView() {
       {/* Body: left nav + content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left nav */}
-        <div className="flex-shrink-0 w-48 border-r border-white/[0.06] overflow-y-auto py-4 px-2" style={{ background: 'rgba(255,255,255,0.01)' }}>
+        <div className="flex-shrink-0 w-48 overflow-y-auto py-4 px-2" style={{ background: '#f8fafc', borderRight: '1px solid #e2e8f0' }}>
           {SECTIONS.map(s => {
             const Icon = s.icon
             const isActive = activeSection === s.id
@@ -885,7 +885,7 @@ export function DeveloperCornerView() {
         </div>
 
         {/* Content pane */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8" style={{ background: '#ffffff' }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}
