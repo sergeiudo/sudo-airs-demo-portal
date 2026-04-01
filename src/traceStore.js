@@ -45,6 +45,13 @@ function db() {
       status TEXT NOT NULL,
       metadata TEXT
     );
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      view TEXT NOT NULL,
+      ip TEXT,
+      user_agent TEXT
+    );
   `)
   return _db
 }
@@ -108,6 +115,18 @@ export function deleteTrace(id) {
   const d = db()
   d.prepare('DELETE FROM spans WHERE trace_id = ?').run(id)
   d.prepare('DELETE FROM traces WHERE id = ?').run(id)
+}
+
+export function insertActivity({ view, ip, user_agent }) {
+  db().prepare(
+    `INSERT INTO activity_log (ts, view, ip, user_agent) VALUES (?, ?, ?, ?)`
+  ).run(new Date().toISOString(), view, ip ?? null, user_agent ?? null)
+}
+
+export function getActivity({ limit = 100 } = {}) {
+  return db().prepare(
+    `SELECT * FROM activity_log ORDER BY ts DESC LIMIT ?`
+  ).all(limit)
 }
 
 export function deleteAllTraces() {

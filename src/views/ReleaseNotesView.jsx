@@ -302,6 +302,7 @@ export function ReleaseNotesView() {
 
           {/* System Health */}
           <SystemHealth />
+          <ActivityLog />
         </div>
       </div>
     </div>
@@ -543,6 +544,158 @@ function SystemHealth() {
                   <div className="text-[10px] text-slate-300 text-right">
                     Snapshot at {new Date(health.ts).toLocaleTimeString()}
                   </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+const VIEW_NAMES = {
+  apiIntercept:    'API Intercept',
+  modelScanning:   'Model Scanning',
+  redTeaming:      'Red Teaming',
+  claudeHooks:     'AI Code Assistant',
+  observability:   'LLM Telemetry',
+  developerCorner: 'Developer Corner',
+  releaseNotes:    'Release Notes',
+}
+
+const VIEW_COLORS = {
+  apiIntercept:    '#EF4444',
+  modelScanning:   '#3B82F6',
+  redTeaming:      '#F97316',
+  claudeHooks:     '#8B5CF6',
+  observability:   '#10B981',
+  developerCorner: '#06B6D4',
+  releaseNotes:    '#F59E0B',
+}
+
+function parseUA(ua) {
+  if (!ua) return { browser: 'Unknown', os: 'Unknown' }
+  let browser = 'Other'
+  if (/Edg\//.test(ua))     browser = 'Edge'
+  else if (/Chrome\//.test(ua))  browser = 'Chrome'
+  else if (/Firefox\//.test(ua)) browser = 'Firefox'
+  else if (/Safari\//.test(ua))  browser = 'Safari'
+
+  let os = 'Other'
+  if (/iPhone/.test(ua))         os = 'iPhone'
+  else if (/Android/.test(ua))   os = 'Android'
+  else if (/Windows/.test(ua))   os = 'Windows'
+  else if (/Mac OS X/.test(ua))  os = 'macOS'
+  else if (/Linux/.test(ua))     os = 'Linux'
+
+  return { browser, os }
+}
+
+function timeAgo(ts) {
+  const ms = Date.now() - new Date(ts).getTime()
+  const m = Math.floor(ms / 60000)
+  const h = Math.floor(m / 60)
+  const d = Math.floor(h / 24)
+  if (d > 0) return `${d}d ago`
+  if (h > 0) return `${h}h ago`
+  if (m > 0) return `${m}m ago`
+  return 'just now'
+}
+
+function ActivityLog() {
+  const [open, setOpen] = useState(false)
+  const [logs, setLogs] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/activity')
+      if (!res.ok) throw new Error(`${res.status}`)
+      setLogs(await res.json())
+    } catch { setLogs([]) }
+    finally { setLoading(false) }
+  }
+
+  const handleOpen = () => {
+    setOpen(v => {
+      if (!v && !logs) load()
+      return !v
+    })
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+      <button
+        onClick={handleOpen}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-100 transition-colors"
+      >
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>
+          <Activity size={14} style={{ color: '#6366f1' }} />
+        </div>
+        <div className="flex-1">
+          <div className="text-[13px] font-black text-slate-700">Activity Log</div>
+          <div className="text-[11px] text-slate-400">Who's visiting the portal — view navigation events</div>
+        </div>
+        <div className="flex items-center gap-2">
+          {logs && !loading && (
+            <span className="text-[11px] font-semibold text-indigo-600">{logs.length} events</span>
+          )}
+          <button onClick={(e) => { e.stopPropagation(); load() }} className="p-1 rounded-lg hover:bg-slate-200 transition-colors">
+            <RefreshCw size={11} className={`text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown size={14} className="text-slate-400" />
+          </motion.div>
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-5 pt-1">
+              {loading && <div className="text-[12px] text-slate-400 py-4 text-center">Loading…</div>}
+              {logs && !loading && logs.length === 0 && (
+                <div className="text-[12px] text-slate-400 py-4 text-center">No activity yet — navigate to a pillar to log your first visit.</div>
+              )}
+              {logs && !loading && logs.length > 0 && (
+                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                        {['Time', 'View', 'IP Address', 'Browser', 'OS'].map(h => (
+                          <th key={h} className="px-3 py-2.5 text-left font-bold text-slate-400 uppercase tracking-wider text-[9px]">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map((row) => {
+                        const { browser, os } = parseUA(row.user_agent)
+                        const color = VIEW_COLORS[row.view] ?? '#94a3b8'
+                        return (
+                          <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{timeAgo(row.ts)}</td>
+                            <td className="px-3 py-2.5">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+                                {VIEW_NAMES[row.view] ?? row.view}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-slate-600">{row.ip ?? '—'}</td>
+                            <td className="px-3 py-2.5 text-slate-500">{browser}</td>
+                            <td className="px-3 py-2.5 text-slate-500">{os}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

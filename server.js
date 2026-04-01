@@ -15,7 +15,7 @@ import { AzureOpenAI } from 'openai'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
-import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces } from './src/traceStore.js'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity } from './src/traceStore.js'
 
 const app = express()
 app.use(cors())
@@ -876,6 +876,20 @@ app.get('/api/release-notes', async (req, res) => {
     console.error('[release-notes]', err)
     res.status(500).json({ error: err.message })
   }
+})
+
+// ─── Activity log endpoints ───────────────────────────────────────────────────
+app.post('/api/activity', (req, res) => {
+  const view = req.body?.view
+  if (!view) return res.status(400).json({ error: 'view required' })
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ?? req.socket.remoteAddress
+  const user_agent = req.headers['user-agent'] ?? null
+  insertActivity({ view, ip, user_agent })
+  res.json({ ok: true })
+})
+
+app.get('/api/activity', (_req, res) => {
+  res.json(getActivity({ limit: 100 }))
 })
 
 // ─── System health endpoint ───────────────────────────────────────────────────

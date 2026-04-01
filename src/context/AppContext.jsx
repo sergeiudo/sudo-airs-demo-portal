@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer } from 'react'
+import React, { createContext, useContext, useReducer, useEffect } from 'react'
 
 const AppContext = createContext(null)
 
@@ -29,6 +29,16 @@ function appReducer(state, action) {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
+
+  // Fire-and-forget activity log on every view change (except home)
+  useEffect(() => {
+    if (state.activeView === 'home') return
+    fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ view: state.activeView }),
+    }).catch(() => {})
+  }, [state.activeView])
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
