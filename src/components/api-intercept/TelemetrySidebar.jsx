@@ -563,10 +563,6 @@ export function TelemetrySidebar({ telemetry }) {
               )}
             </div>
 
-            {/* Performance Metrics */}
-            <SbSectionLabel>Performance Metrics</SbSectionLabel>
-            <div className="px-4 pb-3"><SbMetricsStrip trace={trace} /></div>
-
             {/* Token Usage */}
             <SbSectionLabel>Token Usage</SbSectionLabel>
             <div className="px-4 pb-3"><SbTokenBar trace={trace} /></div>
