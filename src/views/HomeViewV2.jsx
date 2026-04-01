@@ -141,7 +141,7 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
         }} />
       )}
 
-      <div className="relative flex flex-col p-5">
+      <div className="relative flex flex-col h-full p-5">
         {/* Icon + tag row */}
         <div className="flex items-start justify-between mb-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{
@@ -170,7 +170,7 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
         </p>
 
         {/* Highlight bullets */}
-        <ul className="space-y-1.5 mb-1">
+        <ul className="space-y-1.5 flex-1">
           {pillar.highlights.map((h) => (
             <li key={h} className="flex items-center gap-2 text-[11px]" style={{ color: bulletColor }}>
               <ChevronRight size={10} style={{ color: pillar.accent, flexShrink: 0 }} />
@@ -182,7 +182,7 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
         {/* Launch button */}
         <motion.button
           onClick={(e) => { e.stopPropagation(); onClick() }}
-          className="mt-4 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-[12px] font-bold transition-all"
+          className="mt-auto pt-4 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-[12px] font-bold transition-all"
           style={{
             background: `${pillar.accent}18`,
             border: `1px solid ${pillar.accent}40`,
@@ -354,7 +354,7 @@ export function HomeViewV2() {
   }, [])
 
   return (
-    <div className="flex flex-col min-h-screen w-screen overflow-y-auto bg-base-950 grid-bg relative select-none">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-base-950 grid-bg relative select-none">
 
       {/* ── Ambient color spotlight when a card is selected ── */}
       <AnimatePresence>
@@ -447,10 +447,10 @@ export function HomeViewV2() {
       </motion.div>
 
       {/* ── 3×2 Grid ── */}
-      <div className="relative z-10 px-8 pb-8">
+      <div className="relative z-10 flex-1 overflow-y-auto px-8 pb-8 min-h-0">
         <div
           className="grid gap-4"
-          style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
+          style={{ gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '1fr' }}
         >
           {PILLARS.map((pillar, i) => (
             <MiniCard
