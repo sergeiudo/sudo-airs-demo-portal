@@ -314,6 +314,7 @@ function HeroCard({ pillar, onClose, onLaunch, isDark }) {
         </motion.div>
 
         {/* Launch button */}
+        <div className="flex justify-center">
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -331,6 +332,7 @@ function HeroCard({ pillar, onClose, onLaunch, isDark }) {
           <ArrowRight size={15} />
           Launch {pillar.title}
         </motion.button>
+        </div>
       </div>
     </motion.div>
   )
