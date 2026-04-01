@@ -21,11 +21,7 @@ export function TopBar() {
   const view = VIEW_LABELS[state.activeView] ?? VIEW_LABELS.apiIntercept
 
   return (
-    <header className="flex items-center h-16 px-6 border-b flex-shrink-0" style={{
-      background: '#13161f',
-      borderBottom: `1px solid ${view.color ? view.color + '30' : 'rgba(255,255,255,0.08)'}`,
-      borderLeft: view.color ? `3px solid ${view.color}` : 'none',
-    }}>
+    <header className="flex items-center h-16 px-6 border-b border-white/10 flex-shrink-0" style={{ background: '#13161f' }}>
       {/* Home + Breadcrumb */}
       <div className="flex items-center gap-3 flex-1">
         <button
@@ -43,7 +39,8 @@ export function TopBar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.15 }}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 px-3 py-1 rounded-lg"
+            style={view.color ? { background: `${view.color}18`, border: `1px solid ${view.color}30` } : {}}
           >
             <span className={`text-sm font-semibold ${view.text || theme.primaryText} transition-colors duration-500`}>
               {view.label}
