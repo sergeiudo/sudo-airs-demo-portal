@@ -6,6 +6,7 @@ import { ModelScanningView } from './views/ModelScanningView'
 import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeView } from './views/HomeView'
+import { HomeViewV2 } from './views/HomeViewV2'
 import { ObservabilityView } from './views/ObservabilityView'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
 
@@ -18,7 +19,7 @@ function AppContent() {
   }, [state.isDark])
 
   if (state.activeView === 'home') {
-    return <HomeView />
+    return <HomeViewV2 />
   }
 
   const renderView = () => {
