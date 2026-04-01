@@ -10,6 +10,7 @@ const COLOR_VALS = {
   'text-purple-400': '#c084fc',
   'text-teal-400':   '#2dd4bf',
   'text-emerald-400':'#34d399',
+  'text-indigo-400': '#818cf8',
 }
 const BG_VALS = {
   'bg-red-500/10':    'rgba(239,68,68,0.10)',
@@ -18,6 +19,7 @@ const BG_VALS = {
   'bg-purple-500/10': 'rgba(168,85,247,0.10)',
   'bg-teal-500/10':   'rgba(20,184,166,0.10)',
   'bg-emerald-500/10':'rgba(16,185,129,0.10)',
+  'bg-indigo-500/10': 'rgba(99,102,241,0.10)',
 }
 const BORDER_VALS = {
   'border-red-500/30':    'rgba(239,68,68,0.30)',
@@ -26,6 +28,7 @@ const BORDER_VALS = {
   'border-purple-500/30': 'rgba(168,85,247,0.30)',
   'border-teal-500/30':   'rgba(20,184,166,0.30)',
   'border-emerald-500/30':'rgba(16,185,129,0.30)',
+  'border-indigo-500/30': 'rgba(99,102,241,0.30)',
 }
 
 export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color, collapsed }) {
