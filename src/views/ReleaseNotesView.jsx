@@ -502,7 +502,10 @@ function SystemHealth() {
                     <div className="p-3 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                       <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Last Deploy</div>
                       <div className="flex items-start gap-3">
-                        <span className="px-2 py-0.5 rounded font-mono text-[11px] font-bold" style={{ background: '#dbeafe', color: '#1e40af' }}>{health.git.hash}</span>
+                        <a href={`https://github.com/sergeiudo/sudo-airs-local-demo-vertex-bedrock/commit/${health.git.hash}`} target="_blank" rel="noopener noreferrer"
+                          className="px-2 py-0.5 rounded font-mono text-[11px] font-bold hover:opacity-80 transition-opacity" style={{ background: '#dbeafe', color: '#1e40af' }}>
+                          {health.git.hash}
+                        </a>
                         <div className="flex-1 min-w-0">
                           <div className="text-[12px] text-slate-700 font-medium truncate">{health.git.message}</div>
                           <div className="text-[11px] text-slate-400 mt-0.5">{new Date(health.git.date).toLocaleString()}</div>
