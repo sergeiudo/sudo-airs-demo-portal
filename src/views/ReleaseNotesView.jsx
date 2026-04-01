@@ -185,73 +185,68 @@ export function ReleaseNotesView() {
       style={{ overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9' }}
     >
       {/* Header */}
-      <header className="flex-shrink-0 flex items-center px-8 py-4 border-b" style={{ background: '#ffffff', borderColor: '#e2e8f0' }}>
+      <header className="flex-shrink-0 flex items-center gap-4 px-8 py-4 border-b" style={{ background: '#ffffff', borderColor: '#e2e8f0' }}>
+        {/* Back */}
         <button
           onClick={() => dispatch({ type: 'SET_VIEW', payload: 'home' })}
-          className="flex items-center gap-2 text-[12px] font-semibold text-slate-500 hover:text-slate-800 transition-colors mr-6"
+          className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0"
         >
-          <ArrowLeft size={14} /> Back
+          <ArrowLeft size={13} /> Home
         </button>
 
-        <div className="flex items-center gap-3 flex-1">
-          <div className={state.isDark ? '' : 'bg-slate-700 px-3 py-1 rounded-lg'}>
-            <img src={airsLogo} alt="Prisma AIRS" className="h-6 opacity-90" />
+        <div className="w-px h-5 bg-slate-200 flex-shrink-0" />
+
+        {/* Title block */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#003087' }}>
+            <span className="text-white text-[14px]">📋</span>
           </div>
           <div>
-            <div className="text-[15px] font-black text-slate-800">Release Notes</div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Prisma AI Runtime Security · Features Introduced</div>
+            <div className="text-[15px] font-black text-slate-800 leading-none">What's New in Prisma AIRS</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              Features introduced · scraped weekly from{' '}
+              <a href="https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                docs.paloaltonetworks.com
+              </a>
+            </div>
           </div>
         </div>
 
-        {/* Status + refresh */}
-        <div className="flex items-center gap-4">
+        {/* Stats */}
+        {data && !loading && (
+          <div className="flex items-center gap-5 flex-shrink-0">
+            <div className="text-center">
+              <div className="text-[18px] font-black text-slate-800 leading-none">{totalFeatures}</div>
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">Features</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[18px] font-black text-slate-800 leading-none">{data.pillars?.length ?? 0}</div>
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">Pillars</div>
+            </div>
+          </div>
+        )}
+
+        <div className="w-px h-5 bg-slate-200 flex-shrink-0" />
+
+        {/* Cache status + refresh */}
+        <div className="flex items-center gap-3 flex-shrink-0">
           {data && (
             <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-              <Clock size={11} />
-              {data.cached ? `Cached · updated ${fetchedAgo}` : `Refreshed ${fetchedAgo}`}
-              {data.cached && (
-                <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-400 uppercase">cached</span>
-              )}
+              <Clock size={10} />
+              {data.cached ? `Updated ${fetchedAgo}` : 'Just refreshed'}
             </div>
           )}
           <button
             onClick={() => load(true)}
             disabled={refreshing || loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-40"
-            style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#3b82f6' }}
+            style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#3b82f6' }}
           >
-            <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </header>
-
-      {/* Hero strip */}
-      <div className="flex-shrink-0 px-8 py-5" style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 mb-1">What's New in Prisma AIRS</h1>
-            <p className="text-[13px] text-slate-400">
-              Latest features across all pillars — scraped weekly from{' '}
-              <a href="https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                docs.paloaltonetworks.com
-              </a>
-            </p>
-          </div>
-          {data && !loading && (
-            <div className="flex items-center gap-6 flex-shrink-0">
-              <div className="text-center">
-                <div className="text-2xl font-black text-slate-800">{totalFeatures}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Total Features</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-black text-slate-800">{data.pillars?.length ?? 0}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Pillars</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Body */}
       <div className="flex-1 px-8 py-8">
