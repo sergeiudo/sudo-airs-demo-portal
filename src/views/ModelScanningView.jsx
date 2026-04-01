@@ -316,15 +316,16 @@ export function ModelScanningView() {
           <motion.button
             onClick={scanState === 'complete' || scanState === 'error' ? reset : handleScan}
             disabled={scanState === 'scanning' || !canScan}
-            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-300"
+            style={
               scanState === 'scanning'
-                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                ? { background: '#334155', color: '#94a3b8', cursor: 'not-allowed' }
                 : scanState === 'complete' || scanState === 'error'
-                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-white/10'
+                ? { background: '#334155', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)' }
                 : !scannerUp || !canScan
-                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
-                : 'bg-blue-500 text-white hover:bg-blue-400'
-            }`}
+                ? { background: '#1e293b', color: '#475569', cursor: 'not-allowed' }
+                : { background: '#3b82f6', color: '#ffffff' }
+            }
             whileTap={{ scale: 0.97 }}
           >
             {scanState === 'scanning' ? <><RefreshCw size={14} className="animate-spin" /> Scanning…</>
