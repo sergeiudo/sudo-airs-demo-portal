@@ -124,9 +124,17 @@ export function insertActivity({ view, ip, user_agent }) {
 }
 
 export function getActivity({ limit = 100 } = {}) {
-  return db().prepare(
-    `SELECT * FROM activity_log ORDER BY ts DESC LIMIT ?`
-  ).all(limit)
+  return db().prepare(`
+    SELECT
+      ip,
+      MAX(ts) as last_seen,
+      COUNT(*) as visits,
+      MAX(user_agent) as user_agent
+    FROM activity_log
+    GROUP BY ip
+    ORDER BY last_seen DESC
+    LIMIT ?
+  `).all(limit)
 }
 
 export function deleteAllTraces() {

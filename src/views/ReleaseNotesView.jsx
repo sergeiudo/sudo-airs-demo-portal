@@ -637,11 +637,11 @@ function ActivityLog() {
         </div>
         <div className="flex-1">
           <div className="text-[13px] font-black text-slate-700">Activity Log</div>
-          <div className="text-[11px] text-slate-400">Who's visiting the portal — view navigation events</div>
+          <div className="text-[11px] text-slate-400">Unique visitors to this portal</div>
         </div>
         <div className="flex items-center gap-2">
           {logs && !loading && (
-            <span className="text-[11px] font-semibold text-indigo-600">{logs.length} events</span>
+            <span className="text-[11px] font-semibold text-indigo-600">{logs.length} visitor{logs.length !== 1 ? 's' : ''}</span>
           )}
           <button onClick={(e) => { e.stopPropagation(); load() }} className="p-1 rounded-lg hover:bg-slate-200 transition-colors">
             <RefreshCw size={11} className={`text-slate-400 ${loading ? 'animate-spin' : ''}`} />
@@ -671,24 +671,23 @@ function ActivityLog() {
                   <table className="w-full text-[11px]">
                     <thead>
                       <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        {['Time', 'View', 'IP Address', 'Browser', 'OS'].map(h => (
+                        {['Last Seen', 'IP Address', 'Visits', 'Browser', 'OS'].map(h => (
                           <th key={h} className="px-3 py-2.5 text-left font-bold text-slate-400 uppercase tracking-wider text-[9px]">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {logs.map((row) => {
+                      {logs.map((row, i) => {
                         const { browser, os } = parseUA(row.user_agent)
-                        const color = VIEW_COLORS[row.view] ?? '#94a3b8'
                         return (
-                          <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{timeAgo(row.ts)}</td>
+                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{timeAgo(row.last_seen)}</td>
+                            <td className="px-3 py-2.5 font-mono font-bold text-slate-700">{row.ip ?? '—'}</td>
                             <td className="px-3 py-2.5">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
-                                {VIEW_NAMES[row.view] ?? row.view}
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)' }}>
+                                {row.visits} view{row.visits !== 1 ? 's' : ''}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 font-mono text-slate-600">{row.ip ?? '—'}</td>
                             <td className="px-3 py-2.5 text-slate-500">{browser}</td>
                             <td className="px-3 py-2.5 text-slate-500">{os}</td>
                           </tr>
