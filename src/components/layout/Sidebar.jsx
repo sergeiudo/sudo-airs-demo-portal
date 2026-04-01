@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Crosshair, ScanSearch, Swords, Terminal, Settings, Activity, ExternalLink, BarChart2 } from 'lucide-react'
+import { Crosshair, ScanSearch, Swords, Terminal, Settings, Activity, ExternalLink, BarChart2, Code2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '../sidebar/Logo'
 import { ProtectionToggle } from '../sidebar/ProtectionToggle'
@@ -42,6 +42,13 @@ const NAV_ITEMS = [
     sublabel: 'Prompt history & metrics',
     icon: BarChart2,
     color: { text: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30', bar: 'bg-teal-400' },
+  },
+  {
+    id: 'developerCorner',
+    label: 'Developer Corner',
+    sublabel: 'Integration guide & API ref',
+    icon: Code2,
+    color: { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', bar: 'bg-indigo-400' },
   },
 ]
 

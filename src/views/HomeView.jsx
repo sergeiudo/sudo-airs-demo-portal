@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Crosshair, ScanSearch, Swords, Shield, ArrowRight, ChevronRight, Terminal, Sun, Moon, BarChart2 } from 'lucide-react'
+import { Crosshair, ScanSearch, Swords, Shield, ArrowRight, ChevronRight, Terminal, Sun, Moon, BarChart2, Code2 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import airsLogo from '../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
@@ -55,6 +55,16 @@ const PILLARS = [
       'Full LLM observability layer that captures every prompt and response as a structured trace. Monitor latency, token usage, threat detection rates, and AIRS overhead in real time — with a searchable prompt history log.',
     highlights: ['Live pipeline flow traces', 'Latency & token analytics', 'Threat detection breakdown', 'Prompt history log'],
   },
+  {
+    id: 'developerCorner',
+    icon: Code2,
+    title: 'Developer Corner',
+    tag: 'Integration Guide',
+    color: 'indigo',
+    description:
+      'Complete Prisma AIRS integration reference for development teams — Python SDK, REST API, live code samples extracted from this portal, and full API explorer with all fields and error codes.',
+    highlights: ['Python SDK (pan-aisecurity) — sync & async', 'REST API with real curl examples', 'Live code from this demo portal', 'Full API reference & detection services'],
+  },
 ]
 
 const COLOR_MAP = {
@@ -63,6 +73,7 @@ const COLOR_MAP = {
   orange: { text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/10', tag: 'bg-orange-500/15 text-orange-400', btn: 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border-orange-500/30', hoverBg: 'rgba(249,115,22,0.08)', hoverBorder: 'rgba(249,115,22,0.40)' },
   purple: { text: 'text-purple-400', border: 'border-purple-500/30', bg: 'bg-purple-500/10', tag: 'bg-purple-500/15 text-purple-400', btn: 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-500/30', hoverBg: 'rgba(168,85,247,0.08)', hoverBorder: 'rgba(168,85,247,0.40)' },
   teal:   { text: 'text-teal-400',   border: 'border-teal-500/30',   bg: 'bg-teal-500/10',   tag: 'bg-teal-500/15 text-teal-400',   btn: 'bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border-teal-500/30',   hoverBg: 'rgba(20,184,166,0.08)',   hoverBorder: 'rgba(20,184,166,0.40)' },
+  indigo: { text: 'text-indigo-400', border: 'border-indigo-500/30', bg: 'bg-indigo-500/10', tag: 'bg-indigo-500/15 text-indigo-400', btn: 'bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border-indigo-500/30', hoverBg: 'rgba(99,102,241,0.08)', hoverBorder: 'rgba(99,102,241,0.40)' },
 }
 
 const containerVariants = {

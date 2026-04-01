@@ -7,6 +7,7 @@ import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeView } from './views/HomeView'
 import { ObservabilityView } from './views/ObservabilityView'
+import { DeveloperCornerView } from './views/DeveloperCornerView'
 
 function AppContent() {
   const { state } = useAppContext()
@@ -26,8 +27,9 @@ function AppContent() {
       case 'modelScanning':  return <ModelScanningView />
       case 'redTeaming':     return <RedTeamingView />
       case 'claudeHooks':    return <ClaudeHooksView />
-      case 'observability':    return <ObservabilityView />
-      default:               return <ApiInterceptView />
+      case 'observability':     return <ObservabilityView />
+      case 'developerCorner':  return <DeveloperCornerView />
+      default:                 return <ApiInterceptView />
     }
   }
 
