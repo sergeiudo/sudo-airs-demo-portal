@@ -84,9 +84,16 @@ const PILLARS = [
 ]
 
 // ─── Mini grid card ────────────────────────────────────────────────────────────
-function MiniCard({ pillar, index, anySelected, onClick }) {
+function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
   const Icon = pillar.icon
   const [hovered, setHovered] = useState(false)
+
+  const cardBg = hovered
+    ? (isDark ? `rgba(255,255,255,0.07)` : `rgba(255,255,255,0.95)`)
+    : (isDark ? `rgba(255,255,255,0.04)` : `rgba(255,255,255,0.82)`)
+  const titleColor = isDark ? '#ffffff' : '#0f172a'
+  const descColor = isDark ? 'rgba(148,163,184,0.85)' : 'rgba(51,65,85,0.85)'
+  const bulletColor = isDark ? 'rgba(148,163,184,0.75)' : 'rgba(71,85,105,0.85)'
 
   return (
     <motion.div
@@ -98,7 +105,7 @@ function MiniCard({ pillar, index, anySelected, onClick }) {
       animate={{
         opacity: anySelected ? 0.22 : 1,
         y: 0,
-        scale: anySelected ? 0.97 : hovered ? 1.025 : 1,
+        scale: anySelected ? 0.97 : hovered ? 1.018 : 1,
         filter: anySelected ? 'blur(2px)' : 'blur(0px)',
       }}
       transition={{
@@ -112,11 +119,9 @@ function MiniCard({ pillar, index, anySelected, onClick }) {
       style={{
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        background: hovered
-          ? `rgba(255,255,255,0.07)`
-          : `rgba(255,255,255,0.04)`,
-        border: `1px solid ${hovered ? pillar.accent + '50' : 'rgba(255,255,255,0.09)'}`,
-        boxShadow: hovered ? `0 8px 40px ${pillar.glow}, 0 0 0 1px ${pillar.accent}20` : 'none',
+        background: cardBg,
+        border: `1px solid ${hovered ? pillar.accent + '55' : (isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)')}`,
+        boxShadow: hovered ? `0 8px 40px ${pillar.glow}, 0 0 0 1px ${pillar.accent}20` : (isDark ? 'none' : '0 2px 12px rgba(0,0,0,0.06)'),
         transition: 'background 0.2s, border 0.2s, box-shadow 0.2s',
       }}
     >
@@ -132,41 +137,63 @@ function MiniCard({ pillar, index, anySelected, onClick }) {
       {/* Inner glow on hover */}
       {hovered && (
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: `radial-gradient(ellipse 80% 50% at 50% 0%, ${pillar.dim} 0%, transparent 65%)`,
+          background: `radial-gradient(ellipse 80% 45% at 50% 0%, ${pillar.dim} 0%, transparent 65%)`,
         }} />
       )}
 
-      <div className="relative flex flex-col h-full p-6">
-        {/* Tag + icon row */}
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[9px] font-black tracking-[0.22em] uppercase" style={{ color: pillar.accent }}>
-            {pillar.tag}
-          </span>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{
+      <div className="relative flex flex-col h-full p-5">
+        {/* Icon + tag row */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{
             background: `${pillar.accent}18`,
             border: `1px solid ${pillar.accent}35`,
           }}>
-            <Icon size={15} style={{ color: pillar.accent }} />
+            <Icon size={17} style={{ color: pillar.accent }} />
           </div>
+          <span className="text-[9px] font-black tracking-[0.2em] uppercase px-2.5 py-1 rounded-full" style={{
+            color: pillar.accent,
+            background: `${pillar.accent}15`,
+            border: `1px solid ${pillar.accent}30`,
+          }}>
+            {pillar.tag}
+          </span>
         </div>
 
         {/* Title */}
-        <h2 className="text-[18px] font-black tracking-tight leading-tight text-white mb-2">
+        <h2 className="text-[17px] font-black tracking-tight leading-tight mb-2" style={{ color: pillar.accent }}>
           {pillar.title}
         </h2>
 
-        {/* Summary */}
-        <p className="text-[12px] leading-relaxed flex-1" style={{ color: 'rgba(148,163,184,0.85)' }}>
-          {pillar.summary}
+        {/* Full description */}
+        <p className="text-[11px] leading-relaxed mb-3" style={{ color: descColor }}>
+          {pillar.description}
         </p>
 
-        {/* Explore hint */}
-        <div className="flex items-center gap-1.5 mt-5">
-          <span className="text-[10px] font-black tracking-[0.18em] uppercase" style={{ color: pillar.accent, opacity: 0.75 }}>
-            Explore
-          </span>
-          <ChevronRight size={10} style={{ color: pillar.accent, opacity: 0.75 }} />
-        </div>
+        {/* Highlight bullets */}
+        <ul className="space-y-1.5 flex-1">
+          {pillar.highlights.map((h) => (
+            <li key={h} className="flex items-center gap-2 text-[11px]" style={{ color: bulletColor }}>
+              <ChevronRight size={10} style={{ color: pillar.accent, flexShrink: 0 }} />
+              {h}
+            </li>
+          ))}
+        </ul>
+
+        {/* Launch button */}
+        <motion.button
+          onClick={(e) => { e.stopPropagation(); onClick() }}
+          className="mt-4 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-[12px] font-bold transition-all"
+          style={{
+            background: `${pillar.accent}18`,
+            border: `1px solid ${pillar.accent}40`,
+            color: pillar.accent,
+          }}
+          whileHover={{ background: `${pillar.accent}30`, scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          Launch {pillar.title}
+          <ArrowRight size={12} />
+        </motion.button>
       </div>
     </motion.div>
   )
@@ -432,6 +459,7 @@ export function HomeViewV2() {
               index={i}
               anySelected={!!selected}
               onClick={() => handleSelect(pillar.id)}
+              isDark={state.isDark}
             />
           ))}
         </div>
