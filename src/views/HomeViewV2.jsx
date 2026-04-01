@@ -410,21 +410,23 @@ export function HomeViewV2() {
         </div>
 
         {/* Right: byline + theme toggle */}
-        <div className="flex items-center justify-end gap-3 flex-1">
+        <div className="flex flex-col items-end gap-1.5 flex-1">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] tracking-widest text-slate-600 uppercase">Palo Alto Networks</span>
+            <button
+              onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
+              className="p-2 rounded-lg border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all"
+              title={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {state.isDark ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+          </div>
           <button
             onClick={() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80"
-            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa' }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all hover:opacity-80"
+            style={{ background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.35)', color: '#ca8a04' }}
           >
             📋 Prisma AIRS — Latest Release Notes
-          </button>
-          <span className="text-[10px] tracking-widest text-slate-600 uppercase">Palo Alto Networks</span>
-          <button
-            onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
-            className="p-2 rounded-lg border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all"
-            title={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {state.isDark ? <Sun size={14} /> : <Moon size={14} />}
           </button>
         </div>
       </header>

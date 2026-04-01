@@ -768,44 +768,59 @@ function stripTags(html) {
 
 function parseReleaseNotes(html) {
   const features = []
-  const sectionRe = /<(?:div|section)[^>]+id="concept-[^"]*"[^>]*>([\s\S]*?)(?=<(?:div|section)[^>]+id="concept-|$)/gi
+  // Top-level concept divs only (id="concept-XXX" but not deeper nested ones)
+  const sectionRe = /<div[^>]+class="[^"]*topic[^"]*concept[^"]*"[^>]+id="(concept-[^"]*)"[^>]*>([\s\S]*?)(?=<div[^>]+class="[^"]*topic[^"]*concept[^"]*"|$)/gi
   let m
   while ((m = sectionRe.exec(html)) !== null) {
-    const block = m[1]
+    const block = m[2]
 
-    // Title: first h2 or h3
-    const titleM = block.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/i)
+    // Title: first h2
+    const titleM = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i)
     if (!titleM) continue
     const title = stripTags(titleM[1])
     if (!title || title.length < 4) continue
 
-    // Date: month year pattern
+    // Date: inside <tt> tag or bare month year text
     const dateM = block.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b/)
     const date = dateM ? dateM[0] : ''
 
-    // "Supported for:" line
+    // "Supported for:" — grab li items after it
     let supportedFor = ''
-    const supportM = block.match(/Supported\s+for\s*:?([\s\S]*?)(?=<\/(?:p|div|li)|<(?:p|div|li|ul))/i)
-    if (supportM) supportedFor = stripTags(supportM[1]).replace(/^[:\s]+/, '').trim()
-
-    // All paragraphs — collect full text blocks
-    const paragraphs = []
-    const paraRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
-    let pm
-    while ((pm = paraRe.exec(block)) !== null) {
-      const txt = stripTags(pm[1])
-      if (txt.length > 20 && !txt.match(/^Supported\s+for/i)) paragraphs.push(txt)
+    const supportedM = block.match(/Supported\s+for[^<]*<\/b[^>]*>([\s\S]*?)(?=<\/div>|<section)/i)
+    if (supportedM) {
+      const liM = supportedM[1].match(/<li[^>]*>([\s\S]*?)<\/li>/i)
+      if (liM) supportedFor = stripTags(liM[1])
     }
 
-    // All list items
+    // Extract the main content section (after the table with date/supported-for)
+    const sectionM = block.match(/<section[^>]*class="[^"]*section[^"]*"[^>]*>([\s\S]*?)<\/section>/i)
+    const contentBlock = sectionM ? sectionM[1] : block
+
+    // Paragraphs: <div class="p"> is how PA docs renders paragraphs
+    const paragraphs = []
+    const divParaRe = /<div[^>]+class="[^"]*\bp\b[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+    let dp
+    while ((dp = divParaRe.exec(contentBlock)) !== null) {
+      const txt = stripTags(dp[1]).trim()
+      if (txt.length > 25 && !txt.match(/^Supported\s+for/i)) paragraphs.push(txt)
+    }
+    // Fallback: real <p> tags
+    if (!paragraphs.length) {
+      const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
+      let pm
+      while ((pm = pRe.exec(contentBlock)) !== null) {
+        const txt = stripTags(pm[1]).trim()
+        if (txt.length > 25 && !txt.match(/^Supported\s+for/i)) paragraphs.push(txt)
+      }
+    }
+
+    // Bullets: <li class="li"> inside the section
     const bullets = []
     const liRe = /<li[^>]*>([\s\S]*?)<\/li>/gi
     let lm
-    while ((lm = liRe.exec(block)) !== null) {
-      const txt = stripTags(lm[1])
-      if (txt.length > 10 && !txt.match(/^Supported\s+for/i) && !txt.match(/^Prisma AIRS/i)) {
-        bullets.push(txt)
-      }
+    while ((lm = liRe.exec(contentBlock)) !== null) {
+      const txt = stripTags(lm[1]).trim()
+      if (txt.length > 10) bullets.push(txt)
     }
 
     features.push({ title, date, supportedFor, paragraphs, bullets })

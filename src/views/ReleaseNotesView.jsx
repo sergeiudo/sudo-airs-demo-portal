@@ -148,6 +148,14 @@ export function ReleaseNotesView() {
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // Allow page scroll (globals.css sets overflow:hidden on #root)
+  useEffect(() => {
+    const root = document.getElementById('root')
+    const prev = root?.style.overflow || ''
+    if (root) root.style.overflow = 'auto'
+    return () => { if (root) root.style.overflow = prev }
+  }, [])
+
   const load = async (force = false) => {
     force ? setRefreshing(true) : setLoading(true)
     setError(null)
