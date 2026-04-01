@@ -53,9 +53,9 @@ const PILLARS = [
     summary: 'Secure AI coding assistants with zero-change hook-based scanning.',
     description: 'Secure the Claude Code CLI with AIRS hook scripts that scan every prompt, URL fetch, and MCP tool call in real time — before any content reaches the model. Zero code changes required.',
     highlights: ['Prompt injection blocking', 'DLP / data exfiltration detection', 'MCP & WebFetch scanning', 'Threat model with test cases'],
-    accent: '#a855f7',
-    glow: 'rgba(168,85,247,0.30)',
-    dim: 'rgba(168,85,247,0.07)',
+    accent: '#8B5CF6',
+    glow: 'rgba(139,92,246,0.30)',
+    dim: 'rgba(139,92,246,0.07)',
   },
   {
     id: 'observability',
@@ -65,9 +65,9 @@ const PILLARS = [
     summary: 'Full trace visibility — latency, tokens, threats, every prompt logged.',
     description: 'Full LLM observability layer that captures every prompt and response as a structured trace. Monitor latency, token usage, threat detection rates, and AIRS overhead in real time — with a searchable prompt history log.',
     highlights: ['Live pipeline flow traces', 'Latency & token analytics', 'Threat detection breakdown', 'Prompt history log'],
-    accent: '#14b8a6',
-    glow: 'rgba(20,184,166,0.30)',
-    dim: 'rgba(20,184,166,0.07)',
+    accent: '#10B981',
+    glow: 'rgba(16,185,129,0.30)',
+    dim: 'rgba(16,185,129,0.07)',
   },
   {
     id: 'developerCorner',
@@ -77,9 +77,9 @@ const PILLARS = [
     summary: 'Python SDK, REST API, and live integration code — ready to ship.',
     description: 'Complete Prisma AIRS integration reference for development teams — Python SDK, REST API, live code samples extracted from this portal, and full API explorer with all fields and error codes.',
     highlights: ['Python SDK (pan-aisecurity) — sync & async', 'REST API with real curl examples', 'Live code from this demo portal', 'Full API reference & detection services'],
-    accent: '#818cf8',
-    glow: 'rgba(129,140,248,0.30)',
-    dim: 'rgba(129,140,248,0.07)',
+    accent: '#06B6D4',
+    glow: 'rgba(6,182,212,0.30)',
+    dim: 'rgba(6,182,212,0.07)',
   },
 ]
 
