@@ -403,49 +403,140 @@ function SystemHealth() {
               {loading && <div className="text-[12px] text-slate-400 py-4 text-center">Loading…</div>}
               {error && <div className="text-[12px] text-red-400 py-4 text-center">Could not reach server: {error}</div>}
               {health && !loading && (
-                <div className="space-y-4">
+                <div className="space-y-5">
+
+                  {/* ── Row 1: Core metrics ── */}
                   <div className="grid grid-cols-4 gap-3">
-                    <StatTile icon={Cpu}       label="Node.js"   value={health.node.version}                color="#3b82f6" sub={`uptime ${fmtUptime(health.node.uptimeSec)}`} />
-                    <StatTile icon={Activity}  label="App RAM"   value={`${health.node.memMb} MB`}          color="#8b5cf6" sub="Node.js process RSS" />
-                    <StatTile icon={Server}    label="OS Memory" value={`${memPct}%`}                       color={memPct > 80 ? '#ef4444' : '#10b981'} sub={`${health.os?.usedMb ?? '—'} / ${health.os?.totalMb ?? '—'} MB used`} />
-                    <StatTile icon={HardDrive} label="Disk /"    value={health.disk?.usePct ?? '—'}         color={diskPct > 80 ? '#ef4444' : '#10b981'} sub={`${Math.round((health.disk?.usedMb??0)/1024)}GB / ${Math.round((health.disk?.totalMb??0)/1024)}GB`} />
+                    <StatTile icon={Cpu}       label="Node.js"    value={health.node.version}       color="#3b82f6" sub={`uptime ${fmtUptime(health.node.uptimeSec)}`} />
+                    <StatTile icon={Activity}  label="App RAM"    value={`${health.node.memMb} MB`} color="#8b5cf6" sub="process RSS" />
+                    <StatTile icon={Server}    label="OS Memory"  value={memPct != null ? `${memPct}%` : '—'} color={memPct > 80 ? '#ef4444' : '#10b981'} sub={`${health.os?.usedMb ?? '—'} / ${health.os?.totalMb ?? '—'} MB`} />
+                    <StatTile icon={HardDrive} label="Disk /"     value={health.disk?.usePct ?? '—'} color={diskPct > 80 ? '#ef4444' : '#10b981'} sub={`${Math.round((health.disk?.usedMb??0)/1024)}GB / ${Math.round((health.disk?.totalMb??0)/1024)}GB`} />
                   </div>
-                  {/* Memory bar */}
+
+                  {/* ── Row 2: Performance ── */}
+                  <div className="grid grid-cols-3 gap-3">
+                    {health.load && (
+                      <StatTile icon={Cpu} label="CPU Load (1m / 5m / 15m)"
+                        value={health.load.m1.toFixed(2)}
+                        color={health.load.m1 > 1.5 ? '#ef4444' : '#10b981'}
+                        sub={`5m: ${health.load.m5.toFixed(2)} · 15m: ${health.load.m15.toFixed(2)}`} />
+                    )}
+                    {health.pingMs != null && (
+                      <StatTile icon={Activity} label="API Response"
+                        value={`${health.pingMs}ms`}
+                        color={health.pingMs > 200 ? '#f97316' : '#10b981'}
+                        sub="self-ping to /api/health" />
+                    )}
+                    {health.db && (
+                      <StatTile icon={Server} label="Traces (SQLite)"
+                        value={health.db.totalTraces.toLocaleString()}
+                        color="#6366f1"
+                        sub={`${health.db.tracesToday} scans today`} />
+                    )}
+                  </div>
+
+                  {/* ── Memory bar ── */}
                   {health.os && (
                     <div>
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>OS Memory</span>
-                        <span>{health.os.availableMb} MB available</span>
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1.5">
+                        <span className="font-semibold">OS Memory</span>
+                        <span>{health.os.availableMb} MB available of {health.os.totalMb} MB</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{ background: memPct > 80 ? '#ef4444' : '#10b981' }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${memPct}%` }}
-                          transition={{ duration: 0.6, ease: 'easeOut' }}
-                        />
+                        <motion.div className="h-full rounded-full" style={{ background: memPct > 80 ? '#ef4444' : '#10b981' }}
+                          initial={{ width: 0 }} animate={{ width: `${memPct}%` }} transition={{ duration: 0.6, ease: 'easeOut' }} />
                       </div>
                     </div>
                   )}
-                  {/* Disk bar */}
+
+                  {/* ── Disk bar ── */}
                   {health.disk && (
                     <div>
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>Disk /</span>
-                        <span>{Math.round(health.disk.availableMb / 1024)} GB available</span>
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1.5">
+                        <span className="font-semibold">Disk /</span>
+                        <span>{Math.round(health.disk.availableMb / 1024)} GB available of {Math.round(health.disk.totalMb / 1024)} GB</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{ background: diskPct > 80 ? '#ef4444' : '#3b82f6' }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${diskPct}%` }}
-                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
-                        />
+                        <motion.div className="h-full rounded-full" style={{ background: diskPct > 80 ? '#ef4444' : '#3b82f6' }}
+                          initial={{ width: 0 }} animate={{ width: `${diskPct}%` }} transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }} />
                       </div>
                     </div>
                   )}
+
+                  {/* ── PM2 Processes ── */}
+                  {health.pm2?.length > 0 && (
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">PM2 Processes</div>
+                      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                              {['Name', 'Status', 'Memory', 'CPU', 'Restarts', 'Uptime'].map(h => (
+                                <th key={h} className="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider text-[9px]">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {health.pm2.map((p, i) => (
+                              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td className="px-3 py-2 font-bold text-slate-700">{p.name}</td>
+                                <td className="px-3 py-2">
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: p.status === 'online' ? '#d1fae5' : '#fee2e2', color: p.status === 'online' ? '#065f46' : '#991b1b' }}>
+                                    {p.status}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-slate-500 font-mono">{p.memMb} MB</td>
+                                <td className="px-3 py-2 text-slate-500 font-mono">{p.cpu}%</td>
+                                <td className="px-3 py-2 text-slate-500 font-mono">{p.restarts}</td>
+                                <td className="px-3 py-2 text-slate-500">{p.uptimeSec != null ? fmtUptime(p.uptimeSec) : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Last Deploy ── */}
+                  {health.git && (
+                    <div className="p-3 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Last Deploy</div>
+                      <div className="flex items-start gap-3">
+                        <span className="px-2 py-0.5 rounded font-mono text-[11px] font-bold" style={{ background: '#dbeafe', color: '#1e40af' }}>{health.git.hash}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12px] text-slate-700 font-medium truncate">{health.git.message}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{new Date(health.git.date).toLocaleString()}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Stack Info ── */}
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tech Stack</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Runtime',    value: `Node.js ${health.node.version}`,  color: '#22c55e' },
+                        { label: 'Framework',  value: 'Express.js',                       color: '#6366f1' },
+                        { label: 'Frontend',   value: 'React + Vite',                     color: '#38bdf8' },
+                        { label: 'Styling',    value: 'Tailwind CSS',                     color: '#06b6d4' },
+                        { label: 'Database',   value: 'SQLite (better-sqlite3)',           color: '#f59e0b' },
+                        { label: 'Process Mgr',value: 'PM2',                              color: '#a78bfa' },
+                        { label: 'Proxy',      value: 'Nginx',                            color: '#10b981' },
+                        { label: 'LLM Infra',  value: 'Vertex AI · Bedrock · Azure',     color: '#ef4444' },
+                        { label: 'AI Security',value: 'Prisma AIRS API',                  color: '#f97316' },
+                      ].map(s => (
+                        <div key={s.label} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}>
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                          <div className="min-w-0">
+                            <div className="text-[9px] text-slate-400 uppercase tracking-wider">{s.label}</div>
+                            <div className="text-[11px] font-bold text-slate-700 truncate">{s.value}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="text-[10px] text-slate-300 text-right">
                     Snapshot at {new Date(health.ts).toLocaleTimeString()}
                   </div>

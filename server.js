@@ -882,14 +882,13 @@ app.get('/api/release-notes', async (req, res) => {
 app.get('/api/system-health', async (_req, res) => {
   try {
     const mem = process.memoryUsage()
-    const uptime = process.uptime()
+    const uptimeSec = Math.round(process.uptime())
 
-    // OS memory (Linux: free -m, macOS: vm_stat fallback)
+    // OS memory (Linux only)
     let osMem = null
     try {
       const { stdout } = await execFileAsync('free', ['-m'], { timeout: 3000 })
-      const lines = stdout.trim().split('\n')
-      const memLine = lines.find(l => l.startsWith('Mem:'))?.split(/\s+/)
+      const memLine = stdout.trim().split('\n').find(l => l.startsWith('Mem:'))?.split(/\s+/)
       if (memLine) osMem = { totalMb: +memLine[1], usedMb: +memLine[2], freeMb: +memLine[3], availableMb: +memLine[6] }
     } catch {}
 
@@ -901,10 +900,65 @@ app.get('/api/system-health', async (_req, res) => {
       if (line) disk = { totalMb: +line[1], usedMb: +line[2], availableMb: +line[3], usePct: line[4] }
     } catch {}
 
+    // CPU load averages (1, 5, 15 min)
+    let load = null
+    try {
+      const { stdout } = await execFileAsync('uptime', [], { timeout: 3000 })
+      const match = stdout.match(/load average[s]?:\s*([\d.]+),?\s*([\d.]+),?\s*([\d.]+)/i)
+      if (match) load = { m1: +match[1], m5: +match[2], m15: +match[3] }
+    } catch {}
+
+    // PM2 process list
+    let pm2Procs = []
+    try {
+      const { stdout } = await execFileAsync('pm2', ['jlist'], { timeout: 5000 })
+      const list = JSON.parse(stdout)
+      pm2Procs = list.map(p => ({
+        name: p.name,
+        status: p.pm2_env?.status,
+        restarts: p.pm2_env?.restart_time,
+        uptimeSec: p.pm2_env?.pm_uptime ? Math.round((Date.now() - p.pm2_env.pm_uptime) / 1000) : null,
+        memMb: Math.round((p.monit?.memory ?? 0) / 1024 / 1024),
+        cpu: p.monit?.cpu ?? 0,
+      }))
+    } catch {}
+
+    // Last git commit
+    let git = null
+    try {
+      const { stdout: hash }    = await execFileAsync('git', ['rev-parse', '--short', 'HEAD'], { timeout: 3000 })
+      const { stdout: msg }     = await execFileAsync('git', ['log', '-1', '--format=%s'], { timeout: 3000 })
+      const { stdout: dateStr } = await execFileAsync('git', ['log', '-1', '--format=%ci'], { timeout: 3000 })
+      git = { hash: hash.trim(), message: msg.trim(), date: dateStr.trim() }
+    } catch {}
+
+    // SQLite stats
+    let db = null
+    try {
+      const traces = getTraces({ limit: 1 })  // just to test connection
+      const all = getTraces({ limit: 99999 })
+      const today = new Date().toISOString().slice(0, 10)
+      const todayCount = all.traces?.filter(t => t.created_at?.startsWith(today)).length ?? 0
+      db = { totalTraces: all.traces?.length ?? 0, tracesToday: todayCount }
+    } catch {}
+
+    // Self-ping latency
+    let pingMs = null
+    try {
+      const t0 = Date.now()
+      await fetch(`http://localhost:${PORT}/api/health`, { signal: AbortSignal.timeout(3000) })
+      pingMs = Date.now() - t0
+    } catch {}
+
     res.json({
-      node: { version: process.version, uptimeSec: Math.round(uptime), memMb: Math.round(mem.rss / 1024 / 1024) },
+      node: { version: process.version, uptimeSec, memMb: Math.round(mem.rss / 1024 / 1024) },
       os: osMem,
       disk,
+      load,
+      pm2: pm2Procs,
+      git,
+      db,
+      pingMs,
       ts: new Date().toISOString(),
     })
   } catch (err) {
