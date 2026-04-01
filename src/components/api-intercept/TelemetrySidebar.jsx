@@ -498,7 +498,7 @@ export function TelemetrySidebar({ telemetry }) {
   const totalMs = trace?.total_ms ?? 0
 
   return (
-    <div className="flex flex-col h-full overflow-hidden border-l border-white/10 bg-base-900">
+    <div className="flex flex-col h-full overflow-hidden border-l border-white/10" style={{ background: '#0D0F16' }}>
 
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 flex-shrink-0">
