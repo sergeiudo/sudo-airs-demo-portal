@@ -752,6 +752,94 @@ app.delete('/api/traces/:id', (req, res) => {
   }
 })
 
+// ─── Release Notes scraper (weekly cache) ─────────────────────────────────────
+const RN_PILLARS = [
+  { name: 'AI Runtime Firewall',  emoji: '🔥', color: '#ef4444', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-network-intercept' },
+  { name: 'AI Runtime API',       emoji: '🔌', color: '#3b82f6', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-api-intercept' },
+  { name: 'AI Model Security',    emoji: '🛡️',  color: '#8b5cf6', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-model-security' },
+  { name: 'AI Red Teaming',       emoji: '🎯', color: '#f97316', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-red-teaming' },
+]
+const RN_CACHE = { data: null, fetchedAt: 0 }
+const RN_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+function parseReleaseNotes(html) {
+  const features = []
+  // Match concept sections: <div ... id="concept-..."> ... </div>
+  const sectionRe = /<(?:div|section)[^>]+id="concept-[^"]*"[^>]*>([\s\S]*?)(?=<(?:div|section)[^>]+id="concept-|$)/gi
+  let m
+  while ((m = sectionRe.exec(html)) !== null) {
+    const block = m[1]
+    // Title: first h2 or h3
+    const titleM = block.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/i)
+    if (!titleM) continue
+    const title = titleM[1].replace(/<[^>]+>/g, '').trim()
+    if (!title || title.length < 4) continue
+
+    // Date: look for month year pattern
+    const dateM = block.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b/)
+    const date = dateM ? dateM[0] : ''
+
+    // Description: first meaningful paragraph
+    const paraRe = /<(?:p|div)[^>]*class="[^"]*(?:p|body|shortdesc)[^"]*"[^>]*>([\s\S]*?)<\/(?:p|div)>/gi
+    let desc = ''
+    let pm
+    while ((pm = paraRe.exec(block)) !== null) {
+      const txt = pm[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+      if (txt.length > 30) { desc = txt; break }
+    }
+    // Fallback: any paragraph
+    if (!desc) {
+      const anyPara = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i)
+      if (anyPara) desc = anyPara[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+    }
+
+    features.push({ title, date, desc: desc.slice(0, 400) })
+  }
+  return features
+}
+
+function parseDateKey(dateStr) {
+  const months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 }
+  const parts = (dateStr || '').toLowerCase().split(' ')
+  return (parseInt(parts[1]) || 0) * 100 + (months[parts[0]] || 0)
+}
+
+async function fetchReleaseNotes() {
+  const results = []
+  for (const pillar of RN_PILLARS) {
+    try {
+      const res = await fetch(pillar.url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const html = await res.text()
+      const features = parseReleaseNotes(html)
+      features.sort((a, b) => parseDateKey(b.date) - parseDateKey(a.date))
+      results.push({ ...pillar, features, error: null })
+    } catch (err) {
+      results.push({ ...pillar, features: [], error: err.message })
+    }
+  }
+  return results
+}
+
+app.get('/api/release-notes', async (req, res) => {
+  const force = req.query.force === '1'
+  const now = Date.now()
+  if (!force && RN_CACHE.data && (now - RN_CACHE.fetchedAt) < RN_TTL_MS) {
+    return res.json({ pillars: RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true })
+  }
+  try {
+    console.log('[release-notes] Scraping Palo Alto docs...')
+    const pillars = await fetchReleaseNotes()
+    RN_CACHE.data = pillars
+    RN_CACHE.fetchedAt = now
+    console.log(`[release-notes] Done. Features: ${pillars.map(p => p.features.length).join(', ')}`)
+    res.json({ pillars, fetchedAt: new Date(now).toISOString(), cached: false })
+  } catch (err) {
+    console.error('[release-notes]', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`\n  ╔══════════════════════════════════════════════╗`)
   console.log(`  ║  SUDO AIRS Demo  →  http://localhost:${PORT}    ║`)

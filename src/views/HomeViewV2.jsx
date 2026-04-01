@@ -411,6 +411,13 @@ export function HomeViewV2() {
 
         {/* Right: byline + theme toggle */}
         <div className="flex items-center justify-end gap-3 flex-1">
+          <button
+            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80"
+            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa' }}
+          >
+            📋 Release Notes
+          </button>
           <span className="text-[10px] tracking-widest text-slate-600 uppercase">Palo Alto Networks</span>
           <button
             onClick={() => dispatch({ type: 'TOGGLE_THEME' })}

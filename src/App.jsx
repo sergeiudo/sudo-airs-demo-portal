@@ -9,6 +9,7 @@ import { HomeView } from './views/HomeView'
 import { HomeViewV2 } from './views/HomeViewV2'
 import { ObservabilityView } from './views/ObservabilityView'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
+import { ReleaseNotesView } from './views/ReleaseNotesView'
 
 function AppContent() {
   const { state } = useAppContext()
@@ -18,9 +19,8 @@ function AppContent() {
     document.documentElement.classList.toggle('light', !state.isDark)
   }, [state.isDark])
 
-  if (state.activeView === 'home') {
-    return <HomeViewV2 />
-  }
+  if (state.activeView === 'home') return <HomeViewV2 />
+  if (state.activeView === 'releaseNotes') return <ReleaseNotesView />
 
   const renderView = () => {
     switch (state.activeView) {
