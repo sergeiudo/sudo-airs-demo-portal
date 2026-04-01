@@ -22,8 +22,9 @@ export function TopBar() {
 
   return (
     <header className="flex items-center h-16 px-6 border-b flex-shrink-0" style={{
-      background: view.color ? `linear-gradient(135deg, #1a1f2e 0%, ${view.color}18 100%)` : '#1e2433',
-      borderBottom: view.color ? `1px solid ${view.color}35` : '1px solid rgba(255,255,255,0.08)',
+      background: '#13161f',
+      borderBottom: `1px solid ${view.color ? view.color + '30' : 'rgba(255,255,255,0.08)'}`,
+      borderLeft: view.color ? `3px solid ${view.color}` : 'none',
     }}>
       {/* Home + Breadcrumb */}
       <div className="flex items-center gap-3 flex-1">
