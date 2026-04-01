@@ -12,6 +12,9 @@ import {
   ListFoundationModelsCommand,
 } from '@aws-sdk/client-bedrock'
 import { AzureOpenAI } from 'openai'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+const execFileAsync = promisify(execFile)
 import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces } from './src/traceStore.js'
 
 const app = express()
@@ -876,10 +879,6 @@ app.get('/api/release-notes', async (req, res) => {
 })
 
 // ─── System health endpoint ───────────────────────────────────────────────────
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-const execFileAsync = promisify(execFile)
-
 app.get('/api/system-health', async (_req, res) => {
   try {
     const mem = process.memoryUsage()
