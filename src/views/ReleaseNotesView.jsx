@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, RefreshCw, ExternalLink, Calendar, Clock, CheckCircle2, AlertCircle, Server, Cpu, HardDrive, Activity, ChevronDown } from 'lucide-react'
+import { ArrowLeft, RefreshCw, ExternalLink, Calendar, Clock, CheckCircle2, AlertCircle, Server, Cpu, HardDrive, Activity, ChevronDown, X } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import airsLogo from '../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
@@ -159,6 +159,7 @@ export function ReleaseNotesView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
 
   // Allow page scroll (globals.css sets overflow:hidden on #root)
   useEffect(() => {
@@ -248,7 +249,7 @@ export function ReleaseNotesView() {
 
         <div className="w-px h-5 bg-slate-200 flex-shrink-0" />
 
-        {/* Cache status + refresh */}
+        {/* Cache status + refresh + activity icon */}
         <div className="flex items-center gap-3 flex-shrink-0">
           {data && (
             <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -264,6 +265,14 @@ export function ReleaseNotesView() {
           >
             <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
             {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+          <button
+            onClick={() => setActivityOpen(true)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:opacity-80"
+            style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)' }}
+            title="Activity Log"
+          >
+            <Activity size={14} style={{ color: '#6366f1' }} />
           </button>
         </div>
       </header>
@@ -302,9 +311,53 @@ export function ReleaseNotesView() {
 
           {/* System Health */}
           <SystemHealth />
-          <ActivityLog />
         </div>
       </div>
+
+      {/* Activity Log Drawer */}
+      <AnimatePresence>
+        {activityOpen && (
+          <>
+            <motion.div
+              key="activity-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40"
+              style={{ background: 'rgba(0,0,0,0.2)' }}
+              onClick={() => setActivityOpen(false)}
+            />
+            <motion.div
+              key="activity-drawer"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+              className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
+              style={{ width: 480, background: '#ffffff', borderLeft: '1px solid #e2e8f0', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)' }}
+            >
+              {/* Drawer header */}
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                  <Activity size={14} style={{ color: '#6366f1' }} />
+                </div>
+                <div className="flex-1">
+                  <div className="text-[14px] font-black text-slate-800">Activity Log</div>
+                  <div className="text-[11px] text-slate-400">Unique visitors to this portal</div>
+                </div>
+                <button onClick={() => setActivityOpen(false)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors">
+                  <X size={13} className="text-slate-400" />
+                </button>
+              </div>
+              {/* Drawer body */}
+              <div className="flex-1 overflow-y-auto">
+                <ActivityLog />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -605,102 +658,55 @@ function timeAgo(ts) {
 }
 
 function ActivityLog() {
-  const [open, setOpen] = useState(false)
   const [logs, setLogs] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  const load = async () => {
+  useEffect(() => {
     setLoading(true)
-    try {
-      const res = await fetch('/api/activity')
-      if (!res.ok) throw new Error(`${res.status}`)
-      setLogs(await res.json())
-    } catch { setLogs([]) }
-    finally { setLoading(false) }
-  }
+    fetch('/api/activity')
+      .then(r => r.json())
+      .then(setLogs)
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false))
+  }, [])
 
-  const handleOpen = () => {
-    setOpen(v => {
-      if (!v && !logs) load()
-      return !v
-    })
-  }
+  if (loading) return <div className="text-[12px] text-slate-400 py-8 text-center">Loading…</div>
+  if (!logs || logs.length === 0) return (
+    <div className="text-[12px] text-slate-400 py-8 text-center px-6">No activity yet — navigate to a pillar to log your first visit.</div>
+  )
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-      <button
-        onClick={handleOpen}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-100 transition-colors"
-      >
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>
-          <Activity size={14} style={{ color: '#6366f1' }} />
-        </div>
-        <div className="flex-1">
-          <div className="text-[13px] font-black text-slate-700">Activity Log</div>
-          <div className="text-[11px] text-slate-400">Unique visitors to this portal</div>
-        </div>
-        <div className="flex items-center gap-2">
-          {logs && !loading && (
-            <span className="text-[11px] font-semibold text-indigo-600">{logs.length} visitor{logs.length !== 1 ? 's' : ''}</span>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); load() }} className="p-1 rounded-lg hover:bg-slate-200 transition-colors">
-            <RefreshCw size={11} className={`text-slate-400 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown size={14} className="text-slate-400" />
-          </motion.div>
-        </div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="overflow-hidden"
-          >
-            <div className="px-5 pb-5 pt-1">
-              {loading && <div className="text-[12px] text-slate-400 py-4 text-center">Loading…</div>}
-              {logs && !loading && logs.length === 0 && (
-                <div className="text-[12px] text-slate-400 py-4 text-center">No activity yet — navigate to a pillar to log your first visit.</div>
-              )}
-              {logs && !loading && logs.length > 0 && (
-                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
-                  <table className="w-full text-[11px]">
-                    <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        {['Last Seen', 'IP Address', 'Visits', 'Browser', 'OS'].map(h => (
-                          <th key={h} className="px-3 py-2.5 text-left font-bold text-slate-400 uppercase tracking-wider text-[9px]">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((row, i) => {
-                        const { browser, os } = parseUA(row.user_agent)
-                        return (
-                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{timeAgo(row.last_seen)}</td>
-                            <td className="px-3 py-2.5 font-mono font-bold text-slate-700">{row.ip ?? '—'}</td>
-                            <td className="px-3 py-2.5">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)' }}>
-                                {row.visits} view{row.visits !== 1 ? 's' : ''}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-slate-500">{browser}</td>
-                            <td className="px-3 py-2.5 text-slate-500">{os}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="p-4">
+      <div className="text-[11px] font-semibold text-indigo-500 mb-3 px-1">{logs.length} unique visitor{logs.length !== 1 ? 's' : ''}</div>
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              {['Last Seen', 'IP Address', 'Visits', 'Browser', 'OS'].map(h => (
+                <th key={h} className="px-3 py-2.5 text-left font-bold text-slate-400 uppercase tracking-wider text-[9px]">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((row, i) => {
+              const { browser, os } = parseUA(row.user_agent)
+              return (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{timeAgo(row.last_seen)}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-700">{row.ip ?? '—'}</td>
+                  <td className="px-3 py-2.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)' }}>
+                      {row.visits} view{row.visits !== 1 ? 's' : ''}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-500">{browser}</td>
+                  <td className="px-3 py-2.5 text-slate-500">{os}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
