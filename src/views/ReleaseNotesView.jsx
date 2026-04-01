@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, RefreshCw, ExternalLink, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, RefreshCw, ExternalLink, Calendar, Clock, CheckCircle2, AlertCircle, Server, Cpu, HardDrive, Activity, ChevronDown } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import airsLogo from '../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
@@ -299,8 +299,162 @@ export function ReleaseNotesView() {
               Data cached for 7 days · Next refresh after {new Date(new Date(data.fetchedAt).getTime() + 7 * 86400000).toLocaleDateString()}
             </div>
           )}
+
+          {/* System Health */}
+          <SystemHealth />
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── System Health ─────────────────────────────────────────────────────────────
+function StatTile({ icon: Icon, label, value, sub, color = '#64748b' }) {
+  return (
+    <div className="flex flex-col gap-1 p-4 rounded-2xl bg-white border border-slate-200" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon size={12} style={{ color }} />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      </div>
+      <div className="text-[20px] font-black leading-none" style={{ color }}>{value}</div>
+      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
+function SystemHealth() {
+  const [open, setOpen] = useState(false)
+  const [health, setHealth] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/system-health')
+      if (!res.ok) throw new Error(`${res.status}`)
+      setHealth(await res.json())
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleOpen = () => {
+    setOpen(v => {
+      if (!v && !health) load()
+      return !v
+    })
+  }
+
+  const fmtUptime = (sec) => {
+    const d = Math.floor(sec / 86400)
+    const h = Math.floor((sec % 86400) / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`
+  }
+
+  const diskPct = health?.disk ? Math.round((health.disk.usedMb / health.disk.totalMb) * 100) : null
+  const memPct  = health?.os   ? Math.round((health.os.usedMb  / health.os.totalMb)  * 100) : null
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+      {/* Header */}
+      <button
+        onClick={handleOpen}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-100 transition-colors"
+      >
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
+          <Server size={14} style={{ color: '#10b981' }} />
+        </div>
+        <div className="flex-1">
+          <div className="text-[13px] font-black text-slate-700">Instance Health</div>
+          <div className="text-[11px] text-slate-400">EC2 t3.medium · us-west-2 · 16.145.84.141</div>
+        </div>
+        <div className="flex items-center gap-2">
+          {health && !loading && (
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Healthy
+            </div>
+          )}
+          <button onClick={(e) => { e.stopPropagation(); load() }} className="p-1 rounded-lg hover:bg-slate-200 transition-colors" title="Refresh">
+            <RefreshCw size={11} className={`text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown size={14} className="text-slate-400" />
+          </motion.div>
+        </div>
+      </button>
+
+      {/* Body */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-5 pt-1">
+              {loading && <div className="text-[12px] text-slate-400 py-4 text-center">Loading…</div>}
+              {error && <div className="text-[12px] text-red-400 py-4 text-center">Could not reach server: {error}</div>}
+              {health && !loading && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-4 gap-3">
+                    <StatTile icon={Cpu}       label="Node.js"   value={health.node.version}                color="#3b82f6" sub={`uptime ${fmtUptime(health.node.uptimeSec)}`} />
+                    <StatTile icon={Activity}  label="App RAM"   value={`${health.node.memMb} MB`}          color="#8b5cf6" sub="Node.js process RSS" />
+                    <StatTile icon={Server}    label="OS Memory" value={`${memPct}%`}                       color={memPct > 80 ? '#ef4444' : '#10b981'} sub={`${health.os?.usedMb ?? '—'} / ${health.os?.totalMb ?? '—'} MB used`} />
+                    <StatTile icon={HardDrive} label="Disk /"    value={health.disk?.usePct ?? '—'}         color={diskPct > 80 ? '#ef4444' : '#10b981'} sub={`${Math.round((health.disk?.usedMb??0)/1024)}GB / ${Math.round((health.disk?.totalMb??0)/1024)}GB`} />
+                  </div>
+                  {/* Memory bar */}
+                  {health.os && (
+                    <div>
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>OS Memory</span>
+                        <span>{health.os.availableMb} MB available</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ background: memPct > 80 ? '#ef4444' : '#10b981' }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${memPct}%` }}
+                          transition={{ duration: 0.6, ease: 'easeOut' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {/* Disk bar */}
+                  {health.disk && (
+                    <div>
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Disk /</span>
+                        <span>{Math.round(health.disk.availableMb / 1024)} GB available</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ background: diskPct > 80 ? '#ef4444' : '#3b82f6' }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${diskPct}%` }}
+                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-300 text-right">
+                    Snapshot at {new Date(health.ts).toLocaleTimeString()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

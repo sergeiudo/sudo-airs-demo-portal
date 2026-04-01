@@ -875,6 +875,44 @@ app.get('/api/release-notes', async (req, res) => {
   }
 })
 
+// ─── System health endpoint ───────────────────────────────────────────────────
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+const execFileAsync = promisify(execFile)
+
+app.get('/api/system-health', async (_req, res) => {
+  try {
+    const mem = process.memoryUsage()
+    const uptime = process.uptime()
+
+    // OS memory (Linux: free -m, macOS: vm_stat fallback)
+    let osMem = null
+    try {
+      const { stdout } = await execFileAsync('free', ['-m'], { timeout: 3000 })
+      const lines = stdout.trim().split('\n')
+      const memLine = lines.find(l => l.startsWith('Mem:'))?.split(/\s+/)
+      if (memLine) osMem = { totalMb: +memLine[1], usedMb: +memLine[2], freeMb: +memLine[3], availableMb: +memLine[6] }
+    } catch {}
+
+    // Disk usage for /
+    let disk = null
+    try {
+      const { stdout } = await execFileAsync('df', ['-m', '/'], { timeout: 3000 })
+      const line = stdout.trim().split('\n')[1]?.split(/\s+/)
+      if (line) disk = { totalMb: +line[1], usedMb: +line[2], availableMb: +line[3], usePct: line[4] }
+    } catch {}
+
+    res.json({
+      node: { version: process.version, uptimeSec: Math.round(uptime), memMb: Math.round(mem.rss / 1024 / 1024) },
+      os: osMem,
+      disk,
+      ts: new Date().toISOString(),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`\n  ╔══════════════════════════════════════════════╗`)
   console.log(`  ║  SUDO AIRS Demo  →  http://localhost:${PORT}    ║`)
