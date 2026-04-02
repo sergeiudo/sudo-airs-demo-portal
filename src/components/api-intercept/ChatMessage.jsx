@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ShieldX, ShieldCheck, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check, Activity } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
@@ -57,14 +57,32 @@ function SystemMessage({ message }) {
 }
 
 // ─── User bubble (iMessage style) ─────────────────────────────────────────────
-function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslating }) {
-  const hebrew = isHebrewText(message.content)
+function UserMessage({ message, onResend, onTranslate, isLoading, isTranslating }) {
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [openUpward, setOpenUpward] = useState(false)
+  const btnRef = useRef(null)
+
+  useEffect(() => {
+    if (!showDropdown) return
+    const handler = (e) => {
+      if (btnRef.current && !btnRef.current.closest('.translate-dropdown-root')?.contains(e.target)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showDropdown])
 
   const severityColor = message.attackMeta?.severity === 'critical'
     ? 'bg-red-500/20 text-red-400 border-red-500/30'
     : message.attackMeta?.severity === 'high'
     ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
     : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+
+  const LANGUAGES = [
+    'English', 'Spanish', 'Russian', 'German', 'French',
+    'Japanese', 'Portuguese', 'Italian', 'Simplified Chinese', 'Hebrew',
+  ]
 
   return (
     <motion.div
@@ -107,9 +125,8 @@ function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslati
           <p
             className="relative leading-relaxed whitespace-pre-wrap break-words"
             style={{
-              ...(hebrew
-                ? { fontFamily: 'Arial, sans-serif', direction: 'rtl', textAlign: 'right', fontSize: '13px' }
-                : { fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: '12px' }),
+              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+              fontSize: '12px',
               color: 'var(--user-bubble-text)',
             }}
           >
@@ -142,16 +159,44 @@ function UserMessage({ message, onResend, onResendHebrew, isLoading, isTranslati
             Resend
           </button>
         )}
-        {onResendHebrew && (
-          <button
-            onClick={onResendHebrew}
-            disabled={isLoading}
-            className="flex items-center gap-1 text-blue-400/70 hover:text-blue-300 transition-colors disabled:opacity-30"
-            title="Translate to Hebrew"
-          >
-            <Languages size={9} className={isTranslating ? 'animate-spin' : ''} />
-            He
-          </button>
+        {onTranslate && (
+          <div className="relative translate-dropdown-root" ref={btnRef}>
+            <button
+              onClick={() => {
+                if (btnRef.current) {
+                  const rect = btnRef.current.getBoundingClientRect()
+                  setOpenUpward(rect.bottom > window.innerHeight / 2)
+                }
+                setShowDropdown(prev => !prev)
+              }}
+              disabled={isLoading}
+              className="flex items-center gap-1 text-blue-400/70 hover:text-blue-300 transition-colors disabled:opacity-30"
+              title="Translate message"
+            >
+              <Languages size={9} className={isTranslating ? 'animate-spin' : ''} />
+              Translate
+            </button>
+            {showDropdown && (
+              <div
+                className={`absolute right-0 z-50 w-44 bg-slate-900/95 border border-white/10 rounded-xl shadow-xl backdrop-blur-md overflow-hidden ${
+                  openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+                }`}
+              >
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => {
+                      setShowDropdown(false)
+                      onTranslate(message.content, lang)
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/8 hover:text-white transition-colors"
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         <CopyButton text={message.content} />
       </div>
@@ -275,13 +320,13 @@ const hebrew = isHebrewText(message.content || '')
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
-export function ChatMessage({ message, onResend, onResendHebrew, isLoading, isTranslating, onOpenTelemetry }) {
+export function ChatMessage({ message, onResend, onTranslate, isLoading, isTranslating, onOpenTelemetry }) {
   if (message.role === 'system') return <SystemMessage message={message} />
   if (message.role === 'user') return (
     <UserMessage
       message={message}
       onResend={onResend}
-      onResendHebrew={onResendHebrew}
+      onTranslate={onTranslate}
       isLoading={isLoading}
       isTranslating={isTranslating}
     />
