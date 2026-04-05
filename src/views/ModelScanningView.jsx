@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ScanSearch, Upload, Link2, Play, AlertTriangle,
   CheckCircle2, ShieldX, ShieldCheck, Hash, ChevronDown,
-  RefreshCw, AlertCircle, Wifi, WifiOff, ExternalLink, Zap,
+  RefreshCw, AlertCircle, Wifi, WifiOff, ExternalLink, Zap, History,
 } from 'lucide-react'
 import { useProtectionTheme } from '../hooks/useProtectionTheme'
 import { RadarAnimation } from '../components/model-scanning/RadarAnimation'
@@ -88,6 +88,7 @@ export function ModelScanningView() {
   const [progress, setProgress]   = useState(0)
   const [result, setResult]       = useState(null)
   const [errorMsg, setErrorMsg]   = useState('')
+  const [history, setHistory]     = useState([])
 
   // Resizable JSON panel — default 1/3 of container
   const containerRef = useRef(null)
@@ -156,6 +157,15 @@ export function ModelScanningView() {
       stopProgress(100)
       if (!res.ok) throw new Error(json.detail || 'Scan failed')
       setResult(json); setScanState('complete')
+      const outcome = (json.eval_outcome ?? '').toUpperCase()
+      const allowed = outcome.includes('ALLOW') || outcome.includes('PASS')
+      setHistory(h => [{
+        id: Date.now(),
+        uri: mode === 'huggingface' ? hfUri.trim() : (file?.name ?? 'local file'),
+        ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        allowed,
+        result: json,
+      }, ...h].slice(0, 10))
     } catch (err) {
       stopProgress(0); setErrorMsg(err.message); setScanState('error')
     }
@@ -309,6 +319,43 @@ export function ModelScanningView() {
               <input ref={fileInputRef} type="file" className="hidden"
                 accept=".zip,.pkl,.bin,.safetensors,.pt,.onnx"
                 onChange={e => setFile(e.target.files?.[0] ?? null)} />
+            </div>
+          )}
+
+          {/* Scan history */}
+          {history.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <History size={9} className="text-slate-600" />
+                <div className="text-[9px] text-slate-600 uppercase tracking-wider font-semibold">Scan History</div>
+              </div>
+              <div className="space-y-1">
+                <AnimatePresence>
+                  {history.map(h => (
+                    <motion.button
+                      key={h.id}
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => { setResult(h.result); setScanState('complete'); setProgress(100) }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border border-white/8 bg-white/[0.02] hover:border-white/20 hover:bg-white/5 text-left transition-all"
+                    >
+                      <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${h.allowed ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                        {h.allowed
+                          ? <ShieldCheck size={10} className="text-emerald-400" />
+                          : <ShieldX size={10} className="text-red-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-mono text-slate-400 truncate">{h.uri}</div>
+                        <div className="text-[9px] text-slate-700">{h.ts}</div>
+                      </div>
+                      <span className={`text-[8px] font-bold flex-shrink-0 ${h.allowed ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {h.allowed ? 'SAFE' : 'BLOCKED'}
+                      </span>
+                    </motion.button>
+                  ))}
+                </AnimatePresence>
+              </div>
             </div>
           )}
 
