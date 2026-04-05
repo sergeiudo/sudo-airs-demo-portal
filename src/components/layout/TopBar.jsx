@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, HelpCircle, ChevronRight, Sun, Moon, ArrowLeft } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { PulsingDot } from '../shared/PulsingDot'
+import { HelpDrawer } from './HelpDrawer'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 const VIEW_LABELS = {
@@ -18,6 +19,7 @@ const VIEW_LABELS = {
 export function TopBar() {
   const { state, dispatch } = useAppContext()
   const theme = useProtectionTheme()
+  const [helpOpen, setHelpOpen] = useState(false)
   const view = VIEW_LABELS[state.activeView] ?? VIEW_LABELS.apiIntercept
 
   return (
@@ -85,7 +87,11 @@ export function TopBar() {
         <button className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all">
           <Bell size={14} />
         </button>
-        <button className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all">
+        <button
+          onClick={() => setHelpOpen(true)}
+          className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all"
+          title="Demo guide"
+        >
           <HelpCircle size={14} />
         </button>
         <button
@@ -96,6 +102,7 @@ export function TopBar() {
           {state.isDark ? <Sun size={14} /> : <Moon size={14} />}
         </button>
       </div>
+      <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
     </header>
   )
 }
