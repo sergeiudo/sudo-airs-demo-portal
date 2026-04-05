@@ -93,15 +93,24 @@ function Connector({ fromId, toId, activeNode, packetPos, blockedAt, color }) {
 
 // ─── Stats ticker ─────────────────────────────────────────────────────────────
 function StatTicker({ isProtected }) {
-  const [count, setCount] = useState({ scanned: 2847, blocked: 134, latency: 23 })
+  const [count, setCount] = useState({ scanned: null, blocked: null, latency: null })
+
   useEffect(() => {
-    const t = setInterval(() => {
-      setCount(c => ({
-        scanned: c.scanned + Math.floor(Math.random() * 3),
-        blocked: c.blocked + (Math.random() > 0.85 ? 1 : 0),
-        latency: 18 + Math.floor(Math.random() * 12),
-      }))
-    }, 2000)
+    const load = () => {
+      fetch('/api/traces/metrics')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data) return
+          setCount({
+            scanned: data.protected_count ?? 0,
+            blocked: data.blocked_count ?? 0,
+            latency: data.avg_airs_input_ms != null ? Math.round(data.avg_airs_input_ms) : null,
+          })
+        })
+        .catch(() => {})
+    }
+    load()
+    const t = setInterval(load, 10000)
     return () => clearInterval(t)
   }, [])
 
@@ -113,9 +122,9 @@ function StatTicker({ isProtected }) {
       className="flex items-center gap-4"
     >
       {[
-        { label: 'PROMPTS SCANNED', value: count.scanned.toLocaleString(), color: 'text-cyan-400' },
-        { label: 'THREATS BLOCKED', value: count.blocked.toLocaleString(), color: 'text-red-400' },
-        { label: 'SCAN LATENCY', value: `${count.latency}ms`, color: 'text-emerald-400' },
+        { label: 'PROMPTS SCANNED', value: count.scanned != null ? count.scanned.toLocaleString() : '—', color: 'text-cyan-400' },
+        { label: 'THREATS BLOCKED', value: count.blocked != null ? count.blocked.toLocaleString() : '—', color: 'text-red-400' },
+        { label: 'SCAN LATENCY',    value: count.latency != null ? `${count.latency}ms` : '—',           color: 'text-emerald-400' },
       ].map(s => (
         <div key={s.label} className="text-center">
           <motion.div
