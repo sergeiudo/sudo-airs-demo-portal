@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
 // Extract raw color value from Tailwind class e.g. 'bg-red-500/10' → 'rgba(239,68,68,0.1)'
@@ -34,8 +34,6 @@ const BORDER_VALS = {
 export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color, collapsed }) {
   const theme = useProtectionTheme()
   const [hovered, setHovered] = useState(false)
-  const [tooltipPos, setTooltipPos] = useState({ top: 0 })
-  const buttonRef = useRef(null)
   const c = isActive && color ? color : null
 
   const hoverBg     = color ? BG_VALS[color.bg]         : null
@@ -57,16 +55,10 @@ export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color,
 
   return (
     <motion.button
-      ref={buttonRef}
       onClick={onClick}
-      onMouseEnter={() => {
-        setHovered(true)
-        if (buttonRef.current) {
-          const rect = buttonRef.current.getBoundingClientRect()
-          setTooltipPos({ top: rect.top + rect.height / 2 })
-        }
-      }}
+      onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      title={collapsed ? label : undefined}
       className={`relative w-full flex items-center gap-3 rounded-lg text-left transition-all duration-200 group
         ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'}
       `}
@@ -102,57 +94,6 @@ export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color,
           )}
         </div>
       )}
-
-      <AnimatePresence>
-        {collapsed && hovered && (
-          <motion.div
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -6 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            style={{
-              position: 'fixed',
-              left: 76,
-              top: tooltipPos.top,
-              transform: 'translateY(-50%)',
-              zIndex: 9999,
-              pointerEvents: 'none',
-              background: document.documentElement.classList.contains('light')
-                ? '#ffffff'
-                : 'rgba(15,20,35,0.98)',
-              border: document.documentElement.classList.contains('light')
-                ? '1px solid rgba(0,48,135,0.14)'
-                : '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              backdropFilter: 'blur(12px)',
-              boxShadow: document.documentElement.classList.contains('light')
-                ? '0 8px 24px rgba(0,48,135,0.10)'
-                : '0 4px 16px rgba(0,0,0,0.4)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <div style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: document.documentElement.classList.contains('light') ? '#1e293b' : '#e2e8f0',
-              lineHeight: 1.3,
-            }}>
-              {label}
-            </div>
-            {sublabel && (
-              <div style={{
-                fontSize: 10,
-                color: '#64748b',
-                marginTop: 2,
-                lineHeight: 1.3,
-              }}>
-                {sublabel}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.button>
   )
 }
