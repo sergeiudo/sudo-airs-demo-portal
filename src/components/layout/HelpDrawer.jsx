@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
@@ -21,6 +21,13 @@ const TIPS = [
 export function HelpDrawer({ open, onClose }) {
   const { dispatch } = useAppContext()
   const isLight = document.documentElement.classList.contains('light')
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
 
   const navigate = (viewId) => {
     dispatch({ type: 'SET_VIEW', payload: viewId })
