@@ -8,6 +8,7 @@ import {
 import { useProtectionTheme } from '../hooks/useProtectionTheme'
 import { RobustnessGauge } from '../components/red-teaming/RobustnessGauge'
 import { LogEntry } from '../components/red-teaming/LogEntry'
+import { RedTeamReport } from '../components/red-teaming/RedTeamReport'
 
 // ─── Static category taxonomy ─────────────────────────────────────────────────
 const CATEGORIES = {
@@ -580,34 +581,7 @@ export function RedTeamingView() {
         </div>
 
         {/* Report summary (when complete) */}
-        {report && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-            className="border-b border-white/10 px-5 py-3 flex-shrink-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <BarChart3 size={12} className={theme.primaryText} />
-                <span className="text-xs font-semibold text-slate-300">Report</span>
-              </div>
-              <span className="text-[10px] text-slate-500">ASR {report.asr?.toFixed(1)}%</span>
-              <span className="text-[10px] text-slate-500">Score {report.score?.toFixed(1)}</span>
-              {/* Severity breakdown */}
-              {report.severity_report?.stats && Object.entries(report.severity_report.stats).map(([sev, count]) => count > 0 && (
-                <span key={sev} className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                  sev === 'CRITICAL' ? 'bg-red-500/20 text-red-400'
-                  : sev === 'HIGH'   ? 'bg-orange-500/20 text-orange-400'
-                  : sev === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400'
-                  :                    'bg-blue-500/20 text-blue-400'
-                }`}>{count} {sev}</span>
-              ))}
-              {/* Compliance scores */}
-              {report.compliance_report?.map(c => (
-                <span key={c.id} className="text-[9px] text-slate-500">
-                  {c.id}: {c.score}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-        )}
+        <RedTeamReport report={report} />
 
         {/* Attack log */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 flex-shrink-0">
