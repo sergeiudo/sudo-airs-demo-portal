@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
@@ -34,6 +34,7 @@ const BORDER_VALS = {
 export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color, collapsed }) {
   const theme = useProtectionTheme()
   const [hovered, setHovered] = useState(false)
+  const buttonRef = useRef(null)
   const c = isActive && color ? color : null
 
   const hoverBg     = color ? BG_VALS[color.bg]         : null
@@ -55,6 +56,7 @@ export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color,
 
   return (
     <motion.button
+      ref={buttonRef}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
