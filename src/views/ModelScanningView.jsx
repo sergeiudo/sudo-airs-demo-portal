@@ -88,7 +88,8 @@ export function ModelScanningView() {
   const [progress, setProgress]   = useState(0)
   const [result, setResult]       = useState(null)
   const [errorMsg, setErrorMsg]   = useState('')
-  const [history, setHistory]     = useState([])
+  const [history, setHistory]       = useState([])
+  const [historyOpen, setHistoryOpen] = useState(true)
 
   // Resizable JSON panel — default 1/3 of container
   const containerRef = useRef(null)
@@ -325,10 +326,25 @@ export function ModelScanningView() {
           {/* Scan history */}
           {history.length > 0 && (
             <div>
-              <div className="flex items-center gap-1.5 mb-2">
+              <button
+                onClick={() => setHistoryOpen(o => !o)}
+                className="flex items-center gap-1.5 mb-2 w-full text-left group"
+              >
                 <History size={9} className="text-slate-600" />
-                <div className="text-[9px] text-slate-600 uppercase tracking-wider font-semibold">Scan History</div>
-              </div>
+                <div className="text-[9px] text-slate-600 uppercase tracking-wider font-semibold flex-1">Scan History ({history.length})</div>
+                <motion.div animate={{ rotate: historyOpen ? 0 : -90 }} transition={{ duration: 0.2 }}>
+                  <ChevronDown size={10} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+                </motion.div>
+              </button>
+              <AnimatePresence initial={false}>
+              {historyOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                style={{ overflow: 'hidden' }}
+              >
               <div className="space-y-1">
                 <AnimatePresence>
                   {history.map(h => (
@@ -356,6 +372,9 @@ export function ModelScanningView() {
                   ))}
                 </AnimatePresence>
               </div>
+              </motion.div>
+              )}
+              </AnimatePresence>
             </div>
           )}
 
