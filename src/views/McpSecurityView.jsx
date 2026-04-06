@@ -772,7 +772,7 @@ function McpBriefingPage({ isLight, textMuted, textPrimary, cardBg, cardBorder }
                 <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, background: o.color + '20', color: o.color }}>{o.id}</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: o.color }}>{o.label}</span>
               </div>
-              <div style={{ fontSize: 9, color: isLight ? '#475569' : '#64748b', lineHeight: 1.4 }}>{o.desc}</div>
+              <div style={{ fontSize: 11, color: isLight ? '#334155' : '#94a3b8', lineHeight: 1.5 }}>{o.desc}</div>
             </div>
           ))}
         </div>
@@ -820,8 +820,8 @@ function McpBriefingPage({ isLight, textMuted, textPrimary, cardBg, cardBorder }
             }}>
               <div style={{ fontSize: 18, marginBottom: 6 }}>{node.icon}</div>
               <div style={{ fontSize: 11, fontWeight: 700, color: node.color }}>{node.label}</div>
-              <div style={{ fontSize: 9, color: textMuted, marginBottom: 6 }}>{node.sub}</div>
-              <div style={{ fontSize: 9, color: isLight ? '#475569' : '#64748b', lineHeight: 1.4 }}>{node.detail}</div>
+              <div style={{ fontSize: 10, color: textMuted, marginBottom: 6 }}>{node.sub}</div>
+              <div style={{ fontSize: 11, color: isLight ? '#334155' : '#94a3b8', lineHeight: 1.5 }}>{node.detail}</div>
             </div>
           ))}
         </div>
@@ -841,7 +841,7 @@ function McpBriefingPage({ isLight, textMuted, textPrimary, cardBg, cardBorder }
                 <span style={{ fontSize: 14, flexShrink: 0 }}>{t.icon}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <code style={{ fontSize: 10, fontWeight: 700, color: t.color, fontFamily: 'monospace' }}>{t.name}</code>
-                  <div style={{ fontSize: 9, color: isLight ? '#475569' : '#94a3b8', marginTop: 2, lineHeight: 1.4 }}>{t.desc}</div>
+                  <div style={{ fontSize: 11, color: isLight ? '#334155' : '#94a3b8', marginTop: 2, lineHeight: 1.5 }}>{t.desc}</div>
                   <div style={{ fontSize: 8, color: accentRed, marginTop: 3, display: 'flex', alignItems: 'center', gap: 3 }}>
                     <span>⚠</span><span>{t.risk}</span>
                   </div>
@@ -878,7 +878,7 @@ function McpBriefingPage({ isLight, textMuted, textPrimary, cardBg, cardBorder }
                 }}>{s.step}</div>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 600, color: s.highlight ? accent : textPrimary }}>{s.icon} {s.label}</div>
-                  <div style={{ fontSize: 9, color: textMuted, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
+                  <div style={{ fontSize: 11, color: textMuted, marginTop: 2, lineHeight: 1.5 }}>{s.desc}</div>
                 </div>
               </div>
             ))}
@@ -950,7 +950,7 @@ function AttackExplanationCard({ scenario: sc, explanation: ex, isLight, textMut
             <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>
               {row.icon} {row.label}
             </div>
-            <div style={{ fontSize: 12, color: isLight ? '#1e293b' : '#cbd5e1', lineHeight: 1.7 }}>{row.text}</div>
+            <div style={{ fontSize: 12, color: isLight ? '#1e293b' : '#e2e8f0', lineHeight: 1.7 }}>{row.text}</div>
           </div>
         ))}
 
@@ -991,6 +991,34 @@ export function McpSecurityView() {
   const [openGroups, setOpenGroups] = useState({ 'tool-misuse': true, 'tool-poisoning': true, 'memory-poisoning': true, 'data-exfiltration': true })
   const [activeScenario, setActiveScenario] = useState(null)
   const logEndRef = useRef(null)
+
+  // Resizable panels
+  const [leftWidth, setLeftWidth] = useState(300)
+  const [rightWidth, setRightWidth] = useState(280)
+  const leftDragRef = useRef({ dragging: false, startX: 0, startW: 0 })
+  const rightDragRef = useRef({ dragging: false, startX: 0, startW: 0 })
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (leftDragRef.current.dragging) {
+        const delta = e.clientX - leftDragRef.current.startX
+        setLeftWidth(Math.min(520, Math.max(200, leftDragRef.current.startW + delta)))
+      }
+      if (rightDragRef.current.dragging) {
+        const delta = rightDragRef.current.startX - e.clientX
+        setRightWidth(Math.min(520, Math.max(200, rightDragRef.current.startW + delta)))
+      }
+    }
+    const onUp = () => {
+      leftDragRef.current.dragging = false
+      rightDragRef.current.dragging = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
 
   // Health check
   useEffect(() => {
@@ -1067,12 +1095,23 @@ export function McpSecurityView() {
   const textMuted = '#64748b'
   const panelBg = isLight ? '#f8fafc' : 'rgba(255,255,255,0.01)'
 
+  const onLeftDragStart = (e) => {
+    leftDragRef.current = { dragging: true, startX: e.clientX, startW: leftWidth }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+  const onRightDragStart = (e) => {
+    rightDragRef.current = { dragging: true, startX: e.clientX, startW: rightWidth }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
       {/* ── LEFT: Tool panel ────────────────────────────────────────────────── */}
       <div style={{
-        width: 300, flexShrink: 0, borderRight: `1px solid ${cardBorder}`,
+        width: leftWidth, flexShrink: 0, borderRight: 'none',
         display: 'flex', flexDirection: 'column', overflow: 'hidden', background: panelBg,
       }}>
         {/* Header */}
@@ -1295,6 +1334,18 @@ export function McpSecurityView() {
         </div>
       </div>
 
+      {/* Left drag handle */}
+      <div
+        onMouseDown={onLeftDragStart}
+        style={{
+          width: 4, flexShrink: 0, cursor: 'col-resize',
+          background: cardBorder, transition: 'background 0.15s',
+          borderLeft: `1px solid ${cardBorder}`,
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = '#06b6d4'}
+        onMouseLeave={e => e.currentTarget.style.background = cardBorder}
+      />
+
       {/* ── CENTER: Pipeline + result ─────────────────────────────────────────── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -1499,9 +1550,20 @@ export function McpSecurityView() {
         </div>
       </div>
 
+      {/* Right drag handle */}
+      <div
+        onMouseDown={onRightDragStart}
+        style={{
+          width: 4, flexShrink: 0, cursor: 'col-resize',
+          background: cardBorder, transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = '#06b6d4'}
+        onMouseLeave={e => e.currentTarget.style.background = cardBorder}
+      />
+
       {/* ── RIGHT: Invocation log ─────────────────────────────────────────────── */}
       <div style={{
-        width: 280, flexShrink: 0, borderLeft: `1px solid ${cardBorder}`,
+        width: rightWidth, flexShrink: 0, borderLeft: 'none',
         display: 'flex', flexDirection: 'column', overflow: 'hidden', background: panelBg,
       }}>
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${cardBorder}`, flexShrink: 0 }}>
@@ -1539,7 +1601,7 @@ export function McpSecurityView() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {blocked ? <ShieldX size={11} color="#ef4444" /> : hasError ? <AlertTriangle size={11} color="#facc15" /> : <ShieldCheck size={11} color="#34d399" />}
-                      <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color: textPrimary, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: isLight ? '#0f172a' : '#f1f5f9', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {entry.tool}
                       </span>
                       <span style={{ fontSize: 8, color: textMuted }}>{entry.ts}</span>

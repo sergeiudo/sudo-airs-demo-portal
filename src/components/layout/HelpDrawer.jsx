@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare } from 'lucide-react'
+import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 
 const VIEWS = [
@@ -10,12 +10,14 @@ const VIEWS = [
   { id: 'claudeHooks',     icon: Terminal,   label: 'AI Code Assistant Protection', desc: 'See how AIRS protects Claude Code via pre/post-tool hook scripts.',    color: '#8B5CF6' },
   { id: 'observability',   icon: BarChart2,  label: 'LLM Telemetry',                desc: 'Browse prompt history, latency metrics, and detection breakdowns.',    color: '#10B981' },
   { id: 'developerCorner', icon: Code2,      label: 'Developer Corner',             desc: 'Python SDK, REST API reference, and live integration code samples.',   color: '#06B6D4' },
+  { id: 'mcpSecurity',     icon: Network,    label: 'MCP Security',                 desc: 'Live MCP tool demo with real AIRS two-stage scanning — 10 OWASP attack scenarios.',  color: '#06B6D4' },
 ]
 
 const TIPS = [
   { icon: ShieldOff,     text: 'Toggle protection OFF to see what happens without AIRS — attacks reach the model unblocked.' },
   { icon: Zap,           text: 'In API Intercept, click any attack payload from the library to auto-inject it into the chat.' },
   { icon: Eye,           text: 'Click "Prompt Telemetry" on any response to see the full AIRS pipeline trace and scan details.' },
+  { icon: Network,       text: 'In MCP Security, try attack scenarios with protection OFF first, then ON — to show the before/after story.' },
 ]
 
 export function HelpDrawer({ open, onClose }) {
