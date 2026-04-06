@@ -526,6 +526,11 @@ export function McpSecurityView() {
     setInvoking(false)
   }
 
+  const handleInvokeCustom = () => {
+    setActiveScenario(null)
+    invoke(selectedTool.id, params)
+  }
+
   const handleInvoke = handleInvokeCustom
 
   const handleScenario = (scenario) => {
@@ -536,11 +541,6 @@ export function McpSecurityView() {
     }
     setActiveScenario(scenario)
     invoke(scenario.tool, scenario.params)
-  }
-
-  const handleInvokeCustom = () => {
-    setActiveScenario(null)
-    invoke(selectedTool.id, params)
   }
 
   const handleToolChange = (tool) => {
