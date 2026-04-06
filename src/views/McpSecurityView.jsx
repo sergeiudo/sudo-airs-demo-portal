@@ -631,16 +631,17 @@ function AttackExplanationCard({ scenario: sc, explanation: ex, isLight, textMut
         }}>{sc.stage} DETECTION</span>
       </div>
 
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Highlighted attack payload */}
-        <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
-          <div style={{ fontSize: 8, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 5 }}>
+        <div style={{ padding: '10px 14px', borderRadius: 9, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.30)' }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 7 }}>
             ⚡ {ex.highlightLabel}
           </div>
           <code style={{
-            fontSize: 10, fontFamily: 'monospace', color: '#fca5a5',
-            background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 5,
-            display: 'block', wordBreak: 'break-all', lineHeight: 1.5,
+            fontSize: 12, fontFamily: 'monospace', color: '#ffffff',
+            background: 'rgba(0,0,0,0.40)', padding: '6px 10px', borderRadius: 6,
+            display: 'block', wordBreak: 'break-all', lineHeight: 1.6,
+            border: '1px solid rgba(239,68,68,0.25)',
           }}>
             {ex.highlight}
           </code>
@@ -653,23 +654,23 @@ function AttackExplanationCard({ scenario: sc, explanation: ex, isLight, textMut
           { label: 'How AIRS protected', text: ex.how, icon: '🛡️' },
         ].map(row => (
           <div key={row.label}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 4 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>
               {row.icon} {row.label}
             </div>
-            <div style={{ fontSize: 11, color: isLight ? '#334155' : '#94a3b8', lineHeight: 1.6 }}>{row.text}</div>
+            <div style={{ fontSize: 12, color: isLight ? '#1e293b' : '#cbd5e1', lineHeight: 1.7 }}>{row.text}</div>
           </div>
         ))}
 
         {/* Detection categories */}
         {ex.detectedBy?.length > 0 && (
           <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 5 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 7 }}>
               🎯 AIRS Detection Categories
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {ex.detectedBy.map(d => (
                 <span key={d} style={{
-                  fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                  fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
                   background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.35)',
                   color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em',
                 }}>{d.replace(/_/g, ' ')}</span>
