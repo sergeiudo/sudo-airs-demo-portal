@@ -233,9 +233,9 @@ const SCENARIOS = SCENARIO_GROUPS.flatMap(g => g.scenarios)
 // ── Attack explanations ────────────────────────────────────────────────────────
 const EXPLANATIONS = {
   'path-traversal': {
-    what: 'A malicious agent passes `../../etc/passwd` as a file path parameter to the `read_file` tool, attempting to escape the sandbox and read the system password file.',
-    why: 'Directory traversal exploits insufficient path validation. Without AIRS, the tool would expose all system user accounts and hashed passwords — a critical foothold for privilege escalation.',
-    how: 'AIRS scans the tool invocation at Stage 1 via the `tool_event` field. It detects the traversal pattern in the file path parameter and blocks before the tool ever executes.',
+    what: 'A malicious agent passes `../../etc/passwd` as a file path parameter to the `read_file` tool, attempting to escape the sandbox and read the system password file. With Protection OFF, the attack reaches the tool — only the MCP server\'s own sandbox stops it as a last resort. Toggle Protection ON to see AIRS block it before the tool runs.',
+    why: 'Directory traversal exploits insufficient path validation. In a real deployment without a sandbox, the tool would return all system user accounts and hashed passwords — a critical foothold for privilege escalation and lateral movement.',
+    how: 'With AIRS ON: Stage 1 scans the tool invocation via the `tool_event` field, detects the traversal pattern (`../../`) in the path parameter, and blocks before the tool ever executes. The MCP server is never called.',
     highlight: '../../etc/passwd',
     highlightLabel: 'Traversal payload in path parameter',
     detectedBy: ['injection', 'malicious_code'],
@@ -1448,26 +1448,37 @@ export function McpSecurityView() {
 
                 {result.error && (() => {
                   const isSandboxBlock = result.error.includes('outside the sandbox') || result.error.includes('Access denied')
+                  const isUnprotected = !result.airsEnabled
                   return (
                     <div style={{
-                      padding: '12px 16px', borderRadius: 10,
-                      background: isSandboxBlock ? 'rgba(251,191,36,0.08)' : 'rgba(250,204,21,0.08)',
-                      border: `1px solid ${isSandboxBlock ? 'rgba(251,191,36,0.30)' : 'rgba(250,204,21,0.25)'}`,
-                      display: 'flex', gap: 10, alignItems: 'flex-start',
+                      padding: '14px 16px', borderRadius: 12,
+                      background: isSandboxBlock && isUnprotected ? 'rgba(239,68,68,0.06)' : 'rgba(251,191,36,0.08)',
+                      border: `1px solid ${isSandboxBlock && isUnprotected ? 'rgba(239,68,68,0.25)' : 'rgba(251,191,36,0.30)'}`,
+                      display: 'flex', gap: 12, alignItems: 'flex-start',
                     }}>
-                      <AlertTriangle size={16} color={isSandboxBlock ? '#fbbf24' : '#facc15'} style={{ flexShrink: 0, marginTop: 1 }} />
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', marginBottom: 3 }}>
-                          {isSandboxBlock ? '⚠️ Sandbox Safety Net Triggered' : '⚠️ Tool Error'}
+                      <AlertTriangle size={18} color={isSandboxBlock && isUnprotected ? '#ef4444' : '#fbbf24'} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: isSandboxBlock && isUnprotected ? '#ef4444' : '#fbbf24', marginBottom: 6 }}>
+                          {isSandboxBlock && isUnprotected
+                            ? '🔓 Attack Reached the Tool — Stopped by Sandbox (Last Resort)'
+                            : isSandboxBlock
+                            ? '⚠️ Sandbox Safety Net Triggered'
+                            : '⚠️ Tool Error'}
                         </div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
-                          {isSandboxBlock
-                            ? `The MCP server's sandbox caught this attack before it could read system files. Note: ideally AIRS Stage 1 should have blocked this before the tool ran — check that your AIRS profile has prompt injection detection enabled.`
-                            : result.error}
+                        <div style={{ fontSize: 12, color: isLight ? '#334155' : '#cbd5e1', lineHeight: 1.7 }}>
+                          {isSandboxBlock && isUnprotected ? (
+                            <>
+                              <strong style={{ color: isLight ? '#0f172a' : '#f1f5f9' }}>This is the expected "unprotected" result.</strong> With AIRS OFF, the path traversal payload reached the MCP tool. The sandbox blocked it as a last-resort safety net — but this is not AIRS protection. In a real deployment without a sandbox, <strong style={{ color: '#ef4444' }}>the attack would have succeeded</strong> and returned the contents of <code style={{ fontFamily: 'monospace', fontSize: 11 }}>/etc/passwd</code>.
+                              <br /><br />
+                              <strong style={{ color: '#34d399' }}>Now toggle Protection ON</strong> and run this scenario again — AIRS will intercept the tool invocation at Stage 1, before the tool ever executes.
+                            </>
+                          ) : isSandboxBlock ? (
+                            `The MCP server's sandbox caught this attack. With AIRS enabled, Stage 1 should have blocked this before the tool ran — verify that your AIRS profile has prompt injection detection enabled in Strata Cloud Manager.`
+                          ) : result.error}
                         </div>
                         {isSandboxBlock && (
-                          <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 6, fontStyle: 'italic' }}>
-                            Raw error: {result.error}
+                          <div style={{ fontSize: 10, color: '#64748b', marginTop: 8, fontFamily: 'monospace' }}>
+                            Tool response: {result.error}
                           </div>
                         )}
                       </div>
