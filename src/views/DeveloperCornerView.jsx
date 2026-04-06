@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Code2, Globe, FileCode, BookOpen, Terminal,
@@ -817,6 +817,11 @@ function ReferenceSection() {
 
 export function DeveloperCornerView() {
   const [activeSection, setActiveSection] = useState('quickstart')
+  const isLight = document.documentElement.classList.contains('light')
+  const bg = isLight ? '#ffffff' : '#0d1117'
+  const bgSide = isLight ? '#f8fafc' : '#0a0e18'
+  const border = isLight ? '#e2e8f0' : 'rgba(255,255,255,0.08)'
+  const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
 
   const renderSection = () => {
     switch (activeSection) {
@@ -833,13 +838,13 @@ export function DeveloperCornerView() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Hero */}
-      <div className="flex-shrink-0 px-8 py-5 flex-shrink-0" style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="flex-shrink-0 px-8 py-5 flex-shrink-0" style={{ background: bg, borderBottom: `1px solid ${border}` }}>
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)' }}>
             <Code2 size={20} style={{ color: '#818cf8' }} />
           </div>
           <div>
-            <h1 className="text-lg font-black" style={{ color: '#0f172a' }}>Prisma AIRS Integration Guide</h1>
+            <h1 className="text-lg font-black" style={{ color: textPrimary }}>Prisma AIRS Integration Guide</h1>
             <p className="text-[12px]" style={{ color: '#64748b' }}>Everything your team needs to add AI Runtime Security to any application</p>
           </div>
           <div className="ml-auto flex items-center gap-4">
@@ -860,7 +865,7 @@ export function DeveloperCornerView() {
       {/* Body: left nav + content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left nav */}
-        <div className="flex-shrink-0 w-48 overflow-y-auto py-4 px-2" style={{ background: '#f8fafc', borderRight: '1px solid #e2e8f0' }}>
+        <div className="flex-shrink-0 w-48 overflow-y-auto py-4 px-2" style={{ background: bgSide, borderRight: `1px solid ${border}` }}>
           {SECTIONS.map(s => {
             const Icon = s.icon
             const isActive = activeSection === s.id
@@ -885,7 +890,7 @@ export function DeveloperCornerView() {
         </div>
 
         {/* Content pane */}
-        <div className="flex-1 overflow-y-auto p-8" style={{ background: '#ffffff' }}>
+        <div className="flex-1 overflow-y-auto p-8" style={{ background: bg }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}

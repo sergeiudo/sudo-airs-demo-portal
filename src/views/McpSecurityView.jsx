@@ -1090,11 +1090,11 @@ export function McpSecurityView() {
   }
 
   const isLight = document.documentElement.classList.contains('light')
-  const cardBg = isLight ? '#ffffff' : 'rgba(255,255,255,0.02)'
-  const cardBorder = isLight ? 'rgba(0,48,135,0.10)' : 'rgba(255,255,255,0.08)'
+  const cardBg = isLight ? '#ffffff' : 'rgba(255,255,255,0.05)'
+  const cardBorder = isLight ? 'rgba(0,48,135,0.10)' : 'rgba(255,255,255,0.10)'
   const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
   const textMuted = '#64748b'
-  const panelBg = isLight ? '#f8fafc' : 'rgba(255,255,255,0.01)'
+  const panelBg = isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)'
 
   const onLeftDragStart = (e) => {
     leftDragRef.current = { dragging: true, startX: e.clientX, startW: leftWidth }
