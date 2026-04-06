@@ -345,15 +345,16 @@ function ScanStageCard({ stage, label, data, pending, skipped }) {
   const isBlock = data?.action === 'block'
   const isAllow = data?.action === 'allow'
 
+  // Block = green card (AIRS protected), allow = green card too. Red only for threats.
   const borderColor = pending ? 'rgba(255,255,255,0.08)'
     : skipped ? 'rgba(255,255,255,0.05)'
-    : isBlock ? 'rgba(239,68,68,0.35)'
+    : isBlock ? 'rgba(52,211,153,0.35)'
     : isAllow ? 'rgba(52,211,153,0.35)'
     : 'rgba(255,255,255,0.08)'
 
   const bgColor = pending ? 'rgba(255,255,255,0.02)'
     : skipped ? 'rgba(255,255,255,0.01)'
-    : isBlock ? 'rgba(239,68,68,0.06)'
+    : isBlock ? 'rgba(52,211,153,0.06)'
     : isAllow ? 'rgba(52,211,153,0.06)'
     : 'rgba(255,255,255,0.02)'
 
@@ -366,7 +367,7 @@ function ScanStageCard({ stage, label, data, pending, skipped }) {
         <span style={{ fontSize: 10, color: '#94a3b8', flex: 1 }}>{label}</span>
         {pending && <RefreshCw size={11} color="#64748b" className="animate-spin" />}
         {skipped && <span style={{ fontSize: 9, color: '#64748b' }}>skipped</span>}
-        {isBlock && <ShieldX size={14} color="#ef4444" />}
+        {isBlock && <ShieldCheck size={14} color="#34d399" />}
         {isAllow && <ShieldCheck size={14} color="#34d399" />}
       </div>
       {data && (
