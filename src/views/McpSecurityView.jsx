@@ -399,6 +399,122 @@ function ScanStageCard({ stage, label, data, pending, skipped }) {
   )
 }
 
+// ── AIRS Payload Viewer ────────────────────────────────────────────────────────
+function JsonToken({ value }) {
+  if (value === null) return <span style={{ color: '#94a3b8' }}>null</span>
+  if (typeof value === 'boolean') return <span style={{ color: '#60a5fa' }}>{String(value)}</span>
+  if (typeof value === 'number') return <span style={{ color: '#34d399' }}>{value}</span>
+  if (typeof value === 'string') return <span style={{ color: '#fbbf24' }}>"{value}"</span>
+  return <span>{String(value)}</span>
+}
+
+function JsonLines({ obj, indent = 0 }) {
+  const pad = '  '.repeat(indent)
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return <span>{'[]'}</span>
+    return (
+      <>
+        {'[\n'}
+        {obj.map((item, i) => (
+          <span key={i}>
+            {pad + '  '}
+            {typeof item === 'object' && item !== null
+              ? <JsonLines obj={item} indent={indent + 1} />
+              : <JsonToken value={item} />}
+            {i < obj.length - 1 ? ',' : ''}{'\n'}
+          </span>
+        ))}
+        {pad}{']'}
+      </>
+    )
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    const keys = Object.keys(obj)
+    if (keys.length === 0) return <span>{'{}'}</span>
+    return (
+      <>
+        {'{\n'}
+        {keys.map((k, i) => (
+          <span key={k}>
+            {pad + '  '}<span style={{ color: '#c084fc' }}>"{k}"</span>
+            <span style={{ color: '#94a3b8' }}>: </span>
+            {typeof obj[k] === 'object' && obj[k] !== null
+              ? <JsonLines obj={obj[k]} indent={indent + 1} />
+              : <JsonToken value={obj[k]} />}
+            {i < keys.length - 1 ? ',' : ''}{'\n'}
+          </span>
+        ))}
+        {pad}{'}'}
+      </>
+    )
+  }
+  return <JsonToken value={obj} />
+}
+
+function AirsPayloadViewer({ stage1, stage2, isLight, textMuted }) {
+  const [open, setOpen] = React.useState(false)
+  const stages = [
+    stage1?.requestBody && { label: 'Stage 1 — Pre-Tool Request', body: stage1.requestBody, latency: stage1.latencyMs },
+    stage2?.requestBody && { label: 'Stage 2 — Post-Tool Request', body: stage2.requestBody, latency: stage2.latencyMs },
+  ].filter(Boolean)
+
+  return (
+    <div style={{ borderRadius: 12, border: `1px solid ${isLight ? 'rgba(0,48,135,0.10)' : 'rgba(255,255,255,0.08)'}`, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', background: isLight ? 'rgba(0,48,135,0.03)' : 'rgba(255,255,255,0.03)',
+          border: 'none', cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#06b6d4', letterSpacing: '0.06em' }}>
+          📡 AIRS API Request Payloads
+        </span>
+        <span style={{ fontSize: 9, color: textMuted }}>— {stages.length} scan{stages.length > 1 ? 's' : ''} sent to Prisma AIRS</span>
+        <motion.div style={{ marginLeft: 'auto' }} animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.18 }}>
+          <ChevronDown size={12} color={textMuted} />
+        </motion.div>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {stages.map((s, i) => (
+                <div key={i} style={{ borderTop: `1px solid ${isLight ? 'rgba(0,48,135,0.08)' : 'rgba(255,255,255,0.06)'}` }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 14px',
+                    background: isLight ? 'rgba(0,48,135,0.02)' : 'rgba(6,182,212,0.04)',
+                  }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{s.label}</span>
+                    {s.latency && <span style={{ fontSize: 9, color: textMuted, marginLeft: 'auto' }}>⏱ {s.latency}ms</span>}
+                  </div>
+                  <pre style={{
+                    margin: 0, padding: '12px 16px',
+                    fontSize: 11, fontFamily: 'monospace', lineHeight: 1.6,
+                    background: isLight ? '#f8fafc' : 'rgba(0,0,0,0.35)',
+                    overflowX: 'auto', maxHeight: 320, overflowY: 'auto',
+                    color: '#94a3b8',
+                  }}>
+                    <JsonLines obj={s.body} />
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 // ── MCP Briefing / Welcome page ───────────────────────────────────────────────
 function McpBriefingPage({ isLight, textMuted, textPrimary, cardBg, cardBorder }) {
   const accent = '#06b6d4'
@@ -1207,29 +1323,7 @@ export function McpSecurityView() {
 
                 {/* Raw request bodies */}
                 {isProtected && (result.stage1 || result.stage2) && (
-                  <details style={{ marginTop: 4 }}>
-                    <summary style={{ fontSize: 10, color: textMuted, cursor: 'pointer', userSelect: 'none' }}>
-                      Show AIRS request payloads
-                    </summary>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                      {result.stage1?.requestBody && (
-                        <div>
-                          <div style={{ fontSize: 9, color: textMuted, marginBottom: 4 }}>Stage 1 request body:</div>
-                          <pre style={{ fontSize: 9, fontFamily: 'monospace', color: '#64748b', background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.25)', padding: '8px 10px', borderRadius: 8, margin: 0, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
-                            {JSON.stringify(result.stage1.requestBody, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      {result.stage2?.requestBody && (
-                        <div>
-                          <div style={{ fontSize: 9, color: textMuted, marginBottom: 4 }}>Stage 2 request body:</div>
-                          <pre style={{ fontSize: 9, fontFamily: 'monospace', color: '#64748b', background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.25)', padding: '8px 10px', borderRadius: 8, margin: 0, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
-                            {JSON.stringify(result.stage2.requestBody, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  </details>
+                  <AirsPayloadViewer stage1={result.stage1} stage2={result.stage2} isLight={isLight} textMuted={textMuted} />
                 )}
               </motion.div>
             )}
