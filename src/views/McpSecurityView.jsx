@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Network, Play, ShieldCheck, ShieldX, FileText, Globe,
-  Code2, Brain, ChevronRight, AlertTriangle, CheckCircle2,
+  Code2, Brain, ChevronRight, ChevronDown, AlertTriangle, CheckCircle2,
   Wifi, WifiOff, RefreshCw, Lock, Unlock, Terminal,
   ArrowRight, Zap, Eye, Database,
 } from 'lucide-react'
@@ -318,6 +318,7 @@ export function McpSecurityView() {
   const [invoking, setInvoking] = useState(false)
   const [result, setResult] = useState(null)
   const [log, setLog] = useState([])
+  const [openGroups, setOpenGroups] = useState({ 'tool-misuse': true, 'tool-poisoning': true, 'memory-poisoning': true, 'data-exfiltration': true })
   const logEndRef = useRef(null)
 
   // Health check
@@ -438,10 +439,18 @@ export function McpSecurityView() {
               Attack Scenarios
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {SCENARIO_GROUPS.map(group => (
+              {SCENARIO_GROUPS.map(group => {
+                const isOpen = openGroups[group.id]
+                return (
                 <div key={group.id}>
-                  {/* Group header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                  {/* Group header — clickable */}
+                  <button
+                    onClick={() => setOpenGroups(o => ({ ...o, [group.id]: !o[group.id] }))}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, marginBottom: isOpen ? 5 : 0,
+                      width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+                    }}
+                  >
                     <div style={{ width: 3, height: 12, borderRadius: 99, background: group.color, flexShrink: 0 }} />
                     <span style={{ fontSize: 9, fontWeight: 700, color: group.color, letterSpacing: '0.06em' }}>
                       {group.label}
@@ -449,8 +458,21 @@ export function McpSecurityView() {
                     <span style={{ fontSize: 8, color: textMuted, marginLeft: 2 }}>
                       {group.owasp}
                     </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={{ fontSize: 8, color: textMuted, marginLeft: 2 }}>({group.scenarios.length})</span>
+                    <motion.div style={{ marginLeft: 'auto' }} animate={{ rotate: isOpen ? 0 : -90 }} transition={{ duration: 0.18 }}>
+                      <ChevronDown size={10} color={textMuted} />
+                    </motion.div>
+                  </button>
+                  <AnimatePresence initial={false}>
+                  {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 2 }}>
                     {group.scenarios.map(s => (
                       <button
                         key={s.id}
@@ -479,8 +501,12 @@ export function McpSecurityView() {
                       </button>
                     ))}
                   </div>
+                  </motion.div>
+                  )}
+                  </AnimatePresence>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
