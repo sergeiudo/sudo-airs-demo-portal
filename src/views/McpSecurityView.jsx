@@ -872,16 +872,12 @@ export function McpSecurityView() {
                         onMouseEnter={e => { e.currentTarget.style.background = group.color + '20'; e.currentTarget.style.borderColor = group.color + '55' }}
                         onMouseLeave={e => { e.currentTarget.style.background = group.color + '10'; e.currentTarget.style.borderColor = group.color + '30' }}
                       >
-                        {/* Neutral number badge */}
+                        {/* Colored dot */}
                         <div style={{
-                          width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1,
-                          background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-                          border: `1px solid ${isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.12)'}`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 9, fontWeight: 700, color: textMuted, fontFamily: 'monospace',
-                        }}>
-                          {group.scenarios.indexOf(s) + 1}
-                        </div>
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 5,
+                          background: group.color,
+                          boxShadow: `0 0 6px ${group.color}80`,
+                        }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: textPrimary, lineHeight: 1.3 }}>{s.label}</div>
                           <div style={{ fontSize: 10, color: textMuted, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
