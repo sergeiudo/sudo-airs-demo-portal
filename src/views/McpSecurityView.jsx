@@ -465,33 +465,34 @@ export function McpSecurityView() {
           </span>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             {[
-              { label: 'Agent', icon: Terminal, color: '#94a3b8' },
+              { label: 'Agent', icon: Terminal, color: '#94a3b8', bypassed: false },
               null,
-              { label: 'AIRS Stage 1', icon: ShieldCheck, color: isProtected ? '#34d399' : '#ef4444', sub: 'Pre-Tool Scan' },
+              { label: 'AIRS Stage 1', icon: isProtected ? ShieldCheck : ShieldX, color: isProtected ? '#34d399' : '#475569', sub: 'Pre-Tool Scan', bypassed: !isProtected },
               null,
-              { label: 'MCP Tool', icon: Network, color: selectedTool.color },
+              { label: 'MCP Tool', icon: Network, color: selectedTool.color, bypassed: false },
               null,
-              { label: 'AIRS Stage 2', icon: ShieldCheck, color: isProtected ? '#34d399' : '#ef4444', sub: 'Post-Tool Scan' },
+              { label: 'AIRS Stage 2', icon: isProtected ? ShieldCheck : ShieldX, color: isProtected ? '#34d399' : '#475569', sub: 'Post-Tool Scan', bypassed: !isProtected },
               null,
-              { label: 'Response', icon: CheckCircle2, color: '#94a3b8' },
+              { label: 'Response', icon: CheckCircle2, color: '#94a3b8', bypassed: false },
             ].map((node, i) => node === null ? (
-              <ArrowRight key={i} size={12} color={isProtected ? '#34d399' : '#94a3b8'} style={{ opacity: 0.4 }} />
+              <ArrowRight key={i} size={12} color={isProtected ? '#34d399' : '#475569'} style={{ opacity: isProtected ? 0.4 : 0.2 }} />
             ) : (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: node.bypassed ? 0.35 : 1 }}>
                 <div style={{
                   width: 28, height: 28, borderRadius: 8,
                   background: node.color + '18', border: `1px solid ${node.color}35`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  position: 'relative',
                 }}>
                   <node.icon size={12} color={node.color} />
                 </div>
                 <span style={{ fontSize: 8, color: node.color, fontWeight: 600, textAlign: 'center', maxWidth: 56, lineHeight: 1.2 }}>{node.label}</span>
-                {node.sub && <span style={{ fontSize: 7, color: textMuted, textAlign: 'center' }}>{node.sub}</span>}
+                {node.sub && <span style={{ fontSize: 7, color: node.bypassed ? '#475569' : textMuted, textAlign: 'center' }}>{node.bypassed ? 'BYPASSED' : node.sub}</span>}
               </div>
             ))}
           </div>
           {!isProtected && (
-            <span style={{ fontSize: 9, color: '#ef4444', fontWeight: 600 }}>AIRS scanning disabled — toggle protection ON</span>
+            <span style={{ fontSize: 9, color: '#ef4444', fontWeight: 600 }}>⚠ Protection OFF — AIRS bypassed</span>
           )}
         </div>
 
@@ -539,62 +540,115 @@ export function McpSecurityView() {
                 exit={{ opacity: 0 }}
                 style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
               >
-                {/* Overall verdict banner */}
-                <div style={{
-                  padding: '12px 16px', borderRadius: 12,
-                  background: result.blocked ? 'rgba(239,68,68,0.08)' : result.error ? 'rgba(250,204,21,0.08)' : 'rgba(52,211,153,0.08)',
-                  border: `1px solid ${result.blocked ? 'rgba(239,68,68,0.30)' : result.error ? 'rgba(250,204,21,0.30)' : 'rgba(52,211,153,0.30)'}`,
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}>
-                  {result.blocked ? <ShieldX size={20} color="#ef4444" /> : result.error ? <AlertTriangle size={20} color="#facc15" /> : <ShieldCheck size={20} color="#34d399" />}
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: result.blocked ? '#ef4444' : result.error ? '#facc15' : '#34d399' }}>
-                      {result.blocked ? `🚫 Blocked at ${result.blockStage === 1 ? 'Stage 1 — Tool invocation prevented' : 'Stage 2 — Response suppressed'}` : result.error ? `⚠️ Tool Error` : '✅ Allowed — Tool executed successfully'}
-                    </div>
-                    <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>
-                      {result.blocked
-                        ? `AIRS detected a threat in the ${result.blockStage === 1 ? 'tool invocation parameters' : 'tool output'}`
-                        : result.error ? result.error
-                        : `Tool: ${result.tool} · AIRS scans: ${isProtected ? 'enabled' : 'disabled'}`}
+                {/* ── UNPROTECTED flow banner ── */}
+                {!result.airsEnabled && !result.error && (
+                  <div style={{
+                    padding: '12px 16px', borderRadius: 12,
+                    background: 'rgba(239,68,68,0.07)',
+                    border: '1px solid rgba(239,68,68,0.28)',
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                  }}>
+                    <Unlock size={18} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#ef4444' }}>
+                        ⚠️ Unprotected — No AIRS Scanning
+                      </div>
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 2, lineHeight: 1.5 }}>
+                        The MCP tool executed without any security checks. The raw output is returned directly to the agent — no prompt inspection, no response scanning, no data loss prevention.
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 10, color: '#ef4444', fontWeight: 600 }}>
+                        Toggle Protection ON in the sidebar to enable Prisma AIRS scanning.
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Stage 1 */}
-                <ScanStageCard
-                  stage="Stage 1 — Pre-Tool"
-                  label="AIRS scans tool name + parameters before execution"
-                  data={result.stage1}
-                  pending={false}
-                  skipped={!isProtected}
-                />
+                {/* ── PROTECTED verdict banner ── */}
+                {result.airsEnabled && (
+                  <div style={{
+                    padding: '12px 16px', borderRadius: 12,
+                    background: result.blocked ? 'rgba(239,68,68,0.08)' : result.error ? 'rgba(250,204,21,0.08)' : 'rgba(52,211,153,0.08)',
+                    border: `1px solid ${result.blocked ? 'rgba(239,68,68,0.30)' : result.error ? 'rgba(250,204,21,0.30)' : 'rgba(52,211,153,0.30)'}`,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    {result.blocked ? <ShieldX size={20} color="#ef4444" /> : result.error ? <AlertTriangle size={20} color="#facc15" /> : <ShieldCheck size={20} color="#34d399" />}
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: result.blocked ? '#ef4444' : result.error ? '#facc15' : '#34d399' }}>
+                        {result.blocked
+                          ? `🚫 Blocked at ${result.blockStage === 1 ? 'Stage 1 — Tool invocation prevented' : 'Stage 2 — Response suppressed'}`
+                          : `✅ Allowed — Tool executed and output cleared by AIRS`}
+                      </div>
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>
+                        {result.blocked
+                          ? `AIRS detected a threat in the ${result.blockStage === 1 ? 'tool invocation parameters' : 'tool output'}`
+                          : `Both Stage 1 and Stage 2 scans passed — no threats detected`}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                {/* Tool result */}
+                {result.error && (
+                  <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.25)', display: 'flex', gap: 8 }}>
+                    <AlertTriangle size={14} color="#facc15" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontSize: 11, color: '#facc15' }}>{result.error}</span>
+                  </div>
+                )}
+
+                {/* Stage 1 — only shown when AIRS enabled */}
+                {result.airsEnabled && (
+                  <ScanStageCard
+                    stage="Stage 1 — Pre-Tool"
+                    label="AIRS scans tool name + parameters before execution"
+                    data={result.stage1}
+                    pending={false}
+                    skipped={false}
+                  />
+                )}
+
+                {/* Tool result — always shown when not blocked and no error */}
                 {!result.blocked && !result.error && result.toolResult && (
-                  <div style={{ border: `1px solid ${cardBorder}`, background: cardBg, borderRadius: 12, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
-                      Tool Output — {result.tool}
+                  <div style={{
+                    border: `1px solid ${result.airsEnabled ? cardBorder : 'rgba(239,68,68,0.25)'}`,
+                    background: result.airsEnabled ? cardBg : 'rgba(239,68,68,0.04)',
+                    borderRadius: 12, padding: '12px 14px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                        Tool Output — {result.tool}
+                      </div>
+                      {!result.airsEnabled && (
+                        <span style={{
+                          fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                          background: 'rgba(239,68,68,0.18)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.30)',
+                          marginLeft: 'auto',
+                        }}>
+                          ⚠ EXPOSED — NO SCANNING
+                        </span>
+                      )}
                     </div>
                     <pre style={{
-                      fontSize: 10, fontFamily: 'monospace', color: '#94a3b8',
+                      fontSize: 10, fontFamily: 'monospace', color: result.airsEnabled ? '#94a3b8' : '#f87171',
                       whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0,
-                      maxHeight: 200, overflowY: 'auto',
+                      maxHeight: 240, overflowY: 'auto',
                       background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.25)',
                       padding: '8px 10px', borderRadius: 8,
+                      border: result.airsEnabled ? 'none' : '1px solid rgba(239,68,68,0.20)',
                     }}>
                       {JSON.stringify(result.toolResult, null, 2)}
                     </pre>
                   </div>
                 )}
 
-                {/* Stage 2 */}
-                <ScanStageCard
-                  stage="Stage 2 — Post-Tool"
-                  label="AIRS scans tool output before returning to agent"
-                  data={result.stage2}
-                  pending={false}
-                  skipped={!isProtected || result.blockStage === 1}
-                />
+                {/* Stage 2 — only shown when AIRS enabled */}
+                {result.airsEnabled && (
+                  <ScanStageCard
+                    stage="Stage 2 — Post-Tool"
+                    label="AIRS scans tool output before returning to agent"
+                    data={result.stage2}
+                    pending={false}
+                    skipped={result.blockStage === 1}
+                  />
+                )}
 
                 {/* Raw request bodies */}
                 {isProtected && (result.stage1 || result.stage2) && (
