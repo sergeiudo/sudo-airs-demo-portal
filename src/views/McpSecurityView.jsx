@@ -398,6 +398,221 @@ function ScanStageCard({ stage, label, data, pending, skipped }) {
   )
 }
 
+// ── MCP Briefing / Welcome page ───────────────────────────────────────────────
+function McpBriefingPage({ isLight, textMuted, textPrimary, cardBg, cardBorder }) {
+  const accent = '#06b6d4'
+  const accentGreen = '#34d399'
+  const accentRed = '#ef4444'
+  const accentPurple = '#a78bfa'
+
+  const tools = [
+    { name: 'read_file(path)', icon: '📄', color: '#60a5fa', desc: 'Read files from sandboxed workspace', risk: 'Path traversal, PII exfiltration' },
+    { name: 'web_fetch(url)', icon: '🌐', color: '#34d399', desc: 'Fetch any URL and return its content', risk: 'C2 callbacks, malicious downloads' },
+    { name: 'execute_code(code)', icon: '⚡', color: '#f97316', desc: 'Run Python in a subprocess (5s limit)', risk: 'OS command injection, RCE' },
+    { name: 'get_memory(key)', icon: '🧠', color: '#a78bfa', desc: 'Read from persistent agent memory store', risk: 'Context exfiltration, data leak' },
+    { name: 'set_memory(key, val)', icon: '💾', color: '#a78bfa', desc: 'Write to persistent agent memory store', risk: 'Memory poisoning, persona hijack' },
+  ]
+
+  const owaspItems = [
+    { id: 'MCP03', label: 'Tool Poisoning', color: accentPurple, desc: 'Hidden instructions in tool descriptions hijack agent behavior' },
+    { id: 'MCP05', label: 'Tool Misuse', color: accentRed, desc: 'Legitimate tools abused for path traversal, code injection, C2' },
+    { id: 'MCP10', label: 'Memory Poisoning', color: '#f97316', desc: 'Malicious content poisons persistent memory across all future sessions' },
+    { id: 'MCP01', label: 'Secret Exfiltration', color: '#facc15', desc: 'Agent reads credentials and PII, leaks via tool output or network calls' },
+    { id: 'MCP06', label: 'Intent Hijacking', color: '#60a5fa', desc: 'Indirect prompt injection redirects agent goals via untrusted content' },
+  ]
+
+  return (
+    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Hero */}
+      <div style={{
+        borderRadius: 16, overflow: 'hidden', position: 'relative',
+        background: isLight ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' : 'linear-gradient(135deg, rgba(6,182,212,0.12) 0%, rgba(15,20,35,0.98) 60%, rgba(167,139,250,0.08) 100%)',
+        border: `1px solid ${isLight ? 'rgba(6,182,212,0.30)' : 'rgba(6,182,212,0.20)'}`,
+        padding: '28px 32px',
+      }}>
+        {/* Glow orbs */}
+        <div style={{ position: 'absolute', top: -40, right: -40, width: 180, height: 180, borderRadius: '50%', background: 'rgba(6,182,212,0.08)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -30, left: 100, width: 120, height: 120, borderRadius: '50%', background: 'rgba(167,139,250,0.08)', filter: 'blur(30px)', pointerEvents: 'none' }} />
+
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{ padding: '4px 10px', borderRadius: 99, background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.30)', fontSize: 9, fontWeight: 700, color: accent, letterSpacing: '0.12em' }}>
+              PRISMA AIRS · MCP SECURITY DEMO
+            </div>
+            <div style={{ padding: '4px 10px', borderRadius: 99, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', fontSize: 9, fontWeight: 700, color: '#ef4444', letterSpacing: '0.12em' }}>
+              OWASP MCP TOP 10
+            </div>
+          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', margin: '0 0 8px', lineHeight: 1.2 }}>
+            Live MCP Security Demo
+          </h1>
+          <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6, maxWidth: 560 }}>
+            This demo shows a real MCP server with 5 tools, wrapped with <strong style={{ color: accent }}>Prisma AIRS two-stage scanning</strong>.
+            Every tool invocation is intercepted before execution (Stage 1) and after (Stage 2) — detecting prompt injection, malicious URLs, code execution, and data exfiltration in real time.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Real MCP Server', color: accentGreen },
+              { label: 'Real AIRS API', color: accent },
+              { label: '5 Live Tools', color: '#60a5fa' },
+              { label: '10 Attack Scenarios', color: accentRed },
+              { label: 'Two-Stage Scanning', color: accentPurple },
+            ].map(b => (
+              <span key={b.label} style={{ fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 99, background: b.color + '18', border: `1px solid ${b.color}35`, color: b.color }}>
+                {b.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Architecture diagram */}
+      <div style={{ borderRadius: 14, border: `1px solid ${cardBorder}`, background: cardBg, padding: '18px 20px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 16 }}>
+          🏗 Demo Architecture
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
+          {[
+            {
+              label: 'You (Demo)', sub: 'Browser UI', icon: '👤', color: '#94a3b8',
+              detail: 'Select attack scenarios or invoke tools manually from this UI',
+            },
+            null,
+            {
+              label: 'Express Server', sub: 'Port 3001', icon: '⚙️', color: '#60a5fa',
+              detail: '/api/mcp/invoke — orchestrates AIRS scans + tool execution',
+            },
+            null,
+            {
+              label: 'Prisma AIRS', sub: 'Cloud API', icon: '🛡️', color: accent,
+              detail: 'Real-time threat scanning via tool_event — Stage 1 & Stage 2',
+            },
+            null,
+            {
+              label: 'MCP Server', sub: 'Port 8002', icon: '🔧', color: '#34d399',
+              detail: 'FastAPI — 5 real tools in a sandboxed workspace',
+            },
+          ].map((node, i) => node === null ? (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '0 8px', flexShrink: 0 }}>
+              <div style={{ fontSize: 11, color: textMuted }}>→</div>
+              <div style={{ fontSize: 7, color: textMuted, textAlign: 'center', maxWidth: 50, lineHeight: 1.3 }}>
+                {i === 3 ? 'scan req' : i === 5 ? 'tool call' : 'invoke'}
+              </div>
+            </div>
+          ) : (
+            <div key={i} style={{
+              flex: 1, minWidth: 110, borderRadius: 12,
+              border: `1px solid ${node.color}30`,
+              background: node.color + '08',
+              padding: '12px 14px', flexShrink: 0,
+            }}>
+              <div style={{ fontSize: 18, marginBottom: 6 }}>{node.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: node.color }}>{node.label}</div>
+              <div style={{ fontSize: 9, color: textMuted, marginBottom: 6 }}>{node.sub}</div>
+              <div style={{ fontSize: 9, color: isLight ? '#475569' : '#64748b', lineHeight: 1.4 }}>{node.detail}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Two columns: Tools + AIRS flow */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+        {/* MCP Tools */}
+        <div style={{ borderRadius: 14, border: `1px solid ${cardBorder}`, background: cardBg, padding: '16px 18px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
+            🔧 MCP Server Tools
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tools.map(t => (
+              <div key={t.name} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 10, background: t.color + '08', border: `1px solid ${t.color}20` }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>{t.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <code style={{ fontSize: 10, fontWeight: 700, color: t.color, fontFamily: 'monospace' }}>{t.name}</code>
+                  <div style={{ fontSize: 9, color: isLight ? '#475569' : '#94a3b8', marginTop: 2, lineHeight: 1.4 }}>{t.desc}</div>
+                  <div style={{ fontSize: 8, color: accentRed, marginTop: 3, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span>⚠</span><span>{t.risk}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* AIRS scanning flow */}
+        <div style={{ borderRadius: 14, border: `1px solid ${cardBorder}`, background: cardBg, padding: '16px 18px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
+            🛡️ AIRS Two-Stage Scanning Flow
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { step: '1', label: 'Agent sends tool invocation', color: '#94a3b8', desc: 'Tool name + parameters sent to /api/mcp/invoke', icon: '👤' },
+              { step: '2', label: 'Stage 1 — Pre-Tool Scan', color: accent, desc: 'AIRS scans tool name + params via tool_event before execution', icon: '🛡️', highlight: true },
+              { step: '3', label: 'BLOCK or ALLOW', color: accentGreen, desc: 'If blocked → tool never executes. Response returned immediately.', icon: '⚖️' },
+              { step: '4', label: 'MCP Tool Executes', color: '#34d399', desc: 'Tool runs in sandboxed environment, output captured', icon: '🔧' },
+              { step: '5', label: 'Stage 2 — Post-Tool Scan', color: accentPurple, desc: 'AIRS scans tool output + tool_event.output before return', icon: '🛡️', highlight: true },
+              { step: '6', label: 'BLOCK or ALLOW', color: accentGreen, desc: 'If blocked → output suppressed. If allowed → returned to agent.', icon: '⚖️' },
+            ].map(s => (
+              <div key={s.step} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 10px', borderRadius: 9,
+                background: s.highlight ? `${accent}10` : 'transparent',
+                border: `1px solid ${s.highlight ? `${accent}25` : 'transparent'}`,
+              }}>
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                  background: s.color + '20', border: `1px solid ${s.color}40`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 8, fontWeight: 700, color: s.color,
+                }}>{s.step}</div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: s.highlight ? accent : textPrimary }}>{s.icon} {s.label}</div>
+                  <div style={{ fontSize: 9, color: textMuted, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* OWASP MCP Top 10 coverage */}
+      <div style={{ borderRadius: 14, border: `1px solid ${cardBorder}`, background: cardBg, padding: '16px 18px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
+          🎯 OWASP MCP Top 10 — Attack Coverage in This Demo
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+          {owaspItems.map(o => (
+            <div key={o.id} style={{ padding: '10px 12px', borderRadius: 10, background: o.color + '08', border: `1px solid ${o.color}25` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, background: o.color + '20', color: o.color }}>{o.id}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: o.color }}>{o.label}</span>
+              </div>
+              <div style={{ fontSize: 9, color: isLight ? '#475569' : '#64748b', lineHeight: 1.4 }}>{o.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div style={{
+        borderRadius: 14, padding: '14px 20px',
+        background: isLight ? 'rgba(6,182,212,0.06)' : 'rgba(6,182,212,0.06)',
+        border: `1px solid rgba(6,182,212,0.20)`,
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <span style={{ fontSize: 20 }}>👈</span>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: accent }}>Ready to demo</div>
+          <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>
+            Select an <strong style={{ color: textPrimary }}>Attack Scenario</strong> from the left panel to begin. Toggle <strong style={{ color: accentGreen }}>Protection ON</strong> to see AIRS block threats, or keep it <strong style={{ color: accentRed }}>OFF</strong> to show the unprotected baseline first.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
 // ── Attack explanation card component ─────────────────────────────────────────
 function AttackExplanationCard({ scenario: sc, explanation: ex, isLight, textMuted }) {
   return (
@@ -831,15 +1046,9 @@ export function McpSecurityView() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: 40 }}
+                style={{ flex: 1 }}
               >
-                <Network size={40} color="#1e293b" />
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#334155', margin: 0 }}>Select an attack scenario or invoke a tool</p>
-                  <p style={{ fontSize: 12, color: textMuted, marginTop: 4 }}>
-                    {isProtected ? 'AIRS will scan both the tool invocation and its output' : 'Toggle protection ON to enable AIRS scanning'}
-                  </p>
-                </div>
+                <McpBriefingPage isLight={isLight} textMuted={textMuted} textPrimary={textPrimary} cardBg={cardBg} cardBorder={cardBorder} />
               </motion.div>
             )}
 
