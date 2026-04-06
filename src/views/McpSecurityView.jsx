@@ -469,13 +469,14 @@ function PipelineFlow({ isProtected, invoking, result, selectedTool, cardBorder,
 
   return (
     <div style={{
-      padding: '16px 24px', borderBottom: `1px solid ${cardBorder}`, flexShrink: 0,
+      padding: '10px 24px', borderBottom: `1px solid ${cardBorder}`, flexShrink: 0,
       background: isLight ? 'rgba(0,48,135,0.02)' : 'rgba(6,182,212,0.03)',
+      display: 'flex', alignItems: 'center', gap: 12,
     }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 14, textAlign: 'center' }}>
-        MCP Security Pipeline — Real-time
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', flexShrink: 0 }}>
+        Pipeline
+      </span>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
         {nodes.map((node, i) => {
           const state = nodeState(node.key)
           const st = stateStyle(state, node.baseColor)
@@ -486,9 +487,9 @@ function PipelineFlow({ isProtected, invoking, result, selectedTool, cardBorder,
                 animate={{ boxShadow: state === 'running' ? ['0 0 0px rgba(250,204,21,0)', '0 0 16px rgba(250,204,21,0.5)', '0 0 0px rgba(250,204,21,0)'] : st.glow }}
                 transition={{ duration: 1.2, repeat: state === 'running' ? Infinity : 0 }}
                 style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                   opacity: state === 'bypassed' || state === 'skipped' ? 0.35 : 1,
-                  minWidth: 80,
+                  minWidth: 64,
                 }}
               >
                 {/* Icon box */}
@@ -496,14 +497,14 @@ function PipelineFlow({ isProtected, invoking, result, selectedTool, cardBorder,
                   animate={state === 'running' ? { scale: [1, 1.08, 1] } : { scale: 1 }}
                   transition={{ duration: 0.8, repeat: state === 'running' ? Infinity : 0 }}
                   style={{
-                    width: 52, height: 52, borderRadius: 14,
+                    width: 36, height: 36, borderRadius: 10,
                     background: st.bg,
                     border: `2px solid ${st.border}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     position: 'relative',
                   }}
                 >
-                  <node.icon size={22} color={st.color} strokeWidth={isAirs ? 2.5 : 2} />
+                  <node.icon size={15} color={st.color} strokeWidth={isAirs ? 2.5 : 2} />
                   {/* AIRS shield glow ring when active */}
                   {isAirs && state === 'allowed' && (
                     <motion.div
@@ -521,11 +522,11 @@ function PipelineFlow({ isProtected, invoking, result, selectedTool, cardBorder,
                     <motion.div
                       initial={{ scale: 0 }} animate={{ scale: 1 }}
                       style={{
-                        position: 'absolute', top: -6, right: -6,
-                        width: 16, height: 16, borderRadius: '50%',
+                        position: 'absolute', top: -4, right: -4,
+                        width: 13, height: 13, borderRadius: '50%',
                         background: '#ef4444', border: '2px solid #0d1117',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 9, fontWeight: 900, color: '#fff',
+                        fontSize: 7, fontWeight: 900, color: '#fff',
                       }}
                     >✕</motion.div>
                   )}
@@ -534,19 +535,19 @@ function PipelineFlow({ isProtected, invoking, result, selectedTool, cardBorder,
                     <motion.div
                       initial={{ scale: 0 }} animate={{ scale: 1 }}
                       style={{
-                        position: 'absolute', top: -6, right: -6,
-                        width: 16, height: 16, borderRadius: '50%',
+                        position: 'absolute', top: -4, right: -4,
+                        width: 13, height: 13, borderRadius: '50%',
                         background: '#34d399', border: '2px solid #0d1117',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 9, fontWeight: 900, color: '#0d1117',
+                        fontSize: 7, fontWeight: 900, color: '#0d1117',
                       }}
                     >✓</motion.div>
                   )}
                 </motion.div>
                 {/* Labels */}
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: st.color, lineHeight: 1.2 }}>{node.label}</div>
-                  <div style={{ fontSize: 8, color: textMuted, marginTop: 2, maxWidth: 80, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: st.color, lineHeight: 1.2 }}>{node.label}</div>
+                  <div style={{ fontSize: 7, color: textMuted, marginTop: 1, maxWidth: 64, lineHeight: 1.3 }}>
                     {stateLabel(state) !== 'waiting' ? stateLabel(state) : node.sub}
                   </div>
                 </div>
@@ -566,10 +567,11 @@ function PipelineFlow({ isProtected, invoking, result, selectedTool, cardBorder,
           )
         })}
       </div>
+      </div>
       {!isProtected && (
-        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 9, color: '#ef4444', fontWeight: 600 }}>
-          ⚠ Protection OFF — AIRS Stage 1 & Stage 2 bypassed
-        </div>
+        <span style={{ fontSize: 8, color: '#ef4444', fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}>
+          ⚠ OFF
+        </span>
       )}
     </div>
   )
