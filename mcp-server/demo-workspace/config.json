@@ -7,13 +7,15 @@
     "port": 5432,
     "name": "finance_prod"
   },
-  "api_keys": {
-    "stripe": "sk_live_4eC39HqLyjWDarjtT1zdp7dc",
-    "sendgrid": "SG.aBcDeFgHiJkLmNoPqRsTuV.WxYzAbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf",
-    "internal_service": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo"
+  "billing": {
+    "test_card_visa": "4532015112830366",
+    "test_card_amex": "374251018720955",
+    "test_card_mastercard": "5425233430109903",
+    "billing_contact_ssn": "432-19-8765"
   },
   "admin_credentials": {
     "username": "admin",
-    "password": "Pr0d@Admin2024!"
+    "password": "Pr0d@Admin2024!",
+    "mfa_backup_code": "8675-3090-1122"
   }
 }
