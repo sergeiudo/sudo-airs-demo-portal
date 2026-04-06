@@ -818,7 +818,7 @@ export function McpSecurityView() {
 
           {/* Attack Scenarios — grouped by category */}
           <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10 }}>
               Attack Scenarios
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -835,13 +835,13 @@ export function McpSecurityView() {
                     }}
                   >
                     <div style={{ width: 3, height: 12, borderRadius: 99, background: group.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 9, fontWeight: 700, color: group.color, letterSpacing: '0.06em' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: group.color, letterSpacing: '0.04em' }}>
                       {group.label}
                     </span>
-                    <span style={{ fontSize: 8, color: textMuted, marginLeft: 2 }}>
+                    <span style={{ fontSize: 9, color: textMuted, marginLeft: 2 }}>
                       {group.owasp}
                     </span>
-                    <span style={{ fontSize: 8, color: textMuted, marginLeft: 2 }}>({group.scenarios.length})</span>
+                    <span style={{ fontSize: 9, color: textMuted, marginLeft: 2 }}>({group.scenarios.length})</span>
                     <motion.div style={{ marginLeft: 'auto' }} animate={{ rotate: isOpen ? 0 : -90 }} transition={{ duration: 0.18 }}>
                       <ChevronDown size={10} color={textMuted} />
                     </motion.div>
@@ -862,23 +862,36 @@ export function McpSecurityView() {
                         onClick={() => handleScenario(s)}
                         disabled={invoking || mcpHealth === false}
                         style={{
-                          display: 'flex', alignItems: 'flex-start', gap: 8,
-                          padding: '7px 9px', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%',
+                          display: 'flex', alignItems: 'flex-start', gap: 10,
+                          padding: '9px 10px', borderRadius: 9, cursor: 'pointer', textAlign: 'left', width: '100%',
                           background: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
                           border: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`,
                           opacity: (invoking || mcpHealth === false) ? 0.5 : 1,
                           transition: 'all 0.15s',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = s.color + '50'; e.currentTarget.style.background = s.color + '10' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.20)'; e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)' }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }}
                       >
-                        <div style={{ width: 4, height: 4, borderRadius: '50%', background: s.color, flexShrink: 0, marginTop: 5 }} />
+                        {/* Neutral number badge */}
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1,
+                          background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+                          border: `1px solid ${isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.12)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 9, fontWeight: 700, color: textMuted, fontFamily: 'monospace',
+                        }}>
+                          {group.scenarios.indexOf(s) + 1}
+                        </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: textPrimary }}>{s.label}</div>
-                          <div style={{ fontSize: 9, color: textMuted, marginTop: 1, lineHeight: 1.4 }}>{s.desc}</div>
-                          <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
-                            <span style={{ fontSize: 7, fontWeight: 700, color: s.color, background: s.color + '18', padding: '1px 4px', borderRadius: 3 }}>{s.stage}</span>
-                            <span style={{ fontSize: 7, color: textMuted }}>{s.threat}</span>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: textPrimary, lineHeight: 1.3 }}>{s.label}</div>
+                          <div style={{ fontSize: 10, color: textMuted, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
+                          <div style={{ display: 'flex', gap: 5, marginTop: 5 }}>
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                              background: isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)',
+                              color: textMuted, border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.10)'}`,
+                            }}>{s.stage}</span>
+                            <span style={{ fontSize: 9, color: textMuted, alignSelf: 'center' }}>{s.threat}</span>
                           </div>
                         </div>
                       </button>
