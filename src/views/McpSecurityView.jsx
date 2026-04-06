@@ -398,6 +398,75 @@ function ScanStageCard({ stage, label, data, pending, skipped }) {
   )
 }
 
+// ── Attack explanation card component ─────────────────────────────────────────
+function AttackExplanationCard({ scenario: sc, explanation: ex, isLight, textMuted }) {
+  return (
+    <div style={{ borderRadius: 12, overflow: 'hidden', border: `1px solid ${sc.color}30`, background: sc.color + '08' }}>
+      {/* Header */}
+      <div style={{
+        padding: '10px 14px', borderBottom: `1px solid ${sc.color}20`,
+        background: sc.color + '12', display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: sc.color, flexShrink: 0 }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: sc.color }}>{sc.label}</span>
+        <span style={{ fontSize: 9, color: textMuted, marginLeft: 4 }}>{sc.threat}</span>
+        <span style={{
+          marginLeft: 'auto', fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+          background: sc.color + '20', color: sc.color,
+        }}>{sc.stage} DETECTION</span>
+      </div>
+
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Highlighted attack payload */}
+        <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
+          <div style={{ fontSize: 8, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 5 }}>
+            ⚡ {ex.highlightLabel}
+          </div>
+          <code style={{
+            fontSize: 10, fontFamily: 'monospace', color: '#fca5a5',
+            background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 5,
+            display: 'block', wordBreak: 'break-all', lineHeight: 1.5,
+          }}>
+            {ex.highlight}
+          </code>
+        </div>
+
+        {/* What / Why / How */}
+        {[
+          { label: 'What happened', text: ex.what, icon: '🔍' },
+          { label: "Why it's dangerous", text: ex.why, icon: '⚠️' },
+          { label: 'How AIRS protected', text: ex.how, icon: '🛡️' },
+        ].map(row => (
+          <div key={row.label}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 4 }}>
+              {row.icon} {row.label}
+            </div>
+            <div style={{ fontSize: 11, color: isLight ? '#334155' : '#94a3b8', lineHeight: 1.6 }}>{row.text}</div>
+          </div>
+        ))}
+
+        {/* Detection categories */}
+        {ex.detectedBy?.length > 0 && (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 5 }}>
+              🎯 AIRS Detection Categories
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {ex.detectedBy.map(d => (
+                <span key={d} style={{
+                  fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                  background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.35)',
+                  color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em',
+                }}>{d.replace(/_/g, ' ')}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main view ──────────────────────────────────────────────────────────────────
 export function McpSecurityView() {
   const theme = useProtectionTheme()
@@ -851,87 +920,14 @@ export function McpSecurityView() {
                 )}
 
                 {/* ── Attack explanation card ── */}
-                {activeScenario && EXPLANATIONS[activeScenario.id] && (() => {
-                  const ex = EXPLANATIONS[activeScenario.id]
-                  const sc = activeScenario
-                  return (
-                    <div style={{
-                      borderRadius: 12, overflow: 'hidden',
-                      border: `1px solid ${sc.color}30`,
-                      background: sc.color + '08',
-                    }}>
-                      {/* Card header */}
-                      <div style={{
-                        padding: '10px 14px', borderBottom: `1px solid ${sc.color}20`,
-                        background: sc.color + '12',
-                        display: 'flex', alignItems: 'center', gap: 8,
-                      }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: sc.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: sc.color }}>{sc.label}</span>
-                        <span style={{ fontSize: 9, color: textMuted, marginLeft: 4 }}>{sc.threat}</span>
-                        <span style={{
-                          marginLeft: 'auto', fontSize: 8, fontWeight: 700,
-                          padding: '2px 7px', borderRadius: 4,
-                          background: sc.color + '20', color: sc.color,
-                        }}>{sc.stage} DETECTION</span>
-                      </div>
-
-                      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-                        {/* Highlighted attack payload */}
-                        <div style={{
-                          padding: '8px 12px', borderRadius: 8,
-                          background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)',
-                        }}>
-                          <div style={{ fontSize: 8, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 5 }}>
-                            ⚡ {ex.highlightLabel}
-                          </div>
-                          <code style={{
-                            fontSize: 10, fontFamily: 'monospace', color: '#fca5a5',
-                            background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 5,
-                            display: 'block', wordBreak: 'break-all', lineHeight: 1.5,
-                          }}>
-                            {ex.highlight}
-                          </code>
-                        </div>
-
-                        {/* What / Why / How */}
-                        {[
-                          { label: 'What happened', text: ex.what, icon: '🔍' },
-                          { label: 'Why it\'s dangerous', text: ex.why, icon: '⚠️' },
-                          { label: 'How AIRS protected', text: ex.how, icon: '🛡️' },
-                        ].map(row => (
-                          <div key={row.label}>
-                            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 4 }}>
-                              {row.icon} {row.label}
-                            </div>
-                            <div style={{ fontSize: 11, color: isLight ? '#334155' : '#94a3b8', lineHeight: 1.6 }}>
-                              {row.text}
-                            </div>
-                          </div>
-                        ))}
-
-                        {/* Detection flags */}
-                        {ex.detectedBy?.length > 0 && (
-                          <div>
-                            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 5 }}>
-                              🎯 AIRS Detection Categories
-                            </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                              {ex.detectedBy.map(d => (
-                                <span key={d} style={{
-                                  fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
-                                  background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.35)',
-                                  color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em',
-                                }}>{d.replace(/_/g, ' ')}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
+                {activeScenario && EXPLANATIONS[activeScenario.id] && (
+                  <AttackExplanationCard
+                    scenario={activeScenario}
+                    explanation={EXPLANATIONS[activeScenario.id]}
+                    isLight={isLight}
+                    textMuted={textMuted}
+                  />
+                )}
 
                 {/* Stage 1 — only shown when AIRS enabled */}
                 {result.airsEnabled && (
