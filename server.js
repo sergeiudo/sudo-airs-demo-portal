@@ -682,6 +682,140 @@ app.get('/api/airs-probe', async (_req, res) => {
   res.json({ regions: results, active_endpoint: process.env.AIRS_BASE_URL })
 })
 
+// ─── MCP Security Demo ───────────────────────────────────────────────────────
+// Wraps MCP tool invocations with real AIRS two-stage scanning (tool_event)
+
+const MCP_SERVER_URL = `http://localhost:${process.env.MCP_SERVER_PORT || 8002}`
+
+async function airscanMcp({ prompt, response = null, toolName, toolInput, toolOutput = null, model = 'mcp-demo' }) {
+  const trId = `mcp-${Date.now()}`
+  const toolEvent = {
+    metadata: {
+      ecosystem: 'mcp',
+      method: 'tools/call',
+      server_name: 'airs-mcp-demo-server',
+      tool_invoked: toolName,
+    },
+    input: typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput),
+    ...(toolOutput != null ? { output: typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput) } : {}),
+  }
+
+  const contentItem = {
+    ...(prompt != null ? { prompt } : {}),
+    ...(response != null ? { response } : {}),
+    tool_event: toolEvent,
+  }
+
+  const body = {
+    tr_id: trId,
+    ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
+    metadata: { app_name: 'AIRS MCP Demo', ai_model: model, app_user: 'demo-user' },
+    contents: [contentItem],
+  }
+
+  const t0 = Date.now()
+  const res = await fetch(`${process.env.AIRS_BASE_URL}/v1/scan/sync/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-pan-token': process.env.AIRS_API_KEY },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`AIRS MCP scan failed (${res.status}): ${text}`)
+  }
+  const data = await res.json()
+  return { data, latencyMs: Date.now() - t0, requestBody: body, trId }
+}
+
+// POST /api/mcp/invoke
+app.post('/api/mcp/invoke', async (req, res) => {
+  const { tool, params = {}, airsEnabled = false } = req.body
+  if (!tool) return res.status(400).json({ error: 'tool is required' })
+
+  const toolInput = JSON.stringify(params)
+  const result = {
+    tool, params,
+    airsEnabled,
+    stage1: null,
+    stage2: null,
+    toolResult: null,
+    blocked: false,
+    blockStage: null,
+    error: null,
+  }
+
+  try {
+    // ── Stage 1: Pre-tool AIRS scan ──────────────────────────────────────────
+    if (airsEnabled) {
+      const s1 = await airscanMcp({ prompt: toolInput, toolName: tool, toolInput })
+      result.stage1 = {
+        action: s1.data.action,
+        category: s1.data.category,
+        scan_id: s1.data.scan_id,
+        latencyMs: s1.latencyMs,
+        prompt_detected: s1.data.prompt_detected ?? {},
+        requestBody: s1.requestBody,
+        trId: s1.trId,
+      }
+      if (s1.data.action === 'block') {
+        result.blocked = true
+        result.blockStage = 1
+        return res.json(result)
+      }
+    }
+
+    // ── Execute the MCP tool ─────────────────────────────────────────────────
+    const toolRes = await fetch(`${MCP_SERVER_URL}/tools/${tool}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    })
+    const toolData = await toolRes.json()
+    if (!toolRes.ok) {
+      result.error = toolData.detail || `Tool error (${toolRes.status})`
+      return res.json(result)
+    }
+    result.toolResult = toolData
+
+    // ── Stage 2: Post-tool AIRS scan ─────────────────────────────────────────
+    if (airsEnabled) {
+      const toolOutput = JSON.stringify(toolData)
+      const s2 = await airscanMcp({ response: toolOutput.slice(0, 20000), toolName: tool, toolInput, toolOutput: toolOutput.slice(0, 20000) })
+      result.stage2 = {
+        action: s2.data.action,
+        category: s2.data.category,
+        scan_id: s2.data.scan_id,
+        latencyMs: s2.latencyMs,
+        response_detected: s2.data.response_detected ?? {},
+        requestBody: s2.requestBody,
+        trId: s2.trId,
+      }
+      if (s2.data.action === 'block') {
+        result.blocked = true
+        result.blockStage = 2
+        result.toolResult = null // discard the output
+        return res.json(result)
+      }
+    }
+
+    return res.json(result)
+  } catch (err) {
+    result.error = err.message
+    return res.status(500).json(result)
+  }
+})
+
+// GET /api/mcp/health
+app.get('/api/mcp/health', async (_req, res) => {
+  try {
+    const r = await fetch(`${MCP_SERVER_URL}/health`, { signal: AbortSignal.timeout(3000) })
+    const data = await r.json()
+    res.json({ running: r.ok, ...data })
+  } catch {
+    res.json({ running: false })
+  }
+})
+
 // ─── GET /api/health ─────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({

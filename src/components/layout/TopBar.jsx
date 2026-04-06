@@ -14,6 +14,7 @@ const VIEW_LABELS = {
   claudeHooks:     { label: 'AI Code Assistant Protection', sublabel: 'Claude Code hooks integration guide',        text: 'text-purple-400', color: '#8B5CF6' },
   observability:   { label: 'LLM Telemetry',                sublabel: 'Prompt history, metrics & pipeline traces',  text: 'text-teal-400',   color: '#10B981' },
   developerCorner: { label: 'Developer Corner',             sublabel: 'Integration guide & API reference',          text: 'text-indigo-400', color: '#06B6D4' },
+  mcpSecurity:     { label: 'MCP Security',                 sublabel: 'Live MCP tool protection with Prisma AIRS',  text: 'text-cyan-400',   color: '#06B6D4' },
 }
 
 export function TopBar() {

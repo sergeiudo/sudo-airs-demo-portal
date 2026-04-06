@@ -16,6 +16,9 @@ excalidraw.log
 # AWS Chatbot Red Team Target
 aws-chatbot-target/
 
+# MCP server venv
+mcp-server/.venv/
+
 # Superpowers brainstorming sessions
 .superpowers/
 docs/superpowers/

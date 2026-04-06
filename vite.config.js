@@ -14,6 +14,11 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
+      '/mcp-tool': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mcp-tool/, ''),
+      },
     },
   },
 })

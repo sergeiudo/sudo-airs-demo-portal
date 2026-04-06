@@ -10,6 +10,7 @@ import { HomeViewV2 } from './views/HomeViewV2'
 import { ObservabilityView } from './views/ObservabilityView'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
 import { ReleaseNotesView } from './views/ReleaseNotesView'
+import { McpSecurityView } from './views/McpSecurityView'
 
 function AppContent() {
   const { state } = useAppContext()
@@ -30,6 +31,7 @@ function AppContent() {
       case 'claudeHooks':    return <ClaudeHooksView />
       case 'observability':     return <ObservabilityView />
       case 'developerCorner':  return <DeveloperCornerView />
+      case 'mcpSecurity':      return <McpSecurityView />
       default:                 return <ApiInterceptView />
     }
   }

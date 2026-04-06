@@ -1,0 +1,19 @@
+{
+  "app_name": "FinancePortal",
+  "version": "2.4.1",
+  "environment": "production",
+  "database": {
+    "host": "db.internal.company.com",
+    "port": 5432,
+    "name": "finance_prod"
+  },
+  "api_keys": {
+    "stripe": "sk_live_4eC39HqLyjWDarjtT1zdp7dc",
+    "sendgrid": "SG.aBcDeFgHiJkLmNoPqRsTuV.WxYzAbCdEfGhIjKlMnOpQrStUvWxYzAbCdEf",
+    "internal_service": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo"
+  },
+  "admin_credentials": {
+    "username": "admin",
+    "password": "Pr0d@Admin2024!"
+  }
+}
