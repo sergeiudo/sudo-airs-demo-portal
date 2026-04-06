@@ -864,13 +864,13 @@ export function McpSecurityView() {
                         style={{
                           display: 'flex', alignItems: 'flex-start', gap: 10,
                           padding: '9px 10px', borderRadius: 9, cursor: 'pointer', textAlign: 'left', width: '100%',
-                          background: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
-                          border: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`,
+                          background: group.color + '10',
+                          border: `1px solid ${group.color}30`,
                           opacity: (invoking || mcpHealth === false) ? 0.5 : 1,
                           transition: 'all 0.15s',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.20)'; e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)' }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = group.color + '20'; e.currentTarget.style.borderColor = group.color + '55' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = group.color + '10'; e.currentTarget.style.borderColor = group.color + '30' }}
                       >
                         {/* Neutral number badge */}
                         <div style={{
