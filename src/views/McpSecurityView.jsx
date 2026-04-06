@@ -1112,20 +1112,20 @@ export function McpSecurityView() {
                 {result.airsEnabled && (
                   <div style={{
                     padding: '12px 16px', borderRadius: 12,
-                    background: result.blocked ? 'rgba(239,68,68,0.08)' : result.error ? 'rgba(250,204,21,0.08)' : 'rgba(52,211,153,0.08)',
-                    border: `1px solid ${result.blocked ? 'rgba(239,68,68,0.30)' : result.error ? 'rgba(250,204,21,0.30)' : 'rgba(52,211,153,0.30)'}`,
+                    background: result.error ? 'rgba(250,204,21,0.08)' : 'rgba(52,211,153,0.08)',
+                    border: `1px solid ${result.error ? 'rgba(250,204,21,0.30)' : 'rgba(52,211,153,0.30)'}`,
                     display: 'flex', alignItems: 'center', gap: 10,
                   }}>
-                    {result.blocked ? <ShieldX size={20} color="#ef4444" /> : result.error ? <AlertTriangle size={20} color="#facc15" /> : <ShieldCheck size={20} color="#34d399" />}
+                    {result.error ? <AlertTriangle size={20} color="#facc15" /> : <ShieldCheck size={20} color="#34d399" />}
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: result.blocked ? '#ef4444' : result.error ? '#facc15' : '#34d399' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: result.error ? '#facc15' : '#34d399' }}>
                         {result.blocked
-                          ? `🚫 Blocked at ${result.blockStage === 1 ? 'Stage 1 — Tool invocation prevented' : 'Stage 2 — Response suppressed'}`
+                          ? `🛡️ Protected — ${result.blockStage === 1 ? 'Stage 1 blocked tool invocation' : 'Stage 2 suppressed response'}`
                           : `✅ Allowed — Tool executed and output cleared by AIRS`}
                       </div>
                       <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>
                         {result.blocked
-                          ? `AIRS detected a threat in the ${result.blockStage === 1 ? 'tool invocation parameters' : 'tool output'}`
+                          ? `AIRS detected and neutralised a threat in the ${result.blockStage === 1 ? 'tool invocation parameters' : 'tool output'} — attack prevented`
                           : `Both Stage 1 and Stage 2 scans passed — no threats detected`}
                       </div>
                     </div>
