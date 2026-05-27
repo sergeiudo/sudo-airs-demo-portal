@@ -16,10 +16,12 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
 import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity } from './src/traceStore.js'
+import portkeyRouter from './portkey-routes.js'
 
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
+app.use('/api/gateway', portkeyRouter)
 
 const PORT = process.env.PROXY_PORT || 3001
 
