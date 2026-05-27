@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Crosshair, ScanSearch, Swords, Terminal, Settings, Activity, ExternalLink, BarChart2, Code2, Network, Database } from 'lucide-react'
+import { Crosshair, ScanSearch, Swords, Terminal, Settings, Activity, ExternalLink, BarChart2, Code2, Network, Database, Waypoints } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '../sidebar/Logo'
 import { ProtectionToggle } from '../sidebar/ProtectionToggle'
@@ -35,6 +35,13 @@ const NAV_ITEMS = [
     sublabel: 'IDE security integration',
     icon: Terminal,
     color: { text: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30', bar: 'bg-purple-400' },
+  },
+  {
+    id: 'llmGateway',
+    label: 'AI/LLM Gateway',
+    sublabel: 'Portkey + AIRS guardrail',
+    icon: Waypoints,
+    color: { text: 'text-pink-400', bg: 'bg-pink-500/10', border: 'border-pink-500/30', bar: 'bg-pink-400' },
   },
   {
     id: 'observability',
