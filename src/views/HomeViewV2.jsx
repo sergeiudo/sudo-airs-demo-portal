@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database,
+  Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, Waypoints,
   ChevronRight, X, ArrowRight, Shield, Sun, Moon,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
@@ -56,6 +56,18 @@ const PILLARS = [
     accent: '#a855f7',
     glow: 'rgba(168,85,247,0.32)',
     dim: 'rgba(168,85,247,0.08)',
+  },
+  {
+    id: 'llmGateway',
+    icon: Waypoints,
+    title: 'AI/LLM Gateway',
+    tag: 'Gateway Layer',
+    summary: 'One gateway, every model, AIRS-protected.',
+    description: 'Build an AI app the modern way — route to any Vertex/Bedrock model through Portkey, with Prisma AIRS attached as a guardrail. Side-by-side comparison shows what AIRS catches that Portkey’s default guardrails miss.',
+    highlights: ['Live Portkey gateway', 'Real AIRS guardrail', '3-lane detection comparison', 'Vertex + Bedrock fallback'],
+    accent: '#ec4899',
+    glow: 'rgba(236,72,153,0.32)',
+    dim: 'rgba(236,72,153,0.08)',
   },
   {
     id: 'observability',
@@ -481,11 +493,11 @@ export function HomeViewV2() {
         </p>
       </motion.div>
 
-      {/* ── Grid: 4 core pillars + 2 misc below ── */}
+      {/* ── Grid: 5 core pillars + 4 below ── */}
       <div className="relative z-10 px-8 pb-8 max-w-[1280px] mx-auto w-full space-y-4">
-        {/* Row 1: 4 core AIRS pillars */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          {PILLARS.slice(0, 4).map((pillar, i) => (
+        {/* Row 1: 4 core AIRS pillars + AI/LLM Gateway */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+          {PILLARS.slice(0, 5).map((pillar, i) => (
             <MiniCard
               key={pillar.id}
               pillar={pillar}
@@ -498,11 +510,11 @@ export function HomeViewV2() {
         </div>
         {/* Row 2: 4 pillars */}
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          {PILLARS.slice(4).map((pillar, i) => (
+          {PILLARS.slice(5).map((pillar, i) => (
             <MiniCard
               key={pillar.id}
               pillar={pillar}
-              index={4 + i}
+              index={5 + i}
               anySelected={!!selected}
               onClick={() => handleSelect(pillar.id)}
               isDark={state.isDark}
