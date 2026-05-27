@@ -233,7 +233,20 @@ router.post('/chat', async (req, res) => {
       })
     }
   } catch (e) {
-    sendEvent('error', { message: String(e?.message || e) })
+    // Portkey raises AIRS guardrail blocks as thrown errors whose message is
+    // a JSON string containing `{ error: { type: "hooks_failed", ... }, hook_results: {...} }`.
+    // Normalize that into the same event: blocked frame the frontend already handles.
+    const raw = String(e?.message || e)
+    let parsed = null
+    try { parsed = JSON.parse(raw) } catch {}
+    const hr = parsed?.hook_results
+    const before = hr?.before_request_hooks || []
+    const blockedHook = before.find(h => h?.verdict === false)
+    if (blockedHook) {
+      sendEvent('blocked', { reason: blockedHook, hook_results: hr })
+    } else {
+      sendEvent('error', { message: raw })
+    }
   } finally {
     res.end()
   }
