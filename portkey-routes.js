@@ -117,5 +117,127 @@ router.get('/models', (_req, res) => {
   res.json({ providers, total, fetchedAt: new Date().toISOString(), cached: false, static: true })
 })
 
+router.post('/chat', async (req, res) => {
+  const { model, configId, messages, cacheEnabled } = req.body || {}
+
+  if (!ENV.apiKey) {
+    return res.status(503).json({ error: 'configure_portkey', missing: ['PORTKEY_API_KEY'] })
+  }
+  if (!model || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'bad_request', message: 'model + messages required' })
+  }
+
+  // Resolve configId → slug
+  const configMap = {
+    airs:           ENV.configAirs,
+    'no-guardrail': ENV.configNoGuard,
+    defaults:       ENV.configDefaults,
+    fallback:       ENV.configFallback,
+  }
+  const slug = configMap[configId] || ENV.configAirs
+  if (!slug) {
+    return res.status(503).json({ error: 'config_missing', configId })
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const sendEvent = (event, data) => {
+    if (event) res.write(`event: ${event}\n`)
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  }
+
+  const startedAt = Date.now()
+  let tokensOut = 0
+  let assembledText = ''
+  let hookResults = null
+  let fallbackUsed = false
+  let cacheState = cacheEnabled ? 'MISS' : 'disabled'
+  let blocked = false
+  let blockReason = null
+
+  try {
+    const client = buildClient(slug)
+    const stream = await client.chat.completions.create({
+      model, messages, stream: true,
+    })
+
+    for await (const chunk of stream) {
+      // Capture hook_results / fallback info from model_extra when present
+      const extra = chunk?.model_extra || {}
+      if (extra.hook_results) hookResults = extra.hook_results
+      if (extra.cache_status) cacheState = String(extra.cache_status).toUpperCase()
+      if (extra.fallback_used) fallbackUsed = true
+
+      // Detect input-guardrail block before any tokens
+      const before = hookResults?.before_request_hooks
+      if (Array.isArray(before) && before.some(h => h?.verdict === false)) {
+        blocked = true
+        blockReason = before.find(h => h?.verdict === false)
+        sendEvent('blocked', { reason: blockReason, hook_results: hookResults })
+        break
+      }
+
+      const token = chunk?.choices?.[0]?.delta?.content || ''
+      if (token) {
+        tokensOut += 1
+        assembledText += token
+        sendEvent(null, { type: 'token', text: token })
+      }
+    }
+
+    if (!blocked) {
+      const latencyMs = Date.now() - startedAt
+      let traceId = null
+      try {
+        // Use dynamic import to avoid circular-dependency issues at module load time.
+        // server.js imports this router, so we can't do a static top-level import back.
+        const { persistTrace } = await import('./server.js')
+        // Adapt to persistTrace's real signature:
+        // { message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta }
+        const promptText = messages.map(m => `${m.role}: ${m.content}`).join('\n')
+        traceId = persistTrace({
+          message: promptText,
+          chatResponse: { content: assembledText },
+          telemetry: {
+            timing: { total_ms: latencyMs, llm_ms: latencyMs },
+            llm: { tokens_out: tokensOut, model },
+            summary: { verdict: 'ALLOWED', category: 'benign', threats_detected: [] },
+          },
+          backend: 'portkey',
+          resolvedModelId: model,
+          airsEnabled: false,
+          attackMeta: {
+            label: configId,
+            extras: {
+              portkeyConfigId: configId,
+              portkeyConfigSlug: slug,
+              cache: cacheState,
+              fallbackUsed,
+              hookResults,
+            },
+          },
+        })
+      } catch (e) {
+        // Trace persistence failures shouldn't break the stream
+        console.warn('persistTrace failed for gateway chat:', e?.message)
+      }
+      sendEvent('metadata', {
+        hook_results: hookResults,
+        model, latencyMs, tokensOut,
+        cache: cacheState, fallbackUsed, traceId,
+      })
+    }
+  } catch (e) {
+    sendEvent('error', { message: String(e?.message || e) })
+  } finally {
+    res.end()
+  }
+})
+
 export default router
 export { ENV, buildClient }

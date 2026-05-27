@@ -330,7 +330,7 @@ function buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelL
 }
 
 // ─── Persist trace + spans to SQLite ─────────────────────────────────────────
-function persistTrace({ message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta }) {
+export function persistTrace({ message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta }) {
   const traceId = `trace_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const timing  = telemetry.timing ?? {}
   const llm     = telemetry.llm ?? {}
