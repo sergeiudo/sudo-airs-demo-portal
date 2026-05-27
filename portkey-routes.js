@@ -24,10 +24,12 @@ function buildClient(configId) {
 }
 
 router.get('/health', async (_req, res) => {
+  // PORTKEY_CONFIG_NO_GUARDRAIL is not in this list — the no-guardrail lane
+  // bypasses by calling Portkey with no config attached, so the env var is
+  // optional/unused.
   const required = {
     PORTKEY_API_KEY:               !!ENV.apiKey,
     PORTKEY_CONFIG_AIRS:           !!ENV.configAirs,
-    PORTKEY_CONFIG_NO_GUARDRAIL:   !!ENV.configNoGuard,
     PORTKEY_CONFIG_DEFAULTS:       !!ENV.configDefaults,
     PORTKEY_CONFIG_FALLBACK:       !!ENV.configFallback,
     PORTKEY_BEDROCK_SLUG:          !!ENV.bedrockSlug,
@@ -73,7 +75,7 @@ router.get('/configs', (_req, res) => {
   res.json({
     configs: [
       { id: 'airs',         label: 'Portkey + AIRS',             slug: ENV.configAirs,     attached: 'AIRS guardrail',           ready: !!ENV.configAirs },
-      { id: 'no-guardrail', label: 'Vertex (no guardrail)',      slug: ENV.configNoGuard,  attached: 'none',                     ready: !!ENV.configNoGuard },
+      { id: 'no-guardrail', label: 'Direct Vertex (no gateway)', slug: '(direct vertex)',      attached: 'none — bypasses Portkey entirely', ready: true },
       { id: 'defaults',     label: 'Portkey default guardrails', slug: ENV.configDefaults, attached: 'Portkey regex/PII checks', ready: !!ENV.configDefaults },
       { id: 'fallback',     label: 'Vertex → Bedrock fallback',  slug: ENV.configFallback, attached: 'fallback chain',           ready: !!ENV.configFallback },
     ],
@@ -127,16 +129,24 @@ router.post('/chat', async (req, res) => {
     return res.status(400).json({ error: 'bad_request', message: 'model + messages required' })
   }
 
-  // Resolve configId → slug
+  // Resolve configId → slug. 'no-guardrail' deliberately calls Portkey with
+  // NO config attached, regardless of what PORTKEY_CONFIG_NO_GUARDRAIL is set
+  // to — relying on the @<integration>/model prefix to route. This guarantees
+  // a true bypass even if the user's no-guardrail Portkey config happens to
+  // have a guardrail attached (which would otherwise block).
   const configMap = {
-    airs:           ENV.configAirs,
-    'no-guardrail': ENV.configNoGuard,
-    defaults:       ENV.configDefaults,
-    fallback:       ENV.configFallback,
+    airs:     ENV.configAirs,
+    defaults: ENV.configDefaults,
+    fallback: ENV.configFallback,
   }
-  const slug = configMap[configId] || ENV.configAirs
-  if (!slug) {
-    return res.status(503).json({ error: 'config_missing', configId })
+  let slug
+  if (configId === 'no-guardrail') {
+    slug = null   // explicit bypass — buildClient(null) attaches no config
+  } else {
+    slug = configMap[configId] || ENV.configAirs
+    if (!slug) {
+      return res.status(503).json({ error: 'config_missing', configId })
+    }
   }
 
   // SSE headers
@@ -159,6 +169,40 @@ router.post('/chat', async (req, res) => {
   let cacheState = cacheEnabled ? 'MISS' : 'disabled'
   let blocked = false
   let blockReason = null
+
+  // ── no-guardrail lane: bypass Portkey entirely, call Vertex directly ──
+  // The user's Portkey workspace has the AIRS guardrail applied as a default,
+  // so even calls without a config still get blocked. Direct Vertex is the
+  // only way to demonstrate the truly-unguarded path.
+  if (configId === 'no-guardrail') {
+    try {
+      const { callVertexAI } = await import('./server.js')
+      const promptText = messages.map(m => m.content).join('\n')
+      // Strip the @integration/ prefix from the model id since callVertexAI wants bare model
+      const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
+      const r = await callVertexAI(promptText, bareModel)
+      const text = r?.text || ''
+      // Fake a token stream by chunking the response so the UI feels alive
+      const chunkSize = 24
+      for (let i = 0; i < text.length; i += chunkSize) {
+        const piece = text.slice(i, i + chunkSize)
+        tokensOut += 1
+        assembledText += piece
+        sendEvent(null, { type: 'token', text: piece })
+      }
+      sendEvent('metadata', {
+        hook_results: null,
+        model, latencyMs: r?.latencyMs ?? (Date.now() - startedAt), tokensOut: r?.tokens?.out ?? tokensOut,
+        cache: 'disabled', fallbackUsed: false, traceId: null,
+        bypass: 'direct-vertex',
+      })
+    } catch (e) {
+      sendEvent('error', { message: `Direct Vertex call failed: ${String(e?.message || e)}` })
+    } finally {
+      res.end()
+    }
+    return
+  }
 
   try {
     const client = buildClient(slug)
@@ -252,9 +296,13 @@ router.post('/chat', async (req, res) => {
   }
 })
 
+// slug semantics:
+//   string     → use that Portkey config
+//   null       → BYPASS Portkey entirely, call Vertex directly (no-guardrail lane)
+//   undefined  → config missing → UNCONFIGURED lane
 async function runLane(laneId, slug, model, messages) {
   const startedAt = Date.now()
-  if (!slug) {
+  if (slug === undefined) {
     return {
       id: laneId, slug: null, verdict: 'UNCONFIGURED',
       blockReason: null, response: '', latencyMs: 0,
@@ -262,6 +310,35 @@ async function runLane(laneId, slug, model, messages) {
       error: 'Config slug missing — set the corresponding env var',
     }
   }
+
+  // Bypass: call Vertex directly (no Portkey, no guardrails at all).
+  if (slug === null) {
+    try {
+      const { callVertexAI } = await import('./server.js')
+      const promptText = messages.map(m => m.content).join('\n')
+      const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
+      const r = await callVertexAI(promptText, bareModel)
+      return {
+        id: laneId, slug: '(direct vertex)',
+        verdict: 'ALLOWED',
+        blockReason: null,
+        response: r?.text || '',
+        latencyMs: r?.latencyMs ?? (Date.now() - startedAt),
+        tokens: r?.tokens?.out ?? 0,
+        hookResults: null,
+        error: null,
+      }
+    } catch (e) {
+      return {
+        id: laneId, slug: '(direct vertex)',
+        verdict: 'ERROR', blockReason: null,
+        response: '', latencyMs: Date.now() - startedAt,
+        tokens: 0, hookResults: null,
+        error: String(e?.message || e),
+      }
+    }
+  }
+
   try {
     const client = buildClient(slug)
     const completion = await client.chat.completions.create({
@@ -333,9 +410,11 @@ router.post('/compare', async (req, res) => {
   }
   const messages = [{ role: 'user', content: prompt }]
   const [noGuard, defaults, airs] = await Promise.all([
-    runLane('no-guardrail', ENV.configNoGuard, model, messages),
-    runLane('defaults',     ENV.configDefaults, model, messages),
-    runLane('airs',         ENV.configAirs,     model, messages),
+    // no-guardrail lane: pass null = bypass (no config attached). Routes via
+    // the @integration prefix in the model id. Always available, never UNCONFIGURED.
+    runLane('no-guardrail', null,                        model, messages),
+    runLane('defaults',     ENV.configDefaults || undefined, model, messages),
+    runLane('airs',         ENV.configAirs     || undefined, model, messages),
   ])
   res.json({ prompt, model, lanes: [noGuard, defaults, airs] })
 })

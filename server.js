@@ -155,7 +155,7 @@ const vertexAI = new VertexAI({
   location: process.env.GCP_REGION || 'us-central1',
 })
 
-async function callVertexAI(prompt, modelId) {
+export async function callVertexAI(prompt, modelId) {
   const genModel = vertexAI.getGenerativeModel({ model: modelId })
   const t0 = Date.now()
   const result = await genModel.generateContent(prompt)

@@ -5,16 +5,21 @@ const ACCENT = '#ec4899'
 
 export function PortkeyStatusStrip() {
   const [health, setHealth] = useState(null)
+  const [configs, setConfigs] = useState(null)
   const [loading, setLoading] = useState(true)
 
   async function load() {
     setLoading(true)
     try {
-      const r = await fetch('/api/gateway/health')
-      const data = await r.json()
-      setHealth(data)
+      const [hRes, cRes] = await Promise.all([
+        fetch('/api/gateway/health').then(r => r.json()),
+        fetch('/api/gateway/configs').then(r => r.json()).catch(() => ({ configs: [] })),
+      ])
+      setHealth(hRes)
+      setConfigs(cRes.configs || [])
     } catch (e) {
       setHealth({ ok: false, status: 'down', reachable: false, modelCount: 0, missing: ['network'] })
+      setConfigs([])
     } finally {
       setLoading(false)
     }
@@ -36,8 +41,8 @@ export function PortkeyStatusStrip() {
     health.status === 'degraded'   ? AlertTriangle :
                                      XCircle
 
-  const totalConfigs = 4
-  const wired = totalConfigs - (health.missing || []).filter(m => m.startsWith('PORTKEY_CONFIG_')).length
+  const totalConfigs = configs?.length || 4
+  const wired = (configs || []).filter(c => c.ready).length
 
   return (
     <div className="flex items-center gap-3 text-[11px]">
