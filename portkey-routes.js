@@ -69,5 +69,53 @@ router.get('/health', async (_req, res) => {
   })
 })
 
+router.get('/configs', (_req, res) => {
+  res.json({
+    configs: [
+      { id: 'airs',         label: 'Portkey + AIRS',             slug: ENV.configAirs,     attached: 'AIRS guardrail',           ready: !!ENV.configAirs },
+      { id: 'no-guardrail', label: 'Vertex (no guardrail)',      slug: ENV.configNoGuard,  attached: 'none',                     ready: !!ENV.configNoGuard },
+      { id: 'defaults',     label: 'Portkey default guardrails', slug: ENV.configDefaults, attached: 'Portkey regex/PII checks', ready: !!ENV.configDefaults },
+      { id: 'fallback',     label: 'Vertex → Bedrock fallback',  slug: ENV.configFallback, attached: 'fallback chain',           ready: !!ENV.configFallback },
+    ],
+  })
+})
+
+// Hardcoded model catalog. Portkey's OpenAI-compatible /v1/models routes to
+// the upstream provider (Vertex doesn't have /models, returns Google 404),
+// so dynamic discovery is not possible via the standard SDK. Curate models
+// here matching what's provisioned in your Portkey integrations. Vertex
+// models are the ones enabled in this project's GCP; Bedrock models match
+// what the user provisioned in Portkey under @sudo-bedrock.
+const MODEL_CATALOG = {
+  [`${ENV.vertexSlug || '@sudo-vertexai'}`]: [
+    { id: 'gemini-2.0-flash-001',       displayName: 'Gemini 2.0 Flash' },
+    { id: 'gemini-2.5-flash',           displayName: 'Gemini 2.5 Flash' },
+    { id: 'gemini-2.5-pro',             displayName: 'Gemini 2.5 Pro' },
+    { id: 'gemini-1.5-pro-002',         displayName: 'Gemini 1.5 Pro' },
+    { id: 'gemini-1.5-flash-002',       displayName: 'Gemini 1.5 Flash' },
+  ],
+}
+
+if (ENV.bedrockSlug) {
+  MODEL_CATALOG[ENV.bedrockSlug] = [
+    { id: 'anthropic.claude-sonnet-4-20250514-v1:0', displayName: 'Claude Sonnet 4 (Bedrock)' },
+    { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', displayName: 'Claude 3.5 Sonnet v2 (Bedrock)' },
+    { id: 'anthropic.claude-3-haiku-20240307-v1:0',  displayName: 'Claude 3 Haiku (Bedrock)' },
+  ]
+}
+
+router.get('/models', (_req, res) => {
+  const providers = {}
+  let total = 0
+  for (const [provider, models] of Object.entries(MODEL_CATALOG)) {
+    providers[provider] = models.map(m => ({
+      id: `${provider}/${m.id}`,
+      displayName: m.displayName,
+    }))
+    total += models.length
+  }
+  res.json({ providers, total, fetchedAt: new Date().toISOString(), cached: false, static: true })
+})
+
 export default router
 export { ENV, buildClient }
