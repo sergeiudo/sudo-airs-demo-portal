@@ -21,7 +21,8 @@ mcp-server/.venv/
 
 # Superpowers brainstorming sessions
 .superpowers/
-docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/specs/
 
 traces.db
 traces.db-shm
