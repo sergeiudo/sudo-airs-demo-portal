@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Waypoints, Zap, ListTree, BookOpen } from 'lucide-react'
 import { LiveDemoTab } from './llm-gateway/LiveDemoTab'
 import { ShowcaseTab } from './llm-gateway/ShowcaseTab'
@@ -15,6 +15,35 @@ const TABS = [
 
 export function LlmGatewayView() {
   const [tab, setTab] = useState('live')
+  const [health, setHealth] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/gateway/health')
+      .then(r => r.json())
+      .then(setHealth)
+      .catch(() => setHealth({ ok: false, status: 'down', reachable: false, modelCount: 0, missing: ['network'] }))
+  }, [])
+
+  if (health && health.status === 'unconfigured') {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="max-w-xl p-6 rounded-2xl text-center"
+             style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.4)' }}>
+          <Waypoints size={32} style={{ color: ACCENT, margin: '0 auto 12px' }} />
+          <h2 className="text-lg font-bold text-white mb-2">Configure Portkey to use this pillar</h2>
+          <p className="text-[12px] text-slate-400 mb-4">
+            Drop your Portkey API key into <code className="px-1 rounded bg-white/5">.env</code> as <code className="px-1 rounded bg-white/5">PORTKEY_API_KEY</code>, then restart the dev server.
+            See <code className="px-1 rounded bg-white/5">.env.example</code> for the full list of variables.
+          </p>
+          <a href="https://app.portkey.ai" target="_blank" rel="noreferrer"
+             className="inline-block px-4 py-2 rounded-lg text-[12px] font-bold"
+             style={{ background: ACCENT, color: '#fff' }}>
+            Open Portkey console
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-base-950">
@@ -51,6 +80,14 @@ export function LlmGatewayView() {
           )
         })}
       </div>
+
+      {/* Degraded banner — surfaces missing env vars */}
+      {health?.status === 'degraded' && (
+        <div className="flex-shrink-0 px-6 py-2 text-[11px]"
+             style={{ background: 'rgba(245,158,11,0.1)', color: '#fbbf24', borderBottom: '1px solid rgba(245,158,11,0.3)' }}>
+          ⚠ Some Portkey configs are missing — affected controls are disabled. Missing: <span className="font-mono">{(health.missing || []).join(', ')}</span>
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
