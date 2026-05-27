@@ -23,6 +23,7 @@ mcp-server/.venv/
 .superpowers/
 docs/superpowers/*
 !docs/superpowers/specs/
+!docs/superpowers/plans/
 
 traces.db
 traces.db-shm
