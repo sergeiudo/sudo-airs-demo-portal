@@ -3,6 +3,7 @@ import { Waypoints, Zap, ListTree, BookOpen } from 'lucide-react'
 import { LiveDemoTab } from './llm-gateway/LiveDemoTab'
 import { ShowcaseTab } from './llm-gateway/ShowcaseTab'
 import { GuideTab } from './llm-gateway/GuideTab'
+import { PortkeyStatusStrip } from './llm-gateway/components/PortkeyStatusStrip'
 
 const ACCENT = '#ec4899'
 
@@ -28,7 +29,7 @@ export function LlmGatewayView() {
           <div className="text-[11px] text-slate-500">Portkey routes · AIRS guardrail · multi-model</div>
         </div>
         <div className="flex-1" />
-        {/* PortkeyStatusStrip mounts here in Task 12 */}
+        <PortkeyStatusStrip />
       </div>
 
       {/* Tab bar */}
