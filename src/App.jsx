@@ -12,6 +12,7 @@ import { DeveloperCornerView } from './views/DeveloperCornerView'
 import { ReleaseNotesView } from './views/ReleaseNotesView'
 import { McpSecurityView } from './views/McpSecurityView'
 import { RagSecurityView } from './views/RagSecurityView'
+import { LlmGatewayView } from './views/LlmGatewayView'
 
 function AppContent() {
   const { state } = useAppContext()
@@ -34,6 +35,7 @@ function AppContent() {
       case 'developerCorner':  return <DeveloperCornerView />
       case 'mcpSecurity':      return <McpSecurityView />
       case 'ragSecurity':      return <RagSecurityView />
+      case 'llmGateway':       return <LlmGatewayView />
       default:                 return <ApiInterceptView />
     }
   }
