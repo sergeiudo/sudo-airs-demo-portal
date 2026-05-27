@@ -252,5 +252,93 @@ router.post('/chat', async (req, res) => {
   }
 })
 
+async function runLane(laneId, slug, model, messages) {
+  const startedAt = Date.now()
+  if (!slug) {
+    return {
+      id: laneId, slug: null, verdict: 'UNCONFIGURED',
+      blockReason: null, response: '', latencyMs: 0,
+      tokens: 0, hookResults: null,
+      error: 'Config slug missing — set the corresponding env var',
+    }
+  }
+  try {
+    const client = buildClient(slug)
+    const completion = await client.chat.completions.create({
+      model, messages, stream: false,
+    })
+    const latencyMs = Date.now() - startedAt
+    const hookResults = completion?.model_extra?.hook_results || null
+    const before = hookResults?.before_request_hooks || []
+    const after  = hookResults?.after_request_hooks || []
+    const inputBlocked  = before.some(h => h?.verdict === false)
+    const outputBlocked = after.some(h => h?.verdict === false)
+
+    let verdict = 'ALLOWED'
+    let blockReason = null
+    if (inputBlocked) {
+      verdict = 'BLOCKED (input)'
+      blockReason = before.find(h => h?.verdict === false)
+    } else if (outputBlocked) {
+      verdict = 'BLOCKED (output)'
+      blockReason = after.find(h => h?.verdict === false)
+    }
+
+    const choice = completion?.choices?.[0]?.message?.content || ''
+    const tokens = completion?.usage?.completion_tokens ?? 0
+
+    return {
+      id: laneId, slug,
+      verdict, blockReason,
+      response: choice, latencyMs, tokens,
+      hookResults,
+      error: null,
+    }
+  } catch (e) {
+    // AIRS guardrail blocks arrive as thrown errors whose message is a JSON
+    // string containing hook_results. Parse and convert to a BLOCKED verdict.
+    const raw = String(e?.message || e)
+    let parsed = null
+    try { parsed = JSON.parse(raw) } catch {}
+    const hookResults = parsed?.hook_results || null
+    const before = hookResults?.before_request_hooks || []
+    const blockedHook = before.find(h => h?.verdict === false)
+    if (blockedHook) {
+      return {
+        id: laneId, slug,
+        verdict: 'BLOCKED (input)',
+        blockReason: blockedHook,
+        response: '', latencyMs: Date.now() - startedAt,
+        tokens: 0, hookResults,
+        error: null,
+      }
+    }
+    return {
+      id: laneId, slug,
+      verdict: 'ERROR', blockReason: null,
+      response: '', latencyMs: Date.now() - startedAt,
+      tokens: 0, hookResults: null,
+      error: raw,
+    }
+  }
+}
+
+router.post('/compare', async (req, res) => {
+  const { prompt, model } = req.body || {}
+  if (!ENV.apiKey) {
+    return res.status(503).json({ error: 'configure_portkey', missing: ['PORTKEY_API_KEY'] })
+  }
+  if (!prompt || !model) {
+    return res.status(400).json({ error: 'bad_request', message: 'prompt + model required' })
+  }
+  const messages = [{ role: 'user', content: prompt }]
+  const [noGuard, defaults, airs] = await Promise.all([
+    runLane('no-guardrail', ENV.configNoGuard, model, messages),
+    runLane('defaults',     ENV.configDefaults, model, messages),
+    runLane('airs',         ENV.configAirs,     model, messages),
+  ])
+  res.json({ prompt, model, lanes: [noGuard, defaults, airs] })
+})
+
 export default router
 export { ENV, buildClient }
