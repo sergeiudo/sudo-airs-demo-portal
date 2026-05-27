@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare } from 'lucide-react'
+import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, Waypoints, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 
 
@@ -9,6 +9,7 @@ const VIEWS = [
   { id: 'modelScanning',   icon: ScanSearch, label: 'Model Scanning',               desc: 'Scan AI model files for embedded malware and vulnerabilities.',        color: '#3B82F6' },
   { id: 'redTeaming',      icon: Swords,     label: 'Red Teaming',                  desc: 'Run automated adversarial campaigns and measure robustness scores.',   color: '#F97316' },
   { id: 'claudeHooks',     icon: Terminal,   label: 'AI Code Assistant Protection', desc: 'See how AIRS protects Claude Code via pre/post-tool hook scripts.',    color: '#8B5CF6' },
+  { id: 'llmGateway',      icon: Waypoints,  label: 'AI/LLM Gateway',               desc: 'Portkey LLM gateway demo — model picker, fallback, cache, and a 3-lane comparison showing what AIRS catches that Portkey defaults miss.', color: '#EC4899' },
   { id: 'observability',   icon: BarChart2,  label: 'LLM Telemetry',                desc: 'Browse prompt history, latency metrics, and detection breakdowns.',    color: '#10B981' },
   { id: 'developerCorner', icon: Code2,      label: 'Developer Corner',             desc: 'Python SDK, REST API reference, and live integration code samples.',   color: '#06B6D4' },
   { id: 'mcpSecurity',     icon: Network,    label: 'MCP Security',                 desc: 'Live MCP tool demo with real AIRS two-stage scanning — 10 OWASP attack scenarios.',  color: '#06B6D4' },

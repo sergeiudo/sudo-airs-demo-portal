@@ -16,6 +16,7 @@ const VIEW_LABELS = {
   developerCorner: { label: 'Developer Corner',             sublabel: 'Integration guide & API reference',          text: 'text-indigo-400', color: '#06B6D4' },
   mcpSecurity:     { label: 'MCP Security',                 sublabel: 'Live MCP tool protection with Prisma AIRS',  text: 'text-cyan-400',   color: '#06B6D4' },
   ragSecurity:     { label: 'RAG Security',                 sublabel: 'Retrieval-Augmented Generation pipeline protection', text: 'text-amber-400', color: '#F59E0B' },
+  llmGateway:      { label: 'AI/LLM Gateway',               sublabel: 'Portkey gateway + Prisma AIRS guardrail',           text: 'text-pink-400',   color: '#EC4899' },
 }
 
 export function TopBar() {
