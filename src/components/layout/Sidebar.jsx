@@ -93,8 +93,8 @@ export function Sidebar() {
         <Logo collapsed={!expanded} />
       </div>
 
-      {/* Protection Toggle */}
-      <ProtectionToggle collapsed={!expanded} />
+      {/* Protection Toggle — hidden on llmGateway view (uses local guardrail controls) */}
+      {state.activeView !== 'llmGateway' && <ProtectionToggle collapsed={!expanded} />}
 
       {/* SCM Console link — appears after first scan */}
       <AnimatePresence>
