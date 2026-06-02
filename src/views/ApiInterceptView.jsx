@@ -7,7 +7,7 @@ import { useProtectionTheme } from '../hooks/useProtectionTheme'
 import { PromptTelemetryDrawer } from '../components/api-intercept/PromptTelemetryDrawer'
 
 const DEFAULT_MODELS = {
-  vertex:  'gemini-2.0-flash-001',
+  vertex:  'gemini-2.5-flash',
   bedrock: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
   azure:   'gpt-5.4-nano',
 }

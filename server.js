@@ -12,6 +12,7 @@ import {
   ListFoundationModelsCommand,
 } from '@aws-sdk/client-bedrock'
 import { AzureOpenAI } from 'openai'
+import { GoogleAuth } from 'google-auth-library'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
@@ -26,14 +27,24 @@ app.use('/api/gateway', portkeyRouter)
 const PORT = process.env.PROXY_PORT || 3001
 
 // ─── Known Vertex AI publisher models ────────────────────────────────────────
+// `kind` selects the call path: 'gemini' → generateContent SDK,
+// 'maas' → OpenAI-compatible partner endpoint (DeepSeek/Qwen/gpt-oss).
+// `location` is per-model because partner models are region-locked
+// (Qwen is global-only, DeepSeek is us-central1-only). Verified live 2026-06-02.
 const VERTEX_MODELS = [
-  { id: 'gemini-2.0-flash-001',      label: 'Gemini 2.0 Flash',       status: 'available' },
-  { id: 'gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite',  status: 'available' },
-  { id: 'gemini-2.0-pro-exp-02-05',  label: 'Gemini 2.0 Pro (Exp)',   status: 'experimental' },
-  { id: 'gemini-1.5-pro',            label: 'Gemini 1.5 Pro',         status: 'available' },
-  { id: 'gemini-1.5-flash',          label: 'Gemini 1.5 Flash',       status: 'available' },
-  { id: 'gemini-1.5-flash-8b',       label: 'Gemini 1.5 Flash 8B',   status: 'available' },
+  // Google Gemini — first-party (generateContent)
+  { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro',        provider: 'Google',   status: 'available', kind: 'gemini', location: 'us-central1' },
+  { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      provider: 'Google',   status: 'available', kind: 'gemini', location: 'us-central1' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', provider: 'Google',   status: 'available', kind: 'gemini', location: 'us-central1' },
+  // Partner Model-as-a-Service — OpenAI-compatible endpoint
+  { id: 'deepseek-ai/deepseek-r1-0528-maas',        label: 'DeepSeek R1 (0528)',  provider: 'DeepSeek', status: 'available', kind: 'maas', location: 'us-central1' },
+  { id: 'qwen/qwen3-235b-a22b-instruct-2507-maas',  label: 'Qwen3 235B Instruct', provider: 'Alibaba',  status: 'available', kind: 'maas', location: 'global' },
+  { id: 'qwen/qwen3-coder-480b-a35b-instruct-maas', label: 'Qwen3 Coder 480B',    provider: 'Alibaba',  status: 'available', kind: 'maas', location: 'global' },
+  { id: 'qwen/qwen3-next-80b-a3b-instruct-maas',    label: 'Qwen3 Next 80B',      provider: 'Alibaba',  status: 'available', kind: 'maas', location: 'global' },
+  { id: 'openai/gpt-oss-120b-maas',                 label: 'GPT-OSS 120B',        provider: 'OpenAI',   status: 'available', kind: 'maas', location: 'us-central1' },
+  { id: 'openai/gpt-oss-20b-maas',                  label: 'GPT-OSS 20B',         provider: 'OpenAI',   status: 'available', kind: 'maas', location: 'us-central1' },
 ]
+const VERTEX_MODEL_MAP = Object.fromEntries(VERTEX_MODELS.map(m => [m.id, m]))
 
 // ─── AWS credential helper ────────────────────────────────────────────────────
 function awsCredentials() {
@@ -173,6 +184,52 @@ export async function callVertexAI(prompt, modelId) {
     },
     finishReason: candidate?.finishReason ?? null,
   }
+}
+
+// ─── Vertex MaaS helper (DeepSeek / Qwen / gpt-oss partner models) ─────────────
+// Partner models aren't reachable via the Gemini SDK — they use Vertex's
+// OpenAI-compatible endpoint. Uses ADC (GOOGLE_APPLICATION_CREDENTIALS), same
+// credentials as the Gemini client. `location` is per-model (region-locked).
+const maasAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] })
+
+async function callVertexMaaS(prompt, modelId, location = 'us-central1') {
+  const project = process.env.GCP_PROJECT_ID
+  const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
+  const url = `https://${host}/v1/projects/${project}/locations/${location}/endpoints/openapi/chat/completions`
+  const client = await maasAuth.getClient()
+  const token = (await client.getAccessToken()).token
+  const t0 = Date.now()
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: prompt }], max_tokens: 1024 }),
+  })
+  const latencyMs = Date.now() - t0
+  if (!resp.ok) {
+    const errText = await resp.text()
+    throw new Error(`Vertex MaaS ${resp.status}: ${errText.slice(0, 300)}`)
+  }
+  const data = await resp.json()
+  const choice = data.choices?.[0]
+  const usage = data.usage ?? {}
+  return {
+    text: choice?.message?.content ?? '',
+    latencyMs,
+    tokens: {
+      input:  usage.prompt_tokens     ?? null,
+      output: usage.completion_tokens ?? null,
+      total:  usage.total_tokens      ?? null,
+    },
+    finishReason: choice?.finish_reason ?? null,
+  }
+}
+
+// Route a Vertex model to the right call path based on its catalog metadata.
+// Unknown IDs default to the Gemini SDK (back-compat with ?modelId=… callers).
+function callVertexModel(prompt, modelId) {
+  const meta = VERTEX_MODEL_MAP[modelId]
+  if (meta?.kind === 'maas') return callVertexMaaS(prompt, modelId, meta.location)
+  return callVertexAI(prompt, modelId)
 }
 
 // ─── Bedrock helper ───────────────────────────────────────────────────────────
@@ -416,7 +473,7 @@ app.post('/api/chat', async (req, res) => {
   if (!airsEnabled) {
     console.log(`[LLM] Unprotected — calling ${modelLabel} directly…`)
     try {
-      const r = backend === 'vertex'  ? await callVertexAI(message, resolvedModelId)
+      const r = backend === 'vertex'  ? await callVertexModel(message, resolvedModelId)
               : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
               : await callBedrock(message, resolvedModelId)
       console.log(`[LLM] Response received (${r.latencyMs}ms, ${r.tokens?.total ?? '?'} tokens) — no AIRS scan`)
@@ -462,7 +519,7 @@ app.post('/api/chat', async (req, res) => {
     let llmText = '', llmLatencyMs = 0, llmTokens = null, llmFinishReason = null
     try {
       console.log(`[LLM] Calling ${modelLabel}…`)
-      const r = backend === 'vertex'  ? await callVertexAI(message, resolvedModelId)
+      const r = backend === 'vertex'  ? await callVertexModel(message, resolvedModelId)
               : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
               : await callBedrock(message, resolvedModelId)
       llmText = r.text; llmLatencyMs = r.latencyMs; llmTokens = r.tokens; llmFinishReason = r.finishReason
@@ -501,7 +558,7 @@ app.post('/api/redteam/proxy', async (req, res) => {
   )
 
   try {
-    const r = backend === 'vertex'  ? await callVertexAI(message, resolvedModelId)
+    const r = backend === 'vertex'  ? await callVertexModel(message, resolvedModelId)
             : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
             : await callBedrock(message, resolvedModelId)
     return res.json({ reply: r.text })
@@ -1062,7 +1119,7 @@ Write in first-person ("I see...", "I would have called...", "I notice..."). Use
   try {
     // Vertex AI streaming — must use { contents: [...] } object form
     if (backend === 'vertex') {
-      const resolvedModelId = modelId || process.env.VERTEX_MODEL || 'gemini-2.0-flash-001'
+      const resolvedModelId = modelId || process.env.VERTEX_MODEL || 'gemini-2.5-flash'
       const genModel = vertexAI.getGenerativeModel({ model: resolvedModelId })
       const streamResult = await genModel.generateContentStream({
         contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
@@ -1080,7 +1137,7 @@ Write in first-person ("I see...", "I would have called...", "I notice..."). Use
     const fullPrompt = systemPrompt + '\n\n' + userMsg
     const r = backend === 'bedrock'
       ? await callBedrock(fullPrompt, resolvedModelId)
-      : await callVertexAI(fullPrompt, resolvedModelId)
+      : await callVertexModel(fullPrompt, resolvedModelId)
     res.write(r.text)
     res.end()
   } catch (err) {
