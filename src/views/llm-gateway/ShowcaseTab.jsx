@@ -5,7 +5,7 @@ import { LaneCard } from './components/LaneCard'
 import { useAppContext } from '../../context/AppContext'
 
 const ACCENT = '#ec4899'
-const FIXED_MODEL = '@sudo-vertexai/gemini-2.0-flash-001' // see spec open-question #3 — fixed for fair comparison
+const FIXED_MODEL = '@sudo-vertexai/gemini-2.5-flash' // see spec open-question #3 — fixed for fair comparison
 
 export function ShowcaseTab() {
   const { state } = useAppContext()

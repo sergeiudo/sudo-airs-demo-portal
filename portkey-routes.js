@@ -24,14 +24,14 @@ function buildClient(configId) {
 }
 
 router.get('/health', async (_req, res) => {
-  // PORTKEY_CONFIG_NO_GUARDRAIL is not in this list — the no-guardrail lane
-  // bypasses by calling Portkey with no config attached, so the env var is
-  // optional/unused.
+  // PORTKEY_CONFIG_NO_GUARDRAIL and PORTKEY_CONFIG_FALLBACK are intentionally
+  // NOT required: no-guardrail bypasses Portkey entirely (no config attached),
+  // and fallback (Vertex→Bedrock) is an optional control. Missing either should
+  // not mark the gateway "degraded".
   const required = {
     PORTKEY_API_KEY:               !!ENV.apiKey,
     PORTKEY_CONFIG_AIRS:           !!ENV.configAirs,
     PORTKEY_CONFIG_DEFAULTS:       !!ENV.configDefaults,
-    PORTKEY_CONFIG_FALLBACK:       !!ENV.configFallback,
     PORTKEY_BEDROCK_SLUG:          !!ENV.bedrockSlug,
   }
   const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k)
@@ -47,7 +47,9 @@ router.get('/health', async (_req, res) => {
   // client.models.list() routes to the configured upstream (e.g. Vertex AI)
   // which does not expose a /models endpoint — use raw fetch instead.
   let reachable = false
-  let modelCount = 0
+  // modelCount reflects the static catalog (Portkey's /v1/models passthrough
+  // 404s through Vertex, so it can't be probed live).
+  const modelCount = Object.values(MODEL_CATALOG).reduce((n, arr) => n + arr.length, 0)
   try {
     const resp = await fetch('https://api.portkey.ai/v1/chat/completions', {
       method: 'POST',
@@ -90,11 +92,9 @@ router.get('/configs', (_req, res) => {
 // what the user provisioned in Portkey under @sudo-bedrock.
 const MODEL_CATALOG = {
   [`${ENV.vertexSlug || '@sudo-vertexai'}`]: [
-    { id: 'gemini-2.0-flash-001',       displayName: 'Gemini 2.0 Flash' },
     { id: 'gemini-2.5-flash',           displayName: 'Gemini 2.5 Flash' },
     { id: 'gemini-2.5-pro',             displayName: 'Gemini 2.5 Pro' },
-    { id: 'gemini-1.5-pro-002',         displayName: 'Gemini 1.5 Pro' },
-    { id: 'gemini-1.5-flash-002',       displayName: 'Gemini 1.5 Flash' },
+    { id: 'gemini-2.5-flash-lite',      displayName: 'Gemini 2.5 Flash Lite' },
   ],
 }
 

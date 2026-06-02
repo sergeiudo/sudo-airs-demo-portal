@@ -11,7 +11,7 @@ export const GUIDE_SNIPPETS = {
       code:
 `export PORTKEY_API_KEY="pk-..."
 export PORTKEY_CONFIG_AIRS="pc-sudo-a-315f92"
-export PORTKEY_MODEL="@sudo-vertexai/gemini-2.0-flash-001"`,
+export PORTKEY_MODEL="@sudo-vertexai/gemini-2.5-flash"`,
     },
     'Init client': {
       lang: 'bash',
@@ -68,7 +68,7 @@ curl ... | jq '.model_extra.hook_results'
 `# .env (do not commit)
 PORTKEY_API_KEY=pk-...
 PORTKEY_CONFIG_AIRS=pc-sudo-a-315f92
-PORTKEY_MODEL=@sudo-vertexai/gemini-2.0-flash-001`,
+PORTKEY_MODEL=@sudo-vertexai/gemini-2.5-flash`,
     },
     'Init client': {
       lang: 'javascript',
@@ -131,7 +131,7 @@ console.log('\\n\\nhook_results:', hookResults)`,
 `# .env (do not commit)
 PORTKEY_API_KEY=pk-...
 PORTKEY_CONFIG_AIRS=pc-sudo-a-315f92
-PORTKEY_MODEL=@sudo-vertexai/gemini-2.0-flash-001`,
+PORTKEY_MODEL=@sudo-vertexai/gemini-2.5-flash`,
     },
     'Init client': {
       lang: 'python',
