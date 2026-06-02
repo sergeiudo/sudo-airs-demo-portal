@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Send, ShieldCheck, ShieldOff, Shield } from 'lucide-react'
 import { ModelPicker } from './components/ModelPicker'
 import { HookResultsViewer } from './components/HookResultsViewer'
@@ -32,6 +32,29 @@ export function LiveDemoTab() {
   const [configsReady, setConfigsReady] = useState({})
   const { messages, send, streaming, clear } = usePortkeyChat()
 
+  // Resizable side panels (mirrors the other pillars)
+  const [leftWidth, setLeftWidth] = useState(300)
+  const [rightWidth, setRightWidth] = useState(380)
+  const [drag, setDrag] = useState(null) // 'left' | 'right' | null
+  const dragRef = useRef({ startX: 0, startW: 0 })
+  const startDrag = (which) => (e) => {
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startW: which === 'left' ? leftWidth : rightWidth }
+    setDrag(which)
+  }
+  useEffect(() => {
+    if (!drag) return
+    const onMove = (e) => {
+      const { startX, startW } = dragRef.current
+      if (drag === 'left') setLeftWidth(Math.min(480, Math.max(240, startW + (e.clientX - startX))))
+      else                 setRightWidth(Math.min(640, Math.max(280, startW - (e.clientX - startX))))
+    }
+    const onUp = () => setDrag(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [drag])
+
   useEffect(() => {
     fetch('/api/gateway/configs').then(r => r.json()).then(d => {
       const map = {}
@@ -54,10 +77,11 @@ export function LiveDemoTab() {
   const textSecondary = isLight ? '#475569' : '#94a3b8'
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* LEFT — Controls */}
+    <div className="flex flex-1 min-h-0"
+         style={{ cursor: drag ? 'col-resize' : 'default', userSelect: drag ? 'none' : 'auto' }}>
+      {/* LEFT — Controls + Attack Library (resizable) */}
       <aside className="flex-shrink-0 flex flex-col gap-4 p-4 border-r overflow-y-auto"
-             style={{ width: 300, background: surfaceBg, borderColor: surfaceBorder }}>
+             style={{ width: leftWidth, background: surfaceBg, borderColor: surfaceBorder }}>
         <ModelPicker value={model} onChange={setModel} />
 
         <div className="flex flex-col gap-2">
@@ -126,6 +150,8 @@ export function LiveDemoTab() {
         </div>
       </aside>
 
+      <ResizeHandle onMouseDown={startDrag('left')} active={drag === 'left'} isLight={isLight} />
+
       {/* CENTER — Chat */}
       <main className="flex-1 flex flex-col min-w-0">
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -160,11 +186,34 @@ export function LiveDemoTab() {
         </form>
       </main>
 
-      {/* RIGHT — Pipeline panel */}
+      <ResizeHandle onMouseDown={startDrag('right')} active={drag === 'right'} isLight={isLight} />
+
+      {/* RIGHT — Pipeline panel (resizable) */}
       <aside className="flex-shrink-0 flex flex-col gap-3 p-4 border-l overflow-y-auto"
-             style={{ width: 380, background: surfaceBg, borderColor: surfaceBorder }}>
+             style={{ width: rightWidth, background: surfaceBg, borderColor: surfaceBorder }}>
         <PipelineTrace messages={messages} isLight={isLight} />
       </aside>
+    </div>
+  )
+}
+
+function ResizeHandle({ onMouseDown, active, isLight }) {
+  const [hover, setHover] = useState(false)
+  const lit = active || hover
+  return (
+    <div onMouseDown={onMouseDown}
+         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+         className="relative flex-shrink-0 w-1 cursor-col-resize">
+      {/* wider invisible hit area */}
+      <div className="absolute inset-y-0 -left-1.5 -right-1.5 z-10" />
+      <div className="h-full w-full transition-colors duration-150"
+           style={{ background: lit ? `${ACCENT}${active ? '99' : '66'}` : (isLight ? 'rgba(0,48,135,0.12)' : 'rgba(255,255,255,0.10)') }} />
+      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-1 pointer-events-none">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="w-0.5 h-0.5 rounded-full"
+               style={{ background: lit ? ACCENT : (isLight ? 'rgba(0,48,135,0.3)' : 'rgba(255,255,255,0.25)') }} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -219,7 +268,9 @@ function PipelineTrace({ messages, isLight }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: isLight ? '#475569' : '#94a3b8' }}>Pipeline Trace</div>
-      <div className="rounded-lg p-3 text-[11px] font-mono space-y-1" style={{ background: '#0d1117', color: '#c9d1d9' }}>
+      <div className="rounded-lg p-3 text-[11px] font-mono space-y-1"
+           style={{ background: isLight ? '#f1f5f9' : '#0d1117', color: isLight ? '#0f172a' : '#c9d1d9',
+                    border: `1px solid ${isLight ? 'rgba(0,48,135,0.12)' : 'rgba(255,255,255,0.08)'}` }}>
         <div>Client</div>
         <div className="pl-3">→ Portkey Gateway ({lastAsst?.metadata?.configId || 'airs'})</div>
         <div className="pl-6">→ Guardrail check (before_request_hooks)</div>
@@ -229,7 +280,7 @@ function PipelineTrace({ messages, isLight }) {
         <div>← Client</div>
       </div>
       {lastAsst?.metadata?.hookResults && (
-        <HookResultsViewer hookResults={lastAsst.metadata.hookResults} />
+        <HookResultsViewer hookResults={lastAsst.metadata.hookResults} isLight={isLight} />
       )}
     </div>
   )
