@@ -4,6 +4,7 @@ import { ModelPicker } from './components/ModelPicker'
 import { HookResultsViewer } from './components/HookResultsViewer'
 import { usePortkeyChat } from '../../hooks/usePortkeyChat'
 import { useAppContext } from '../../context/AppContext'
+import { LLM_GATEWAY_ATTACKS, LLM_GATEWAY_ATTACK_CATEGORIES } from '../../data/llmGatewayAttacks'
 
 const ACCENT = '#ec4899'
 
@@ -55,8 +56,8 @@ export function LiveDemoTab() {
   return (
     <div className="flex flex-1 min-h-0">
       {/* LEFT — Controls */}
-      <aside className="flex-shrink-0 flex flex-col gap-4 p-4 border-r"
-             style={{ width: 280, background: surfaceBg, borderColor: surfaceBorder }}>
+      <aside className="flex-shrink-0 flex flex-col gap-4 p-4 border-r overflow-y-auto"
+             style={{ width: 300, background: surfaceBg, borderColor: surfaceBorder }}>
         <ModelPicker value={model} onChange={setModel} />
 
         <div className="flex flex-col gap-2">
@@ -93,10 +94,36 @@ export function LiveDemoTab() {
                    disabled={!configsReady.fallback} disabledTitle="PORTKEY_CONFIG_FALLBACK not set" />
         <ToggleRow label="Semantic cache" checked={cacheEnabled} onChange={setCacheEnabled} />
 
-        <button onClick={clear} className="mt-auto px-3 py-2 rounded-lg text-[11px] font-semibold"
+        <button onClick={clear} className="px-3 py-2 rounded-lg text-[11px] font-semibold"
                 style={{ background: isLight ? '#f1f5f9' : 'rgba(255,255,255,0.05)', color: textSecondary }}>
           Clear chat
         </button>
+
+        {/* Attack library — click a payload to load it into the prompt box */}
+        <div className="flex flex-col gap-2 pt-3 mt-1 border-t" style={{ borderColor: surfaceBorder }}>
+          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: textSecondary }}>Attack Library</div>
+          {LLM_GATEWAY_ATTACK_CATEGORIES.map(cat => (
+            <div key={cat.id} className="flex flex-col gap-1">
+              <div className="text-[10px] font-bold uppercase tracking-wider px-1" style={{ color: cat.color }}>{cat.label}</div>
+              {LLM_GATEWAY_ATTACKS.filter(a => a.category === cat.id).map(a => {
+                const active = input === a.prompt
+                return (
+                  <button key={a.id}
+                          onClick={() => setInput(a.prompt)}
+                          className="text-left px-3 py-2 rounded-lg text-[11px] transition-colors"
+                          style={{
+                            background: active ? `${ACCENT}1a` : (isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)'),
+                            border: `1px solid ${active ? `${ACCENT}55` : surfaceBorder}`,
+                            color: active ? ACCENT : textPrimary,
+                          }}>
+                    <div className="font-semibold leading-tight">{a.label}</div>
+                    <div className="text-[10px] opacity-70 mt-0.5">severity: {a.severity}</div>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
       </aside>
 
       {/* CENTER — Chat */}

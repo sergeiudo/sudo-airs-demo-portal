@@ -1,16 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { Waypoints, Zap, ListTree, BookOpen } from 'lucide-react'
+import { Waypoints, Zap, BookOpen } from 'lucide-react'
 import { LiveDemoTab } from './llm-gateway/LiveDemoTab'
-import { ShowcaseTab } from './llm-gateway/ShowcaseTab'
 import { GuideTab } from './llm-gateway/GuideTab'
 import { PortkeyStatusStrip } from './llm-gateway/components/PortkeyStatusStrip'
 
 const ACCENT = '#ec4899'
 
 const TABS = [
-  { id: 'live',     label: 'Live Demo',          icon: Zap },
-  { id: 'showcase', label: 'Detection Showcase', icon: ListTree },
-  { id: 'guide',    label: 'Integration Guide',  icon: BookOpen },
+  { id: 'live',     label: 'Live Demo',         icon: Zap },
+  { id: 'guide',    label: 'Integration Guide', icon: BookOpen },
 ]
 
 export function LlmGatewayView() {
@@ -91,9 +89,8 @@ export function LlmGatewayView() {
 
       {/* Body */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {tab === 'live'     && <LiveDemoTab />}
-        {tab === 'showcase' && <ShowcaseTab />}
-        {tab === 'guide'    && <GuideTab />}
+        {tab === 'live'  && <LiveDemoTab />}
+        {tab === 'guide' && <GuideTab />}
       </div>
     </div>
   )
