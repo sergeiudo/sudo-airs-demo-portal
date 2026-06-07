@@ -1,14 +1,21 @@
-#!/usr/bin/env python3.12
+#!/usr/bin/env python3
 """
-AIRS Release Notes → Slack Notifier
+AIRS Release Notes -> Slack Notifier
 
-Scrapes the 4 live Prisma AIRS "Features Introduced" pages, extracts the
-most recent features per pillar, diffs against the last posted state (hash),
-shows a preview, and posts a rich Slack message on confirmation.
+Palo Alto retired the per-pillar "Features Introduced" pages (mid-2026) and now
+publishes a single by-date feed at:
+    /ai-runtime-security/new-features/by-date/prisma-airs/{month-year}
+The legacy "features-introduced" URL 301-redirects to the latest month, which we
+follow to discover "latest" reliably.
+
+This script scrapes the latest month's features (plus a little prior-month context),
+diffs against the last posted state (hash), shows a preview, and posts a rich Slack
+message on confirmation.
 
 Usage:
-  python3.12 airs-slack-notify.py           # diff check + preview + confirm
-  python3.12 airs-slack-notify.py --force   # skip diff, always post
+  python3 airs-slack-notify.py            # diff check + preview + interactive confirm
+  python3 airs-slack-notify.py --yes      # diff check + post automatically (for cron)
+  python3 airs-slack-notify.py --force    # skip diff, always post
 """
 
 import re
@@ -18,6 +25,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -25,256 +33,257 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Config ─────────────────────────────────────────────────────────────────────
+# -- Config ----------------------------------------------------------------------
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 STATE_FILE = Path(__file__).parent / "airs-docs-pdfs" / ".last-seen.json"
 
-PILLARS = [
-    {
-        "name": "AI Runtime Firewall",
-        "emoji": "🔥",
-        "url": "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-network-intercept",
-    },
-    {
-        "name": "AI Runtime API",
-        "emoji": "🔌",
-        "url": "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-api-intercept",
-    },
-    {
-        "name": "AI Model Security",
-        "emoji": "🛡️",
-        "url": "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-model-security",
-    },
-    {
-        "name": "AI Red Teaming",
-        "emoji": "🎯",
-        "url": "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-red-teaming",
-    },
-]
+LEGACY_URL  = "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced"
+BYDATE_BASE = "https://docs.paloaltonetworks.com/ai-runtime-security/new-features/by-date/prisma-airs"
+INDEX_URL   = BYDATE_BASE
+KNOWN_ISSUES_URL     = "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/known-issues"
+ADDRESSED_ISSUES_URL = "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/addressed-issues"
 
-FEATURES_INDEX_URL = "https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced"
+MONTHS = ["january", "february", "march", "april", "may", "june",
+          "july", "august", "september", "october", "november", "december"]
+EARLIER_MONTHS = 2  # how many prior months to surface as context
 
 
-# ── Scraping ───────────────────────────────────────────────────────────────────
+# -- Scraping --------------------------------------------------------------------
 
-def fetch_page(url: str) -> BeautifulSoup:
-    resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
-    return BeautifulSoup(resp.text, "html.parser")
+def get(url):
+    return requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
 
 
-def parse_features(soup: BeautifulSoup) -> list[dict]:
-    """Extract all feature entries from a pillar page, sorted newest first."""
+def collapse(text):
+    return " ".join((text or "").split())
+
+
+def prettify_category(slug):
+    if not slug:
+        return "General"
+    acr = {"ai": "AI", "api": "API", "ml": "ML", "llm": "LLM", "mcp": "MCP", "rag": "RAG"}
+    return " ".join(acr.get(w.lower(), w.capitalize()) for w in slug.split("-"))
+
+
+def label_from_slug(slug):
+    m = re.match(r"^([a-z]+)-(\d{4})$", slug, re.I)
+    if not m:
+        return slug
+    return m.group(1).capitalize() + " " + m.group(2)
+
+
+def parse_month_features(soup):
+    """Extract feature cards from a by-date month page."""
     features = []
-    for div in soup.select('div.topic.concept[id^="concept-"], div[id^="concept-"]'):
-        title_el = div.select_one("h2.title")
-        date_el = div.select_one("tt.ph.tt, tt")
+    for card in soup.select("div.coveo-results-card"):
+        title_el = card.select_one(".coveo-results-title")
         if not title_el:
             continue
+        title = collapse(title_el.get_text())
+        if len(title) < 4:
+            continue
 
-        title = title_el.get_text(strip=True)
-        date_str = date_el.get_text(strip=True) if date_el else ""
+        rd = card.select_one(".coveo-results-release-date")
+        lu = card.select_one(".coveo-results-last-update")
+        release = collapse(rd.get_text()).replace("Release Date:", "").strip() if rd else ""
+        updated = collapse(lu.get_text()).replace("Last Updated:", "").strip() if lu else ""
 
-        # Description: first 2 sentences from the section body
-        desc_parts = []
-        section = div.select_one("section.section, div.body")
-        if section:
-            for p in section.select("div.p, p"):
-                t = " ".join(p.get_text().split())  # collapse all whitespace
-                if t and len(t) > 20:
-                    desc_parts.append(t)
-                    break  # first meaningful paragraph only
+        # Category from the tag-group filter anchor (productSubCategoryTags=...%2F{slug}).
+        category = "General"
+        a = card.select_one(".coveo-results-tag-group a[href]")
+        if a and a.has_attr("href"):
+            m = re.search(r"productSubCategoryTags=[^&]*%2F([a-z0-9-]+)", a["href"], re.I)
+            if m:
+                category = prettify_category(unquote(m.group(1)))
+
+        # Description: first meaningful paragraph in the excerpts block.
+        summary = ""
+        exc = card.select_one(".coveo-results-content-excerpts")
+        if exc:
+            for p in exc.find_all("p"):
+                txt = collapse(p.get_text())
+                if len(txt) > 25:
+                    summary = txt
+                    break
 
         features.append({
-            "title": title,
-            "date": date_str,
-            "desc": desc_parts[0] if desc_parts else "",
-            "sort_key": parse_date_key(date_str),
+            "title": title, "category": category,
+            "release": release, "updated": updated, "summary": summary,
         })
-
-    # Sort newest first
-    features.sort(key=lambda f: f["sort_key"], reverse=True)
     return features
 
 
-def parse_date_key(date_str: str) -> tuple:
-    """Convert 'March 2026' → (2026, 3) for sorting."""
-    months = {
-        "january": 1, "february": 2, "march": 3, "april": 4,
-        "may": 5, "june": 6, "july": 7, "august": 8,
-        "september": 9, "october": 10, "november": 11, "december": 12,
-    }
-    parts = date_str.lower().split()
-    try:
-        month = months.get(parts[0], 0)
-        year = int(parts[1]) if len(parts) > 1 else 0
-        return (year, month)
-    except (IndexError, ValueError):
-        return (0, 0)
+def discover_latest():
+    """Follow the legacy redirect to the latest month; return (slug, url, features)."""
+    r = get(LEGACY_URL)
+    r.raise_for_status()
+    final = r.url.rstrip("/")
+    slug = final.split("/")[-1]
+    return slug, final, parse_month_features(BeautifulSoup(r.text, "html.parser"))
 
 
-def first_two_sentences(text: str) -> str:
-    """Return the first 2 complete sentences from a block of text."""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+def walk_back(latest_slug, max_months=EARLIER_MONTHS):
+    """Fetch up to max_months prior months for context."""
+    months = []
+    m = re.match(r"^([a-z]+)-(\d{4})$", latest_slug, re.I)
+    if not m:
+        return months
+    mi = MONTHS.index(m.group(1).lower())
+    yr = int(m.group(2))
+    misses = 0
+    while len(months) < max_months:
+        mi -= 1
+        if mi < 0:
+            mi = 11
+            yr -= 1
+        slug = "%s-%d" % (MONTHS[mi], yr)
+        url = "%s/%s" % (BYDATE_BASE, slug)
+        try:
+            rr = get(url)
+            feats = parse_month_features(BeautifulSoup(rr.text, "html.parser")) if rr.status_code == 200 else []
+        except Exception:
+            feats = []
+        if not feats:
+            misses += 1
+            if misses >= 2:
+                break
+            continue
+        misses = 0
+        months.append({"slug": slug, "label": label_from_slug(slug), "url": url, "features": feats})
+    return months
+
+
+def first_two_sentences(text):
+    sentences = re.split(r'(?<=[.!?])\s+', (text or "").strip())
     return " ".join(sentences[:2])
 
 
-def get_latest_date(features: list[dict]) -> str:
-    """Return the date of the most recent feature."""
-    return features[0]["date"] if features else "Unknown"
+def summarize(text, limit=280):
+    """First sentence(s), clipped — PA sometimes omits spaces between paragraphs."""
+    s = first_two_sentences(text)
+    if len(s) > limit:
+        s = s[:limit].rsplit(" ", 1)[0].rstrip(",.;:") + "…"
+    return s
 
 
-def get_recent_features(features: list[dict], max_count: int = 5) -> list[dict]:
-    """Return the top N most recent features across all release dates."""
-    return features[:max_count]
+# -- State / diffing -------------------------------------------------------------
+
+def compute_hash(data):
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
-# ── State / diffing ────────────────────────────────────────────────────────────
-
-def compute_hash(data: dict) -> str:
-    serialized = json.dumps(data, sort_keys=True)
-    return hashlib.sha256(serialized.encode()).hexdigest()
-
-
-def load_last_seen() -> dict:
+def load_last_seen():
     if STATE_FILE.exists():
         with open(STATE_FILE) as f:
             return json.load(f)
     return {}
 
 
-def save_last_seen(hash_val: str):
+def save_last_seen(hash_val):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(STATE_FILE, "w") as f:
-        json.dump({
-            "hash": hash_val,
-            "posted_at": datetime.now(timezone.utc).isoformat(),
-        }, f, indent=2)
+        json.dump({"hash": hash_val, "posted_at": datetime.now(timezone.utc).isoformat()}, f, indent=2)
 
 
-# ── Slack ──────────────────────────────────────────────────────────────────────
+# -- Slack -----------------------------------------------------------------------
 
-def build_slack_blocks(pillar_data: list[dict], scraped_at: str) -> list:
-    blocks = []
+def build_slack_blocks(month_label, month_url, features, earlier, scraped_at):
+    blocks = [
+        {"type": "header", "text": {"type": "plain_text", "text": "Prisma AIRS — What's New"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": (
+            "*%d new feature%s* introduced in *%s*.\n*Scraped:* %s"
+            % (len(features), "" if len(features) == 1 else "s", month_label, scraped_at)
+        )}},
+        {"type": "divider"},
+    ]
 
-    # Header
-    blocks.append({
-        "type": "header",
-        "text": {"type": "plain_text", "text": "Prisma AIRS — Latest Release Notes"}
-    })
+    # Feature bullets, chunked to stay under Slack's ~3000 char/section limit.
+    chunk = ""
+    for f in features:
+        cat = " `%s`" % f["category"] if f.get("category") and f["category"] != "General" else ""
+        line = "• *%s*%s\n" % (f["title"], cat)
+        summary = summarize(f["summary"])
+        if summary:
+            line += "%s\n" % summary
+        line += "\n"
+        if len(chunk) + len(line) > 2800:
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk.strip()}})
+            chunk = ""
+        chunk += line
+    if chunk.strip():
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk.strip()}})
 
-    blocks.append({
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": f"Review the Prisma AIRS release notes to learn about all the new features across 4 pillars.\n*Scraped:* {scraped_at}"
-        }
-    })
+    blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                   "text": "<%s|View all %s features →>" % (month_url, month_label)}})
+
+    if earlier:
+        ctx = " · ".join("<%s|%s (%d)>" % (m["url"], m["label"], len(m["features"])) for m in earlier)
+        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": "Earlier: " + ctx}]})
 
     blocks.append({"type": "divider"})
-
-    for pillar in pillar_data:
-        if not pillar["features"]:
-            continue
-
-        latest_date = get_latest_date(pillar["features"])
-        recent = get_recent_features(pillar["features"])
-
-        # Pillar header
-        bullets = ""
-        for f in recent:
-            summary = first_two_sentences(f["desc"]) if f["desc"] else ""
-            desc = f" — {summary}" if summary else ""
-            date_tag = f" `{f['date']}`" if f["date"] else ""
-            bullets += f"• *{f['title']}*{date_tag}{desc}\n"
-
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    f"{pillar['emoji']} *{pillar['name']}* — {latest_date}\n"
-                    f"<{pillar['url']}|View full release notes>\n\n"
-                    f"{bullets.strip()}"
-                )
-            }
-        })
-
-        blocks.append({"type": "divider"})
-
-    # Footer
-    blocks.append({
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f"📄 <{FEATURES_INDEX_URL}|View all Prisma AIRS Features Introduced>\n"
-                f"🐛 <https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/known-issues|Known Issues>\n"
-                f"✅ <https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/addressed-issues|Addressed Issues>"
-            )
-        }
-    })
-
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": (
+        "\U0001F4C4 <%s|All Prisma AIRS new features by date>\n"
+        "\U0001F41B <%s|Known Issues>\n"
+        "✅ <%s|Addressed Issues>" % (INDEX_URL, KNOWN_ISSUES_URL, ADDRESSED_ISSUES_URL)
+    )}})
     return blocks
 
 
-def post_to_slack(blocks: list):
+def post_to_slack(blocks):
     if not SLACK_WEBHOOK_URL:
         raise ValueError("SLACK_WEBHOOK_URL not set in .env")
     resp = requests.post(SLACK_WEBHOOK_URL, json={"blocks": blocks}, timeout=10)
     if resp.status_code != 200:
-        raise RuntimeError(f"Slack returned {resp.status_code}: {resp.text}")
+        raise RuntimeError("Slack returned %s: %s" % (resp.status_code, resp.text))
 
 
-# ── Preview ────────────────────────────────────────────────────────────────────
+# -- Preview ---------------------------------------------------------------------
 
-def print_preview(pillar_data: list[dict]):
+def print_preview(month_label, features, earlier):
     print("\n" + "=" * 65)
-    print("PREVIEW — What will be posted to Slack:")
+    print("PREVIEW — Slack post for %s:" % month_label)
     print("=" * 65)
-    for pillar in pillar_data:
-        if not pillar["features"]:
-            print(f"\n{pillar['emoji']} {pillar['name']}: (no features found)")
-            continue
-        latest_date = get_latest_date(pillar["features"])
-        recent = get_recent_features(pillar["features"])
-        print(f"\n{pillar['emoji']} {pillar['name']} — {latest_date}")
-        for f in recent:
-            summary = first_two_sentences(f["desc"]) if f["desc"] else ""
-            date_tag = f" [{f['date']}]" if f["date"] else ""
-            print(f"   • {f['title']}{date_tag}")
-            if summary:
-                print(f"     {summary}")
+    for f in features:
+        cat = " [%s]" % f["category"] if f.get("category") and f["category"] != "General" else ""
+        print("\n   • %s%s" % (f["title"], cat))
+        summary = summarize(f["summary"])
+        if summary:
+            print("     %s" % summary)
+    if earlier:
+        print("\n   Earlier months: " + ", ".join("%s (%d)" % (m["label"], len(m["features"])) for m in earlier))
     print("\n" + "=" * 65 + "\n")
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# -- Main ------------------------------------------------------------------------
 
 def main():
     force = "--force" in sys.argv
     yes = "--yes" in sys.argv
 
-    print("Fetching Prisma AIRS release notes from docs.paloaltonetworks.com...")
+    print("Fetching Prisma AIRS new features (by-date) from docs.paloaltonetworks.com...")
+    try:
+        latest_slug, latest_url, latest_features = discover_latest()
+    except Exception as e:
+        print("ERROR: could not fetch latest month: %s" % e)
+        sys.exit(1)
 
-    pillar_data = []
-    all_features_combined = {}
+    latest_label = label_from_slug(latest_slug)
+    print("  Latest month: %s — %d features" % (latest_label, len(latest_features)))
 
-    for pillar in PILLARS:
-        print(f"  {pillar['emoji']} {pillar['name']}...", end=" ", flush=True)
-        try:
-            soup = fetch_page(pillar["url"])
-            features = parse_features(soup)
-            print(f"{len(features)} features found, latest: {get_latest_date(features)}")
-            pillar_data.append({**pillar, "features": features})
-            all_features_combined[pillar["name"]] = [
-                {"title": f["title"], "date": f["date"]} for f in features[:10]
-            ]
-        except Exception as e:
-            print(f"ERROR: {e}")
-            pillar_data.append({**pillar, "features": []})
+    if not latest_features:
+        print("\nNo features parsed from the latest month page. The docs structure may have changed again.")
+        sys.exit(1)
 
-    # Diff check
-    current_hash = compute_hash(all_features_combined)
+    earlier = walk_back(latest_slug)
+    for mo in earlier:
+        print("  %s: %d features" % (mo["label"], len(mo["features"])))
+
+    # Diff over the latest month's feature signature (title + dates).
+    signature = {
+        "month": latest_label,
+        "features": [{"title": f["title"], "release": f["release"], "updated": f["updated"]} for f in latest_features],
+    }
+    current_hash = compute_hash(signature)
     last_seen = load_last_seen()
 
     if not force and last_seen.get("hash") == current_hash:
@@ -282,30 +291,27 @@ def main():
         print("Use --force to post anyway.")
         sys.exit(0)
 
-    if last_seen.get("hash"):
-        print("\nChanges detected since last post!")
-    else:
-        print("\nNo previous state — treating as new.")
+    print("\nChanges detected since last post!" if last_seen.get("hash") else "\nNo previous state — treating as new.")
 
-    # Preview
     scraped_at = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
-    print_preview(pillar_data)
+    print_preview(latest_label, latest_features, earlier)
 
-    # Confirm (skip if --yes or running non-interactively)
     if not yes:
-        answer = input("Post this to Slack? [y/N] ").strip().lower()
+        try:
+            answer = input("Post this to Slack? [y/N] ").strip().lower()
+        except EOFError:
+            answer = "n"
         if answer != "y":
             print("Aborted. Nothing was posted.")
             sys.exit(0)
 
-    # Post
     print("Posting to Slack...")
-    blocks = build_slack_blocks(pillar_data, scraped_at)
+    blocks = build_slack_blocks(latest_label, latest_url, latest_features, earlier, scraped_at)
     post_to_slack(blocks)
     print("Posted successfully!")
 
     save_last_seen(current_hash)
-    print(f"State saved to {STATE_FILE}")
+    print("State saved to %s" % STATE_FILE)
 
 
 if __name__ == "__main__":

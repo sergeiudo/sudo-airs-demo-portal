@@ -1,66 +1,69 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, RefreshCw, ExternalLink, Calendar, Clock, CheckCircle2, AlertCircle, Server, Cpu, HardDrive, Activity, ChevronDown, X } from 'lucide-react'
+import { ArrowLeft, RefreshCw, ExternalLink, Calendar, Clock, CheckCircle2, AlertCircle, Server, Cpu, HardDrive, Activity, ChevronDown, X, Filter } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import airsLogo from '../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
-const PILLAR_LINKS = {
-  'AI Runtime Firewall': 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-network-intercept',
-  'AI Runtime API':      'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-api-intercept',
-  'AI Model Security':   'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-model-security',
-  'AI Red Teaming':      'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-red-teaming',
+// PA now publishes a single by-date feed; each feature carries one or more tag groups.
+const MONTH_ACCENT = '#3b82f6'
+
+// Colour per product sub-category (shown as a badge in each card's top-right corner).
+const CATEGORY_COLORS = {
+  'AI Runtime Firewall': '#ef4444',
+  'AI Runtime API':      '#3b82f6',
+  'AI Model Security':   '#8b5cf6',
+  'AI Red Teaming':      '#f97316',
+  'Core':                '#0ea5e9',
+  'Prisma AIRS':         '#64748b',
+  'General':             '#64748b',
+}
+const catColor = (c) => CATEGORY_COLORS[c] || '#64748b'
+
+// Distinct product sub-categories for a feature (middle tag segment), e.g. ["Core","AI Red Teaming"].
+function featureCategories(f) {
+  const subs = [...new Set((f.tags || []).filter(g => g.length >= 3).map(g => g[1]))]
+  if (subs.length) return subs
+  const parent = (f.tags && f.tags[0] && f.tags[0][0]) || null
+  return parent ? [parent] : []
 }
 
-function groupByDate(features) {
-  const groups = {}
-  for (const f of features) {
-    const key = f.date || 'Undated'
-    if (!groups[key]) groups[key] = []
-    groups[key].push(f)
-  }
-  return Object.entries(groups)
-}
-
-function PillarSection({ pillar, index }) {
-  const [open, setOpen] = useState(false)
-  const groups = groupByDate(pillar.features)
+function MonthSection({ month, index, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const accent = MONTH_ACCENT
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ delay: index * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-2xl overflow-hidden"
-      style={{ border: `1px solid ${pillar.color}25`, background: '#ffffff', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}
+      style={{ border: `1px solid ${accent}25`, background: '#ffffff', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}
     >
-      {/* Pillar header */}
+      {/* Month header */}
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-slate-50"
-        style={{ borderBottom: open ? `1px solid ${pillar.color}15` : 'none' }}
+        style={{ borderBottom: open ? `1px solid ${accent}15` : 'none' }}
       >
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: `${pillar.color}12`, border: `1px solid ${pillar.color}30` }}>
-          {pillar.emoji}
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accent}12`, border: `1px solid ${accent}30` }}>
+          <Calendar size={16} style={{ color: accent }} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-black" style={{ color: pillar.color }}>{pillar.name}</div>
+          <div className="text-[15px] font-black" style={{ color: accent }}>{month.label}</div>
           <div className="text-[11px] text-slate-400 mt-0.5">
-            {pillar.error
-              ? `Failed to load: ${pillar.error}`
-              : `${pillar.features.length} feature${pillar.features.length !== 1 ? 's' : ''} · latest: ${pillar.features[0]?.date || '—'}`
-            }
+            {month.features.length} feature{month.features.length !== 1 ? 's' : ''}
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <a
-            href={PILLAR_LINKS[pillar.name]}
+            href={month.url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
-            style={{ color: pillar.color, background: `${pillar.color}10`, border: `1px solid ${pillar.color}25` }}
+            style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}25` }}
           >
-            Full docs <ExternalLink size={10} />
+            View month <ExternalLink size={10} />
           </a>
           <motion.div animate={{ rotate: open ? 0 : -90 }} transition={{ duration: 0.2 }}>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -80,70 +83,72 @@ function PillarSection({ pillar, index }) {
             transition={{ duration: 0.22 }}
             className="overflow-hidden"
           >
-            {pillar.error ? (
-              <div className="flex items-center gap-2 px-6 py-5 text-[13px] text-slate-400">
-                <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
-                Could not load release notes. Check server logs or try refreshing.
-              </div>
-            ) : pillar.features.length === 0 ? (
-              <div className="px-6 py-5 text-[13px] text-slate-400">No features parsed from this page.</div>
+            {month.features.length === 0 ? (
+              <div className="px-6 py-5 text-[13px] text-slate-400">No features parsed for this month.</div>
             ) : (
-              <div className="divide-y divide-slate-50">
-                {groups.map(([date, feats]) => (
-                  <div key={date} className="px-6 py-4">
-                    {/* Date group header */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <Calendar size={11} style={{ color: pillar.color }} />
-                      <span className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: pillar.color }}>
-                        {date}
-                      </span>
-                      <div className="flex-1 h-px" style={{ background: `${pillar.color}15` }} />
-                    </div>
-                    {/* Feature bubbles */}
-                    <div className="space-y-3">
-                      {feats.map((f, i) => (
-                        <div key={i} className="rounded-2xl p-4" style={{
-                          background: `${pillar.color}07`,
-                          border: `1px solid ${pillar.color}20`,
-                        }}>
-                          {/* Title */}
-                          <div className="flex items-start gap-2 mb-2">
-                            <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: pillar.color }} />
-                            <div className="text-[13px] font-bold text-slate-800 leading-snug">{f.title}</div>
-                          </div>
-
-                          {/* Supported for */}
-                          {f.supportedFor && (
-                            <div className="ml-4 mb-2 text-[11px] px-2 py-0.5 rounded-full w-fit" style={{ background: `${pillar.color}15`, color: pillar.color }}>
-                              {f.supportedFor}
-                            </div>
-                          )}
-
-                          {/* Paragraphs */}
-                          {f.paragraphs?.length > 0 && (
-                            <div className="ml-4 space-y-1.5">
-                              {f.paragraphs.map((p, pi) => (
-                                <p key={pi} className="text-[12px] text-slate-600 leading-relaxed">{p}</p>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Bullets */}
-                          {f.bullets?.length > 0 && (
-                            <ul className="ml-4 mt-2 space-y-1.5">
-                              {f.bullets.map((b, bi) => (
-                                <li key={bi} className="flex gap-2 text-[12px] text-slate-600 leading-relaxed">
-                                  <span className="flex-shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style={{ background: `${pillar.color}60` }} />
-                                  <span>{b}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+              <div className="px-6 py-4 space-y-3">
+                {month.features.map((f, i) => (
+                  <div key={i} className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                    {/* Title + product badge(s) top-right */}
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                      <div className="text-[15px] font-bold text-slate-800 leading-snug">{f.title}</div>
+                      {featureCategories(f).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 justify-end flex-shrink-0">
+                          {featureCategories(f).map(c => (
+                            <span key={c} className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: `${catColor(c)}15`, color: catColor(c), border: `1px solid ${catColor(c)}30` }}>
+                              {c}
+                            </span>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
+
+                    {/* Dates line (docs style) */}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mb-3">
+                      {f.releaseDate && <span>Release Date: <span className="text-slate-500 font-medium">{f.releaseDate}</span></span>}
+                      {f.releaseDate && f.lastUpdated && <span className="text-slate-300">|</span>}
+                      {f.lastUpdated && <span>Last Updated: <span className="text-slate-500 font-medium">{f.lastUpdated}</span></span>}
+                    </div>
+
+                    {/* Description */}
+                    {f.paragraphs?.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        {f.paragraphs.map((p, pi) => (
+                          <p key={pi} className="text-[12.5px] text-slate-600 leading-relaxed">{p}</p>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Tag groups (docs-style funnel pills) at the bottom */}
+                    {f.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {f.tags.map((group, gi) => (
+                          <div key={gi} className="inline-flex items-center rounded-md overflow-hidden" style={{ background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+                            <span className="flex items-center px-2 py-1" style={{ color: '#94a3b8' }}>
+                              <Filter size={11} />
+                            </span>
+                            {group.map((seg, si) => (
+                              <span key={si} className="px-2.5 py-1 text-[11px] text-slate-600 whitespace-nowrap" style={{ borderLeft: '1px solid #e2e8f0' }}>
+                                {seg}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
+
+                {/* View all on docs */}
+                <a
+                  href={month.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 mt-1 py-2 rounded-xl text-[12px] font-semibold transition-colors"
+                  style={{ color: accent, background: `${accent}08`, border: `1px dashed ${accent}30` }}
+                >
+                  View all {month.label} features on docs.paloaltonetworks.com <ExternalLink size={11} />
+                </a>
               </div>
             )}
           </motion.div>
@@ -198,7 +203,8 @@ export function ReleaseNotesView() {
       })()
     : null
 
-  const totalFeatures = data?.pillars?.reduce((s, p) => s + p.features.length, 0) ?? 0
+  const totalFeatures = data?.totalFeatures ?? 0
+  const indexUrl = data?.indexUrl || 'https://docs.paloaltonetworks.com/ai-runtime-security/new-features/by-date/prisma-airs'
 
   return (
     <div
@@ -225,8 +231,8 @@ export function ReleaseNotesView() {
           <div>
             <div className="text-[15px] font-black text-slate-800 leading-none">What's New in Prisma AIRS</div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              Features introduced · scraped weekly from{' '}
-              <a href="https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+              New features by date · scraped from{' '}
+              <a href={indexUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                 docs.paloaltonetworks.com
               </a>
             </div>
@@ -241,8 +247,8 @@ export function ReleaseNotesView() {
               <div className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">Features</div>
             </div>
             <div className="text-center">
-              <div className="text-[18px] font-black text-slate-800 leading-none">{data.pillars?.length ?? 0}</div>
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">Pillars</div>
+              <div className="text-[18px] font-black text-slate-800 leading-none">{data.months?.length ?? 0}</div>
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">Months</div>
             </div>
           </div>
         )}
@@ -300,8 +306,8 @@ export function ReleaseNotesView() {
             </div>
           )}
 
-          {!loading && data?.pillars?.map((pillar, i) => (
-            <PillarSection key={pillar.name} pillar={pillar} index={i} />
+          {!loading && data?.months?.map((month, i) => (
+            <MonthSection key={month.slug} month={month} index={i} defaultOpen={i === 0} />
           ))}
 
           {!loading && !error && data && (

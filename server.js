@@ -1221,12 +1221,14 @@ app.delete('/api/traces/:id', (req, res) => {
 })
 
 // ─── Release Notes scraper (weekly cache) ─────────────────────────────────────
-const RN_PILLARS = [
-  { name: 'AI Runtime Firewall',  emoji: '🔥', color: '#ef4444', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-network-intercept' },
-  { name: 'AI Runtime API',       emoji: '🔌', color: '#3b82f6', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-runtime-security-api-intercept' },
-  { name: 'AI Model Security',    emoji: '🛡️',  color: '#8b5cf6', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-model-security' },
-  { name: 'AI Red Teaming',       emoji: '🎯', color: '#f97316', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced/ai-red-teaming' },
-]
+// PA retired the per-pillar "features-introduced" pages (mid-2026). They now publish a
+// single by-date feed at /new-features/by-date/prisma-airs/{month-year}. The legacy URL
+// 301-redirects to the latest month, which we use to discover "latest" reliably.
+const RN_LEGACY_URL  = 'https://docs.paloaltonetworks.com/ai-runtime-security/release-notes/features-introduced'
+const RN_BYDATE_BASE = 'https://docs.paloaltonetworks.com/ai-runtime-security/new-features/by-date/prisma-airs'
+const RN_INDEX_URL   = RN_BYDATE_BASE
+const RN_MAX_MONTHS  = 6 // how many months of history to surface in the feed
+const RN_MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december']
 const RN_CACHE = { data: null, fetchedAt: 0 }
 const RN_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
@@ -1239,104 +1241,133 @@ function stripTags(html) {
     .replace(/\s+/g, ' ').trim()
 }
 
-function parseReleaseNotes(html) {
-  const features = []
-  // Top-level concept divs only (id="concept-XXX" but not deeper nested ones)
-  const sectionRe = /<div[^>]+class="[^"]*topic[^"]*concept[^"]*"[^>]+id="(concept-[^"]*)"[^>]*>([\s\S]*?)(?=<div[^>]+class="[^"]*topic[^"]*concept[^"]*"|$)/gi
-  let m
-  while ((m = sectionRe.exec(html)) !== null) {
-    const block = m[2]
+// "april-2026" → "April 2026"
+function rnLabelFromSlug(slug) {
+  const m = (slug || '').match(/^([a-z]+)-(\d{4})$/i)
+  if (!m) return slug
+  return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() + ' ' + m[2]
+}
 
-    // Title: first h2
-    const titleM = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i)
+// "ai-red-teaming" → "AI Red Teaming"; "prisma-airs" → "Prisma AIRS"; null → "General"
+function rnPrettifyCategory(slug) {
+  if (!slug) return 'General'
+  const ACR = { ai: 'AI', api: 'API', ml: 'ML', llm: 'LLM', mcp: 'MCP', rag: 'RAG', airs: 'AIRS', soc: 'SOC' }
+  return slug.split('-').map(w => ACR[w.toLowerCase()] || (w.charAt(0).toUpperCase() + w.slice(1))).join(' ')
+}
+
+// Parse all <div class="coveo-results-card"> feature blocks from a by-date month page.
+function parseMonthFeatures(html) {
+  const features = []
+  const cardRe = /<div[^>]*class="[^"]*\bcoveo-results-card\b[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*\bcoveo-results-card\b[^"]*"|$)/gi
+  let m
+  while ((m = cardRe.exec(html)) !== null) {
+    const block = m[1]
+
+    const titleM = block.match(/class="[^"]*\bcoveo-results-title\b[^"]*"[^>]*>([\s\S]*?)<\/[a-z0-9]+>/i)
     if (!titleM) continue
     const title = stripTags(titleM[1])
     if (!title || title.length < 4) continue
 
-    // Date: inside <tt> tag or bare month year text
-    const dateM = block.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b/)
-    const date = dateM ? dateM[0] : ''
+    const relM = block.match(/class="[^"]*\bcoveo-results-release-date\b[^"]*"[^>]*>([\s\S]*?)<\//i)
+    const releaseDate = relM ? stripTags(relM[1]).replace(/^Release Date:\s*/i, '') : ''
+    const updM = block.match(/class="[^"]*\bcoveo-results-last-update\b[^"]*"[^>]*>([\s\S]*?)<\//i)
+    const lastUpdated = updM ? stripTags(updM[1]).replace(/^Last Updated:\s*/i, '') : ''
 
-    // "Supported for:" — grab li items after it
-    let supportedFor = ''
-    const supportedM = block.match(/Supported\s+for[^<]*<\/b[^>]*>([\s\S]*?)(?=<\/div>|<section)/i)
-    if (supportedM) {
-      const liM = supportedM[1].match(/<li[^>]*>([\s\S]*?)<\/li>/i)
-      if (liM) supportedFor = stripTags(liM[1])
+    // Tags: PA renders one or more filter "tag groups" per card. Each group's anchor
+    // href encodes the segments (productCategoryTags | productSubCategoryTags | releaseDateTags),
+    // which is far more reliable than the visible markup (it carries hidden "Clear" buttons).
+    const tags = []
+    const seenTags = new Set()
+    const tagARe = /<a[^>]+href="([^"]*platform-explorer[^"]*)"/gi
+    let ta
+    while ((ta = tagARe.exec(block)) !== null) {
+      const href = ta[1]
+      const seg = []
+      const mp = href.match(/productCategoryTags=[^&]*%2F([a-z0-9-]+)/i)
+      const ms = href.match(/productSubCategoryTags=[^&]*%2F([a-z0-9-]+)/i)
+      const md = href.match(/releaseDateTags=[^&]*%2F([a-z0-9-]+)/i)
+      if (mp) seg.push(rnPrettifyCategory(mp[1]))
+      if (ms) seg.push(rnPrettifyCategory(ms[1]))
+      if (md) seg.push(rnLabelFromSlug(md[1]))
+      if (!seg.length) continue
+      const key = seg.join('|')
+      if (seenTags.has(key)) continue // dedupe PA's occasional duplicate groups
+      seenTags.add(key)
+      tags.push(seg)
     }
+    // Category (first group's sub-tag) — kept for accent/colour lookups.
+    const withSub = tags.find(g => g.length >= 3)
+    const category = withSub ? withSub[1] : 'General'
 
-    // Extract the main content section (after the table with date/supported-for)
-    const sectionM = block.match(/<section[^>]*class="[^"]*section[^"]*"[^>]*>([\s\S]*?)<\/section>/i)
-    const contentBlock = sectionM ? sectionM[1] : block
-
-    // Paragraphs: <div class="p"> is how PA docs renders paragraphs
+    // Description: paragraphs inside the excerpts block (PA nests <p> inside <p>).
+    const excM = block.match(/class="[^"]*\bcoveo-results-content-excerpts\b[^"]*"[^>]*>([\s\S]*)$/i)
+    const exc = excM ? excM[1] : block
     const paragraphs = []
-    const divParaRe = /<div[^>]+class="[^"]*\bp\b[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
-    let dp
-    while ((dp = divParaRe.exec(contentBlock)) !== null) {
-      const txt = stripTags(dp[1]).trim()
-      if (txt.length > 25 && !txt.match(/^Supported\s+for/i)) paragraphs.push(txt)
+    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
+    let pm
+    while ((pm = pRe.exec(exc)) !== null) {
+      const txt = stripTags(pm[1]).trim()
+      if (txt.length > 25) paragraphs.push(txt)
+      if (paragraphs.length >= 8) break
     }
-    // Fallback: real <p> tags
-    if (!paragraphs.length) {
-      const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
-      let pm
-      while ((pm = pRe.exec(contentBlock)) !== null) {
-        const txt = stripTags(pm[1]).trim()
-        if (txt.length > 25 && !txt.match(/^Supported\s+for/i)) paragraphs.push(txt)
-      }
-    }
+    const summary = paragraphs[0] || ''
 
-    // Bullets: <li class="li"> inside the section
-    const bullets = []
-    const liRe = /<li[^>]*>([\s\S]*?)<\/li>/gi
-    let lm
-    while ((lm = liRe.exec(contentBlock)) !== null) {
-      const txt = stripTags(lm[1]).trim()
-      if (txt.length > 10) bullets.push(txt)
-    }
-
-    features.push({ title, date, supportedFor, paragraphs, bullets })
+    features.push({ title, category, tags, releaseDate, lastUpdated, summary, paragraphs })
   }
   return features
 }
 
-function parseDateKey(dateStr) {
-  const months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 }
-  const parts = (dateStr || '').toLowerCase().split(' ')
-  return (parseInt(parts[1]) || 0) * 100 + (months[parts[0]] || 0)
+function rnFetch(url) {
+  return fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
 }
 
 async function fetchReleaseNotes() {
-  const results = []
-  for (const pillar of RN_PILLARS) {
+  // 1) Discover the latest month by following the legacy redirect to its final URL.
+  const first = await rnFetch(RN_LEGACY_URL)
+  if (!first.ok) throw new Error(`HTTP ${first.status} resolving latest month`)
+  const latestUrl = first.url.replace(/\/+$/, '')
+  const latestSlug = latestUrl.split('/').pop()
+  const months = [{
+    label: rnLabelFromSlug(latestSlug), slug: latestSlug, url: latestUrl,
+    features: parseMonthFeatures(await first.text()),
+  }]
+
+  // 2) Walk backwards month-by-month from the latest slug to build a short history.
+  const parts = latestSlug.match(/^([a-z]+)-(\d{4})$/i)
+  let mi = parts ? RN_MONTHS.indexOf(parts[1].toLowerCase()) : -1
+  let yr = parts ? parseInt(parts[2]) : 0
+  let misses = 0
+  while (months.length < RN_MAX_MONTHS && mi >= 0) {
+    mi -= 1
+    if (mi < 0) { mi = 11; yr -= 1 }
+    const slug = `${RN_MONTHS[mi]}-${yr}`
+    const url = `${RN_BYDATE_BASE}/${slug}`
     try {
-      const res = await fetch(pillar.url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const html = await res.text()
-      const features = parseReleaseNotes(html)
-      features.sort((a, b) => parseDateKey(b.date) - parseDateKey(a.date))
-      results.push({ ...pillar, features, error: null })
-    } catch (err) {
-      results.push({ ...pillar, features: [], error: err.message })
-    }
+      const r = await rnFetch(url)
+      const feats = r.ok ? parseMonthFeatures(await r.text()) : []
+      if (feats.length === 0) { if (++misses >= 2) break; continue }
+      misses = 0
+      months.push({ label: rnLabelFromSlug(slug), slug, url, features: feats })
+    } catch { if (++misses >= 2) break }
   }
-  return results
+  return months
 }
 
 app.get('/api/release-notes', async (req, res) => {
   const force = req.query.force === '1'
   const now = Date.now()
   if (!force && RN_CACHE.data && (now - RN_CACHE.fetchedAt) < RN_TTL_MS) {
-    return res.json({ pillars: RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true })
+    return res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true })
   }
   try {
-    console.log('[release-notes] Scraping Palo Alto docs...')
-    const pillars = await fetchReleaseNotes()
-    RN_CACHE.data = pillars
+    console.log('[release-notes] Scraping Palo Alto by-date feed...')
+    const months = await fetchReleaseNotes()
+    const totalFeatures = months.reduce((s, m) => s + m.features.length, 0)
+    const payload = { months, indexUrl: RN_INDEX_URL, totalFeatures }
+    RN_CACHE.data = payload
     RN_CACHE.fetchedAt = now
-    console.log(`[release-notes] Done. Features: ${pillars.map(p => p.features.length).join(', ')}`)
-    res.json({ pillars, fetchedAt: new Date(now).toISOString(), cached: false })
+    console.log(`[release-notes] Done. Months: ${months.length}, features: ${months.map(m => m.features.length).join(',')}`)
+    res.json({ ...payload, fetchedAt: new Date(now).toISOString(), cached: false })
   } catch (err) {
     console.error('[release-notes]', err)
     res.status(500).json({ error: err.message })

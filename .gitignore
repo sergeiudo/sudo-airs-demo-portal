@@ -19,6 +19,10 @@ aws-chatbot-target/
 # MCP server venv
 mcp-server/.venv/
 
+# Slack release-notes notifier venv + log
+.venv-slack-notify/
+airs-slack-notify.log
+
 # Superpowers brainstorming sessions
 .superpowers/
 docs/superpowers/*
