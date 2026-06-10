@@ -13,7 +13,7 @@ export function usePortkeyChat() {
     const asstMsg = {
       id: asstId, role: 'assistant', content: '',
       status: 'streaming',
-      metadata: { model, configId, cache: cacheEnabled ? 'MISS' : 'disabled', latencyMs: null, tokens: 0, fallbackUsed: false, hookResults: null, traceId: null },
+      metadata: { model, configId, cache: cacheEnabled ? 'MISS' : 'disabled', latencyMs: null, tokens: 0, tokensIn: null, fallbackUsed: false, hookResults: null, traceId: null, portkeyTraceId: null, bypass: null, inputScanDone: false, outputScanDone: false },
     }
     setMessages(prev => [...prev, userMsg, asstMsg])
     setStreaming(true)
@@ -67,8 +67,30 @@ export function usePortkeyChat() {
               const { hook_results, tokensOut, ...rest } = parsed
               patchAsst({ status: 'done', metadata: { ...rest, hookResults: hook_results || null, tokens: tokensOut ?? rest.tokens ?? 0 } })
               currentEvent = null
+            } else if (currentEvent === 'hooks') {
+              // Live per-phase guardrail results: input scan arrives before the
+              // first token, output scan after the last. Merge as they land so
+              // the pipeline panel lights up stage by stage.
+              setMessages(prev => prev.map(m => {
+                if (m.id !== asstId) return m
+                const hr = m.metadata.hookResults || { before_request_hooks: [], after_request_hooks: [] }
+                const merged = {
+                  before_request_hooks: [...(hr.before_request_hooks || []), ...(parsed.hook_results?.before_request_hooks || [])],
+                  after_request_hooks:  [...(hr.after_request_hooks  || []), ...(parsed.hook_results?.after_request_hooks  || [])],
+                }
+                return { ...m, metadata: { ...m.metadata, hookResults: merged, [parsed.phase === 'input' ? 'inputScanDone' : 'outputScanDone']: true } }
+              }))
+              currentEvent = null
             } else if (currentEvent === 'blocked') {
-              patchAsst({ status: 'blocked', content: 'Blocked by guardrail', metadata: { hookResults: parsed.hook_results, blockReason: parsed.reason } })
+              patchAsst({
+                status: 'blocked', content: 'Blocked by guardrail',
+                metadata: {
+                  hookResults: parsed.hook_results, blockReason: parsed.reason,
+                  latencyMs: parsed.latencyMs ?? null, traceId: parsed.traceId ?? null,
+                  portkeyTraceId: parsed.portkeyTraceId ?? null, cache: parsed.cache ?? 'disabled',
+                  inputScanDone: true,
+                },
+              })
               currentEvent = null
             } else if (currentEvent === 'error') {
               patchAsst({ status: 'error', content: parsed.message || 'Stream error' })

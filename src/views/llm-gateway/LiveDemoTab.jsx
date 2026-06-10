@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Send, ShieldCheck, ShieldOff, Shield } from 'lucide-react'
+import { Send, ShieldCheck, ShieldOff, Shield, Columns3, Loader2 } from 'lucide-react'
 import { ModelPicker } from './components/ModelPicker'
-import { HookResultsViewer } from './components/HookResultsViewer'
+import { GuardrailVerdictCard, parseHookResults } from './components/GuardrailVerdictCard'
+import { LaneCard } from './components/LaneCard'
 import { usePortkeyChat } from '../../hooks/usePortkeyChat'
 import { useAppContext } from '../../context/AppContext'
 import { LLM_GATEWAY_ATTACKS, LLM_GATEWAY_ATTACK_CATEGORIES } from '../../data/llmGatewayAttacks'
@@ -9,10 +10,28 @@ import { LLM_GATEWAY_ATTACKS, LLM_GATEWAY_ATTACK_CATEGORIES } from '../../data/l
 const ACCENT = '#ec4899'
 
 const GUARDRAIL_CHOICES = [
-  { id: 'no-guardrail', label: 'None',           icon: ShieldOff,  desc: 'Raw Vertex via Portkey' },
+  { id: 'no-guardrail', label: 'None',           icon: ShieldOff,  desc: 'Direct Vertex — bypasses the gateway' },
   { id: 'defaults',     label: 'Portkey default',icon: Shield,     desc: 'Regex/PII checks' },
   { id: 'airs',         label: 'AIRS',           icon: ShieldCheck,desc: 'Prisma AIRS guardrail' },
 ]
+
+const CONFIG_LABELS = {
+  'airs': 'AIRS guardrail',
+  'defaults': 'Portkey defaults',
+  'no-guardrail': 'no guardrail',
+  'fallback': 'Vertex → Bedrock fallback',
+}
+
+function providerLabel(modelId) {
+  const slug = String(modelId || '').split('/')[0]
+  if (slug.includes('vertex')) return 'Vertex AI'
+  if (slug.includes('bedrock')) return 'AWS Bedrock'
+  return slug.replace('@', '') || 'provider'
+}
+
+function bareModel(modelId) {
+  return String(modelId || '').split('/').slice(-1)[0] || '—'
+}
 
 const SAMPLE_PROMPTS = [
   { label: 'Benign',           text: 'Explain the OAuth2 client credentials flow in three sentences.' },
@@ -22,7 +41,7 @@ const SAMPLE_PROMPTS = [
 ]
 
 export function LiveDemoTab() {
-  const { state } = useAppContext()
+  const { state, dispatch } = useAppContext()
   const isLight = !state.isDark
   const [model, setModel] = useState('')
   const [guardrail, setGuardrail] = useState('airs')
@@ -31,6 +50,46 @@ export function LiveDemoTab() {
   const [input, setInput] = useState('')
   const [configsReady, setConfigsReady] = useState({})
   const { messages, send, streaming, clear } = usePortkeyChat()
+
+  // 3-lane comparison (same prompt through no-guardrail / defaults / AIRS)
+  const [lanes, setLanes] = useState(null)
+  const [lanePrompt, setLanePrompt] = useState('')
+  const [comparing, setComparing] = useState(false)
+  const [compareError, setCompareError] = useState(null)
+
+  async function runCompare() {
+    if (comparing || !input.trim() || !model) return
+    setComparing(true)
+    setCompareError(null)
+    setLanes(null)
+    setLanePrompt(input)
+    try {
+      const r = await fetch('/api/gateway/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: input, model }),
+      })
+      const data = await r.json()
+      if (!r.ok) setCompareError(data?.message || JSON.stringify(data))
+      else setLanes(data.lanes || [])
+    } catch (e) {
+      setCompareError(String(e?.message || e))
+    } finally {
+      setComparing(false)
+    }
+  }
+
+  const goToTrace = (traceId) => {
+    dispatch({ type: 'SET_SELECTED_TRACE', payload: traceId })
+    dispatch({ type: 'SET_VIEW', payload: 'observability' })
+  }
+
+  // Keep the latest message / lane results in view as they stream in
+  const bottomRef = useRef(null)
+  const lastContentLen = messages.length ? messages[messages.length - 1].content?.length : 0
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages.length, lastContentLen, lanes, comparing])
 
   // Resizable side panels (mirrors the other pillars)
   const [leftWidth, setLeftWidth] = useState(300)
@@ -118,7 +177,8 @@ export function LiveDemoTab() {
                    disabled={!configsReady.fallback} disabledTitle="PORTKEY_CONFIG_FALLBACK not set" />
         <ToggleRow label="Semantic cache" checked={cacheEnabled} onChange={setCacheEnabled} />
 
-        <button onClick={clear} className="px-3 py-2 rounded-lg text-[11px] font-semibold"
+        <button onClick={() => { clear(); setLanes(null); setCompareError(null) }}
+                className="px-3 py-2 rounded-lg text-[11px] font-semibold"
                 style={{ background: isLight ? '#f1f5f9' : 'rgba(255,255,255,0.05)', color: textSecondary }}>
           Clear chat
         </button>
@@ -169,7 +229,16 @@ export function LiveDemoTab() {
               </div>
             </div>
           )}
-          {messages.map(m => <ChatBubble key={m.id} msg={m} isLight={isLight} />)}
+          {messages.map((m, i) => (
+            <ChatBubble key={m.id} msg={m} isLight={isLight} onOpenTrace={goToTrace}
+                        wasMs={cacheHitDelta(messages, i)} />
+          ))}
+
+          {(comparing || lanes || compareError) && (
+            <CompareBlock lanes={lanes} prompt={lanePrompt} comparing={comparing}
+                          error={compareError} isLight={isLight} />
+          )}
+          <div ref={bottomRef} />
         </div>
 
         <form onSubmit={onSubmit} className="flex-shrink-0 flex gap-2 p-4 border-t" style={{ borderColor: surfaceBorder }}>
@@ -178,6 +247,13 @@ export function LiveDemoTab() {
                  disabled={streaming || !model}
                  className="flex-1 px-4 py-2.5 rounded-lg text-[13px]"
                  style={{ background: isLight ? '#ffffff' : 'rgba(15,20,35,0.6)', border: `1px solid ${surfaceBorder}`, color: textPrimary }} />
+          <button type="button" onClick={runCompare}
+                  disabled={comparing || streaming || !input.trim() || !model}
+                  title="Run this prompt through all 3 lanes in parallel — no guardrail vs Portkey defaults vs AIRS"
+                  className="px-4 py-2.5 rounded-lg text-[13px] font-bold flex items-center gap-2"
+                  style={{ background: 'transparent', border: `1px solid ${ACCENT}88`, color: ACCENT, opacity: (comparing || streaming) ? 0.5 : 1 }}>
+            {comparing ? <Loader2 size={13} className="animate-spin" /> : <Columns3 size={13} />} 3 lanes
+          </button>
           <button type="submit" disabled={streaming || !input.trim() || !model}
                   className="px-4 py-2.5 rounded-lg text-[13px] font-bold flex items-center gap-2"
                   style={{ background: ACCENT, color: '#fff', opacity: streaming ? 0.5 : 1 }}>
@@ -229,10 +305,28 @@ function ToggleRow({ label, checked, onChange, disabled, disabledTitle }) {
   )
 }
 
-function ChatBubble({ msg, isLight }) {
+// For a cache-HIT assistant message, find what the same prompt cost on its
+// last un-cached run so the chip can show the latency win.
+function cacheHitDelta(messages, idx) {
+  const m = messages[idx]
+  if (m?.role !== 'assistant' || m?.metadata?.cache !== 'HIT') return null
+  const promptOf = (i) => messages[i - 1]?.role === 'user' ? messages[i - 1].content : null
+  const prompt = promptOf(idx)
+  if (!prompt) return null
+  for (let i = idx - 1; i > 0; i--) {
+    const c = messages[i]
+    if (c.role === 'assistant' && c.metadata?.cache !== 'HIT' && c.metadata?.latencyMs != null && promptOf(i) === prompt) {
+      return c.metadata.latencyMs
+    }
+  }
+  return null
+}
+
+function ChatBubble({ msg, isLight, onOpenTrace, wasMs }) {
   const isUser = msg.role === 'user'
   const blocked = msg.status === 'blocked'
   const error = msg.status === 'error'
+  const md = msg.metadata
   const bg = isUser ? '#0ea5e9' : blocked ? '#7f1d1d' : error ? '#7c2d12' : (isLight ? '#f1f5f9' : 'rgba(255,255,255,0.05)')
   const fg = isUser || blocked || error ? '#ffffff' : (isLight ? '#0f172a' : '#e2e8f0')
   return (
@@ -240,21 +334,37 @@ function ChatBubble({ msg, isLight }) {
       <div className="max-w-[80%] flex flex-col gap-2">
         <div className="px-4 py-3 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap"
              style={{ background: bg, color: fg, border: blocked || error ? '1px solid rgba(239,68,68,0.5)' : 'none' }}>
-          {msg.content || (msg.status === 'streaming' ? '…' : '')}
+          {blocked ? 'Blocked — the request never reached the model.' : (msg.content || (msg.status === 'streaming' ? '…' : ''))}
         </div>
-        {!isUser && msg.metadata && (
+
+        {!isUser && md?.hookResults && (
+          <GuardrailVerdictCard hookResults={md.hookResults} isLight={isLight} />
+        )}
+
+        {!isUser && md && (
           <div className="flex flex-wrap items-center gap-2 text-[10px]" style={{ color: isLight ? '#475569' : '#94a3b8' }}>
-            {msg.metadata.model && <span className="font-mono">{msg.metadata.model.split('/').slice(-1)[0]}</span>}
-            {msg.metadata.latencyMs != null && <span>· {msg.metadata.latencyMs}ms</span>}
-            {msg.metadata.tokens > 0 && <span>· {msg.metadata.tokens} tok</span>}
-            {msg.metadata.cache && msg.metadata.cache !== 'disabled' && (
-              <span className="px-1.5 rounded-full" style={{ background: msg.metadata.cache === 'HIT' ? '#15803d' : '#475569', color: '#fff' }}>
-                cache: {msg.metadata.cache}
+            {md.model && <span className="font-mono">{bareModel(md.model)}</span>}
+            {md.latencyMs != null && <span>· {md.latencyMs}ms</span>}
+            {md.tokens > 0 && <span>· {md.tokensIn != null ? `${md.tokensIn}→${md.tokens}` : md.tokens} tok</span>}
+            {md.bypass && <span className="px-1.5 rounded-full" style={{ background: '#b45309', color: '#fff' }}>gateway bypassed</span>}
+            {md.cache && md.cache !== 'disabled' && md.cache !== 'DISABLED' && (
+              <span className="px-1.5 rounded-full" style={{ background: md.cache === 'HIT' ? '#15803d' : '#475569', color: '#fff' }}>
+                cache: {md.cache}{md.cache === 'HIT' && wasMs != null ? ` — ${md.latencyMs}ms, was ${wasMs}ms` : ''}
               </span>
             )}
-            {msg.metadata.fallbackUsed && <span className="px-1.5 rounded-full" style={{ background: '#0891b2', color: '#fff' }}>↪ fallback</span>}
-            {msg.metadata.traceId && (
-              <span className="font-mono opacity-75">· trace {String(msg.metadata.traceId).slice(0, 8)}</span>
+            {md.fallbackUsed && <span className="px-1.5 rounded-full" style={{ background: '#0891b2', color: '#fff' }}>↪ fallback</span>}
+            {md.traceId && (
+              <button onClick={() => onOpenTrace?.(md.traceId)}
+                      title="Open this trace in LLM Telemetry"
+                      className="font-mono px-1.5 rounded-full hover:opacity-80"
+                      style={{ background: `${ACCENT}1f`, border: `1px solid ${ACCENT}55`, color: ACCENT }}>
+                trace {String(md.traceId).slice(-6)} ↗
+              </button>
+            )}
+            {md.portkeyTraceId && (
+              <span className="font-mono opacity-75" title={`Portkey gateway trace — find it in the Portkey console logs: ${md.portkeyTraceId}`}>
+                · pk:{String(md.portkeyTraceId).slice(0, 8)}
+              </span>
             )}
           </div>
         )}
@@ -263,24 +373,116 @@ function ChatBubble({ msg, isLight }) {
   )
 }
 
+// 3-lane comparison rendered inline in the chat column.
+function CompareBlock({ lanes, prompt, comparing, error, isLight }) {
+  const attack = LLM_GATEWAY_ATTACKS.find(a => a.prompt === prompt)
+  const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
+  const textSecondary = isLight ? '#475569' : '#94a3b8'
+  return (
+    <div className="flex flex-col gap-3 pt-2">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: ACCENT }}>
+        <Columns3 size={12} /> 3-lane comparison
+        {comparing && <Loader2 size={12} className="animate-spin" />}
+      </div>
+      <div className="text-[12px] italic" style={{ color: textSecondary }}>"{prompt}"</div>
+
+      {error && (
+        <div className="px-4 py-3 rounded-lg text-[12px]"
+             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.5)', color: isLight ? '#b91c1c' : '#fca5a5' }}>
+          {error}
+        </div>
+      )}
+
+      {lanes && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+          {lanes.map(l => <LaneCard key={l.id} lane={l} isLight={isLight} />)}
+        </div>
+      )}
+
+      {lanes && attack?.explainPerLane && (
+        <div className="rounded-xl p-4 flex flex-col gap-2" style={{ background: `${ACCENT}10`, border: `1px solid ${ACCENT}33` }}>
+          <div className="text-[10px] uppercase tracking-wider font-bold" style={{ color: ACCENT }}>Why each lane behaved this way</div>
+          <div className="grid gap-2 text-[12px]" style={{ color: textPrimary, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+            <div><span className="font-semibold">No guardrail:</span> {attack.explainPerLane['no-guardrail']}</div>
+            <div><span className="font-semibold">Portkey defaults:</span> {attack.explainPerLane['defaults']}</div>
+            <div><span className="font-semibold">AIRS:</span> {attack.explainPerLane['airs']}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Data-driven pipeline trace: stages, providers, scan timings and verdicts all
+// derive from the last assistant message — including live stage lighting while
+// the stream is in flight (input scan lands before the first token).
 function PipelineTrace({ messages, isLight }) {
   const lastAsst = [...messages].reverse().find(m => m.role === 'assistant')
+  const md = lastAsst?.metadata
+  const parsed = parseHookResults(md?.hookResults)
+  const textSecondary = isLight ? '#475569' : '#94a3b8'
+
+  const OK = '#10b981', FAIL = '#ef4444', WARN = '#f59e0b'
+  const streamingNow = lastAsst?.status === 'streaming'
+  const blocked = lastAsst?.status === 'blocked'
+  const bypass = !!md?.bypass || md?.configId === 'no-guardrail'
+  const provider = providerLabel(md?.model)
+  const hasGuardrail = md?.configId === 'airs' || md?.configId === 'defaults' || md?.configId === 'fallback'
+
+  const rows = []
+  const add = (indent, text, detail, color) => rows.push({ indent, text, detail, color })
+
+  add(0, 'Client', lastAsst ? null : 'waiting for first request…', lastAsst ? null : textSecondary)
+  if (lastAsst) {
+    if (bypass) {
+      add(1, `→ ${provider} (${bareModel(md?.model)})`, 'gateway BYPASSED — no guardrails in path', WARN)
+    } else {
+      add(1, '→ Portkey Gateway', `config: ${CONFIG_LABELS[md?.configId] || md?.configId}${md?.portkeyTraceId ? ` · trace ${String(md.portkeyTraceId).slice(0, 8)}` : ''}`)
+      if (hasGuardrail) {
+        const inp = parsed?.input
+        if (inp) add(2, inp.anyFail ? '✕ Input guardrail' : '✓ Input guardrail',
+                     `${inp.anyFail ? 'BLOCKED' : 'passed'}${inp.execMs != null ? ` · ${inp.execMs}ms` : ''}${inp.airs ? ' · Prisma AIRS' : ''}`,
+                     inp.anyFail ? FAIL : OK)
+        else add(2, streamingNow ? '◌ Input guardrail' : '— Input guardrail', streamingNow ? 'scanning…' : 'no results returned', textSecondary)
+      }
+      if (blocked) {
+        add(2, `— ${provider} (${bareModel(md?.model)})`, 'skipped — request blocked before the model', textSecondary)
+      } else {
+        add(2, `→ ${provider} (${bareModel(md?.model)})`,
+            streamingNow ? 'streaming…' : `${md?.tokens ?? 0} tokens${md?.cache === 'HIT' ? ' · served from cache' : ''}`,
+            streamingNow ? textSecondary : OK)
+        if (hasGuardrail) {
+          const out = parsed?.output
+          if (out) add(2, out.anyFail ? '✕ Output guardrail' : '✓ Output guardrail',
+                       `${out.anyFail ? 'BLOCKED' : 'passed'}${out.execMs != null ? ` · ${out.execMs}ms` : ''}${out.airs ? ' · Prisma AIRS' : ''}`,
+                       out.anyFail ? FAIL : OK)
+          else add(2, streamingNow ? '◌ Output guardrail' : '— Output guardrail',
+                   streamingNow ? 'pending…' : (md?.cache === 'HIT' ? 'skipped — cached response already scanned' : 'no results returned'),
+                   textSecondary)
+        }
+      }
+    }
+    add(0, blocked ? '✕ Response' : '← Response',
+        blocked ? `BLOCKED${md?.latencyMs != null ? ` · ${md.latencyMs}ms total` : ''}`
+                : streamingNow ? 'streaming…' : `delivered${md?.latencyMs != null ? ` · ${md.latencyMs}ms total` : ''}`,
+        blocked ? FAIL : streamingNow ? textSecondary : OK)
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: isLight ? '#475569' : '#94a3b8' }}>Pipeline Trace</div>
-      <div className="rounded-lg p-3 text-[11px] font-mono space-y-1"
+      <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: textSecondary }}>Pipeline Trace</div>
+      <div className="rounded-lg p-3 text-[11px] font-mono space-y-1.5"
            style={{ background: isLight ? '#f1f5f9' : '#0d1117', color: isLight ? '#0f172a' : '#c9d1d9',
                     border: `1px solid ${isLight ? 'rgba(0,48,135,0.12)' : 'rgba(255,255,255,0.08)'}` }}>
-        <div>Client</div>
-        <div className="pl-3">→ Portkey Gateway ({lastAsst?.metadata?.configId || 'airs'})</div>
-        <div className="pl-6">→ Guardrail check (before_request_hooks)</div>
-        <div className="pl-9">→ Vertex AI ({lastAsst?.metadata?.model?.split('/').slice(-1)[0] || '—'})</div>
-        <div className="pl-6">→ Guardrail check (after_request_hooks)</div>
-        <div className="pl-3">→ Portkey response</div>
-        <div>← Client</div>
+        {rows.map((r, i) => (
+          <div key={i} style={{ paddingLeft: r.indent * 12 }}>
+            <span style={{ color: r.color || undefined, fontWeight: r.color && r.color !== textSecondary ? 600 : 400 }}>{r.text}</span>
+            {r.detail && <span style={{ color: textSecondary }}> · {r.detail}</span>}
+          </div>
+        ))}
       </div>
-      {lastAsst?.metadata?.hookResults && (
-        <HookResultsViewer hookResults={lastAsst.metadata.hookResults} isLight={isLight} />
+      {md?.hookResults && (
+        <GuardrailVerdictCard hookResults={md.hookResults} isLight={isLight} />
       )}
     </div>
   )

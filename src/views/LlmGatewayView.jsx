@@ -87,10 +87,15 @@ export function LlmGatewayView() {
         </div>
       )}
 
-      {/* Body */}
+      {/* Body — both tabs stay mounted so switching away and back doesn't
+          destroy the chat conversation mid-demo */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {tab === 'live'  && <LiveDemoTab />}
-        {tab === 'guide' && <GuideTab />}
+        <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'live' ? 'flex' : 'none' }}>
+          <LiveDemoTab />
+        </div>
+        <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'guide' ? 'flex' : 'none' }}>
+          <GuideTab />
+        </div>
       </div>
     </div>
   )

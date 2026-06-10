@@ -1,6 +1,10 @@
 // Three-language copy-paste-runnable snippets for the Integration Guide tab.
 // Each language has the same 5 steps. Placeholders are intentional — users
 // drop their own keys into .env before running.
+//
+// IMPORTANT: strict OpenAI compliance must be DISABLED (header
+// x-portkey-strict-open-ai-compliance: false) or Portkey strips hook_results
+// from allowed responses and you only ever see guardrail verdicts on blocks.
 
 export const GUIDE_STEPS = ['Set env vars', 'Init client', 'Chat request', 'Read hook_results', 'Stream tokens']
 
@@ -20,10 +24,12 @@ export PORTKEY_MODEL="@sudo-vertexai/gemini-2.5-flash"`,
     'Chat request': {
       lang: 'bash',
       code:
-`curl https://api.portkey.ai/v1/chat/completions \\
+`# strict-open-ai-compliance:false ⇒ hook_results included even when allowed
+curl https://api.portkey.ai/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "x-portkey-api-key: $PORTKEY_API_KEY" \\
   -H "x-portkey-config: $PORTKEY_CONFIG_AIRS" \\
+  -H "x-portkey-strict-open-ai-compliance: false" \\
   -d '{
     "model": "'$PORTKEY_MODEL'",
     "messages": [
@@ -34,25 +40,32 @@ export PORTKEY_MODEL="@sudo-vertexai/gemini-2.5-flash"`,
     'Read hook_results': {
       lang: 'bash',
       code:
-`# Pipe through jq to inspect the Portkey extension fields:
-curl ... | jq '.model_extra.hook_results'
+`# hook_results is a TOP-LEVEL field on the response body:
+curl ... | jq '.hook_results'
 
-# Sample shape returned when the AIRS guardrail fires:
+# Allowed response — verdict true, full AIRS scan report included:
 # {
 #   "before_request_hooks": [
-#     { "id": "pg-sudo-a-c3bfdd", "verdict": false, "transformed": false,
-#       "data": { "action": "block", "prompt_detected": { "injection": true } } }
+#     { "verdict": true, "checks": [{ "id": "panw-prisma-airs.intercept",
+#       "data": { "action": "allow", "category": "benign",
+#                 "profile_name": "...", "scan_id": "..." } }] }
 #   ],
-#   "after_request_hooks": []
-# }`,
+#   "after_request_hooks": [ { "verdict": true, ... } ]
+# }
+#
+# When AIRS DENIES the prompt, Portkey returns an error body instead:
+# { "error": { "type": "hooks_failed", ... }, "hook_results": { ... } }`,
     },
     'Stream tokens': {
       lang: 'bash',
       code:
-`curl -N https://api.portkey.ai/v1/chat/completions \\
+`# With streaming, hook_results arrive as dedicated SSE chunks:
+# input-scan results BEFORE the first token, output-scan after the last.
+curl -N https://api.portkey.ai/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "x-portkey-api-key: $PORTKEY_API_KEY" \\
   -H "x-portkey-config: $PORTKEY_CONFIG_AIRS" \\
+  -H "x-portkey-strict-open-ai-compliance: false" \\
   -d '{
     "model": "'$PORTKEY_MODEL'",
     "stream": true,
@@ -79,6 +92,8 @@ import 'dotenv/config'
 const portkey = new Portkey({
   apiKey: process.env.PORTKEY_API_KEY,
   config: process.env.PORTKEY_CONFIG_AIRS,
+  // Required to receive hook_results (AIRS verdicts) on allowed responses
+  strictOpenAiCompliance: false,
 })`,
     },
     'Chat request': {
@@ -96,13 +111,20 @@ console.log(completion.choices[0].message.content)`,
     'Read hook_results': {
       lang: 'javascript',
       code:
-`const hookResults = completion.model_extra?.hook_results
-if (hookResults) {
-  const blocked = (hookResults.before_request_hooks || [])
-    .some(h => h.verdict === false)
-  if (blocked) {
-    console.warn('Blocked by AIRS guardrail:', hookResults.before_request_hooks)
-  }
+`// Node SDK: hook_results is a top-level field on the completion object.
+const hookResults = completion.hook_results
+for (const h of hookResults?.before_request_hooks || []) {
+  const airs = h.checks?.find(c => c.id === 'panw-prisma-airs.intercept')
+  console.log('AIRS input scan:', airs?.data?.action, airs?.data?.category)
+}
+
+// When AIRS DENIES the prompt, the SDK THROWS — the error message is a
+// JSON string carrying the same hook_results:
+try {
+  await portkey.chat.completions.create({ /* hostile prompt */ })
+} catch (e) {
+  const parsed = JSON.parse(e.message)
+  console.warn('Blocked by AIRS:', parsed.hook_results.before_request_hooks)
 }`,
     },
     'Stream tokens': {
@@ -112,15 +134,19 @@ if (hookResults) {
   model: process.env.PORTKEY_MODEL,
   messages: [{ role: 'user', content: 'Say hi.' }],
   stream: true,
+  stream_options: { include_usage: true },  // real token counts in final chunk
 })
 
+// hook_results arrive as dedicated chunks: input scan BEFORE the first
+// token, output scan after the last.
 let hookResults = null
 for await (const chunk of stream) {
+  if (chunk.hook_results) { hookResults = chunk.hook_results; continue }
+  if (chunk.usage) console.log('\\ntokens:', chunk.usage.completion_tokens)
   const token = chunk.choices?.[0]?.delta?.content || ''
   if (token) process.stdout.write(token)
-  if (chunk.model_extra?.hook_results) hookResults = chunk.model_extra.hook_results
 }
-console.log('\\n\\nhook_results:', hookResults)`,
+console.log('\\nhook_results:', JSON.stringify(hookResults, null, 2))`,
     },
   },
 
@@ -144,6 +170,8 @@ load_dotenv()
 portkey = Portkey(
     api_key=os.environ["PORTKEY_API_KEY"],
     config=os.environ["PORTKEY_CONFIG_AIRS"],
+    # Required to receive hook_results (AIRS verdicts) on allowed responses
+    strict_open_ai_compliance=False,
 )`,
     },
     'Chat request': {
@@ -158,11 +186,15 @@ print(completion.choices[0].message.content)`,
     'Read hook_results': {
       lang: 'python',
       code:
-`hook_results = completion.model_extra.get("hook_results") if completion.model_extra else None
-if hook_results:
-    blocked = any(h.get("verdict") is False for h in hook_results.get("before_request_hooks", []))
-    if blocked:
-        print("Blocked by AIRS guardrail:", hook_results["before_request_hooks"])`,
+`# Python SDK (pydantic): extension fields live under model_extra.
+hook_results = completion.model_extra.get("hook_results") if completion.model_extra else None
+for h in (hook_results or {}).get("before_request_hooks", []):
+    airs = next((c for c in h.get("checks", []) if c.get("id") == "panw-prisma-airs.intercept"), None)
+    if airs:
+        print("AIRS input scan:", airs["data"]["action"], airs["data"]["category"])
+
+# When AIRS DENIES the prompt the SDK raises — the exception body carries
+# the same hook_results payload.`,
     },
     'Stream tokens': {
       lang: 'python',
@@ -171,15 +203,19 @@ if hook_results:
     model=os.environ["PORTKEY_MODEL"],
     messages=[{"role": "user", "content": "Say hi."}],
     stream=True,
+    stream_options={"include_usage": True},
 )
 
+# hook_results arrive as dedicated chunks: input scan before the first
+# token, output scan after the last.
 hook_results = None
 for chunk in stream:
-    token = chunk.choices[0].delta.content or ""
-    if token:
-        print(token, end="", flush=True)
-    if chunk.model_extra and chunk.model_extra.get("hook_results"):
-        hook_results = chunk.model_extra["hook_results"]
+    extra = chunk.model_extra or {}
+    if extra.get("hook_results"):
+        hook_results = extra["hook_results"]
+        continue
+    if chunk.choices and chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
 print("\\n\\nhook_results:", hook_results)`,
     },
   },

@@ -68,7 +68,18 @@ export function TopBar() {
         </div>
       </div>
 
-      {/* Status pill */}
+      {/* Status pill. The AI/LLM Gateway pillar ignores the global AIRS toggle
+          (its guardrail is chosen per-request in the Live Demo), so showing
+          "VULNERABLE" there is misleading — show a neutral pillar badge instead. */}
+      {state.activeView === 'llmGateway' ? (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border"
+             style={{ background: 'rgba(236,72,153,0.12)', borderColor: 'rgba(236,72,153,0.4)' }}>
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ec4899' }} />
+          <span className="text-[10px] font-bold tracking-widest" style={{ color: '#ec4899' }}>
+            GUARDRAIL PER REQUEST
+          </span>
+        </div>
+      ) : (
       <AnimatePresence mode="wait">
         <motion.div
           key={theme.isProtected ? 'secured' : 'vulnerable'}
@@ -84,6 +95,7 @@ export function TopBar() {
           </span>
         </motion.div>
       </AnimatePresence>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-1 ml-4">

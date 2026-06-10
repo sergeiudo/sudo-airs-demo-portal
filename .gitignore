@@ -32,3 +32,4 @@ docs/superpowers/*
 traces.db
 traces.db-shm
 traces.db-wal
+portkey-old-workspace-backup.json

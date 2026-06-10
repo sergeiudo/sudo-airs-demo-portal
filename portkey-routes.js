@@ -16,11 +16,96 @@ const ENV = {
   bedrockSlug:      process.env.PORTKEY_BEDROCK_SLUG || '',
 }
 
-function buildClient(configId) {
+// strictOpenAiCompliance:false makes the gateway include hook_results (AIRS
+// guardrail verdicts) on ALLOWED responses too — as dedicated stream chunks
+// carrying only { hook_results } (input scan before the first token, output
+// scan after the last), and as a top-level field on non-streaming bodies.
+// They sit directly on the chunk/completion object in the Node SDK — there is
+// NO model_extra (that's the Python SDK's pydantic accessor).
+function buildClient(configId, { cacheForceRefresh = false } = {}) {
   if (!ENV.apiKey) throw new Error('PORTKEY_API_KEY not set')
-  const opts = { apiKey: ENV.apiKey }
+  const opts = { apiKey: ENV.apiKey, strictOpenAiCompliance: false }
   if (configId) opts.config = configId
+  if (cacheForceRefresh) opts.cacheForceRefresh = true
   return new Portkey(opts)
+}
+
+// Merge hook_results arriving across multiple stream chunks (input + output
+// scans come in separate frames) into one { before, after } object.
+function mergeHookResults(prev, incoming) {
+  if (!incoming) return prev
+  const base = prev || {}
+  return {
+    before_request_hooks: [...(base.before_request_hooks || []), ...(incoming.before_request_hooks || [])],
+    after_request_hooks:  [...(base.after_request_hooks  || []), ...(incoming.after_request_hooks  || [])],
+  }
+}
+
+// Pull the Prisma AIRS check payload out of a hook array (before or after).
+function extractAirsScan(hooks) {
+  for (const h of hooks || []) {
+    for (const c of h?.checks || []) {
+      if (String(c?.id || '').includes('panw-prisma-airs') || c?.data?.profile_name) {
+        return { execMs: c.execution_time ?? h.execution_time ?? null, data: c.data || null, verdict: c.verdict }
+      }
+    }
+  }
+  return null
+}
+
+function detectedThreats(data) {
+  const out = []
+  for (const [src, det] of [['prompt', data?.prompt_detected], ['response', data?.response_detected]]) {
+    for (const [k, v] of Object.entries(det || {})) if (v === true) out.push(`${src}:${k}`)
+  }
+  return out
+}
+
+// Persist a gateway request (allowed, blocked, or direct-bypass) into the
+// same trace store /api/chat uses, so the Observability pillar shows ALL
+// gateway traffic — security events included.
+async function persistGatewayTrace({ configId, slug, model, promptText, responseText, verdict, hookResults, latencyMs, tokensIn, tokensOut, cacheState, fallbackUsed, portkeyTraceId }) {
+  try {
+    const { persistTrace } = await import('./server.js')
+    const inputScan  = extractAirsScan(hookResults?.before_request_hooks)
+    const outputScan = extractAirsScan(hookResults?.after_request_hooks)
+    const airsRan = !!(inputScan || outputScan)
+    const scanData = inputScan?.data || outputScan?.data || null
+    const airsInMs  = inputScan?.execMs  ?? 0
+    const airsOutMs = outputScan?.execMs ?? 0
+    return persistTrace({
+      message: promptText,
+      chatResponse: { content: responseText ?? null },
+      telemetry: {
+        timing: {
+          airs_input_scan_ms: airsInMs || null,
+          // No LLM ran on a block — the remainder is gateway overhead, not inference
+          llm_ms: verdict === 'BLOCKED' ? null : (Math.max(0, latencyMs - airsInMs - airsOutMs) || null),
+          airs_output_scan_ms: airsOutMs || null,
+          total_ms: latencyMs,
+        },
+        llm: { model, tokens_in: tokensIn ?? null, tokens_out: tokensOut ?? null },
+        summary: {
+          verdict,
+          category: scanData?.category ?? (verdict === 'BLOCKED' ? 'malicious' : 'benign'),
+          threats_detected: verdict === 'BLOCKED' ? detectedThreats(scanData) : [],
+          profile: scanData?.profile_name ?? null,
+        },
+        inputScan:  inputScan?.data  ? { scan_id: inputScan.data.scan_id,  category: inputScan.data.category,  action: inputScan.data.action }  : null,
+        outputScan: outputScan?.data ? { scan_id: outputScan.data.scan_id, category: outputScan.data.category, action: outputScan.data.action } : null,
+      },
+      backend: 'portkey',
+      resolvedModelId: model,
+      airsEnabled: airsRan,
+      attackMeta: {
+        label: configId,
+        extras: { portkeyConfigId: configId, portkeyConfigSlug: slug, cache: cacheState, fallbackUsed, hookResults, portkeyTraceId },
+      },
+    })
+  } catch (e) {
+    console.warn('persistGatewayTrace failed:', e?.message)
+    return null
+  }
 }
 
 router.get('/health', async (_req, res) => {
@@ -134,6 +219,8 @@ router.post('/chat', async (req, res) => {
   // to — relying on the @<integration>/model prefix to route. This guarantees
   // a true bypass even if the user's no-guardrail Portkey config happens to
   // have a guardrail attached (which would otherwise block).
+  // An unconfigured slug (e.g. fallback without PORTKEY_CONFIG_FALLBACK) must
+  // 503 — never silently fall through to another config.
   const configMap = {
     airs:     ENV.configAirs,
     defaults: ENV.configDefaults,
@@ -142,11 +229,14 @@ router.post('/chat', async (req, res) => {
   let slug
   if (configId === 'no-guardrail') {
     slug = null   // explicit bypass — buildClient(null) attaches no config
+  } else if (configId == null) {
+    slug = ENV.configAirs
+    if (!slug) return res.status(503).json({ error: 'config_missing', configId: 'airs' })
+  } else if (configId in configMap) {
+    slug = configMap[configId]
+    if (!slug) return res.status(503).json({ error: 'config_missing', configId })
   } else {
-    slug = configMap[configId] || ENV.configAirs
-    if (!slug) {
-      return res.status(503).json({ error: 'config_missing', configId })
-    }
+    return res.status(400).json({ error: 'bad_request', message: `unknown configId: ${configId}` })
   }
 
   // SSE headers
@@ -163,12 +253,17 @@ router.post('/chat', async (req, res) => {
 
   const startedAt = Date.now()
   let tokensOut = 0
+  let tokensIn = null
+  let chunkCount = 0
+  let usageSeen = false
   let assembledText = ''
   let hookResults = null
   let fallbackUsed = false
   let cacheState = cacheEnabled ? 'MISS' : 'disabled'
+  let portkeyTraceId = null
   let blocked = false
   let blockReason = null
+  const promptText = messages.map(m => m.content).join('\n')
 
   // ── no-guardrail lane: bypass Portkey entirely, call Vertex directly ──
   // The user's Portkey workspace has the AIRS guardrail applied as a default,
@@ -177,7 +272,6 @@ router.post('/chat', async (req, res) => {
   if (configId === 'no-guardrail') {
     try {
       const { callVertexAI } = await import('./server.js')
-      const promptText = messages.map(m => m.content).join('\n')
       // Strip the @integration/ prefix from the model id since callVertexAI wants bare model
       const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
       const r = await callVertexAI(promptText, bareModel)
@@ -186,14 +280,20 @@ router.post('/chat', async (req, res) => {
       const chunkSize = 24
       for (let i = 0; i < text.length; i += chunkSize) {
         const piece = text.slice(i, i + chunkSize)
-        tokensOut += 1
         assembledText += piece
         sendEvent(null, { type: 'token', text: piece })
       }
+      const latencyMs = r?.latencyMs ?? (Date.now() - startedAt)
+      const traceId = await persistGatewayTrace({
+        configId, slug: '(direct vertex)', model, promptText,
+        responseText: assembledText, verdict: 'DIRECT', hookResults: null,
+        latencyMs, tokensIn: r?.tokens?.input ?? null, tokensOut: r?.tokens?.output ?? null,
+        cacheState: 'disabled', fallbackUsed: false, portkeyTraceId: null,
+      })
       sendEvent('metadata', {
         hook_results: null,
-        model, latencyMs: r?.latencyMs ?? (Date.now() - startedAt), tokensOut: r?.tokens?.out ?? tokensOut,
-        cache: 'disabled', fallbackUsed: false, traceId: null,
+        model, latencyMs, tokensOut: r?.tokens?.output ?? null,
+        cache: 'disabled', fallbackUsed: false, traceId,
         bypass: 'direct-vertex',
       })
     } catch (e) {
@@ -204,31 +304,70 @@ router.post('/chat', async (req, res) => {
     return
   }
 
+  // Shared blocked-path handler: persist the security event as a trace, then
+  // emit the blocked frame (with trace id + timing) the frontend renders.
+  async function emitBlocked(blockedHook, hr) {
+    const latencyMs = Date.now() - startedAt
+    const traceId = await persistGatewayTrace({
+      configId, slug, model, promptText,
+      responseText: null, verdict: 'BLOCKED', hookResults: hr,
+      latencyMs, tokensIn: null, tokensOut: null,
+      cacheState, fallbackUsed, portkeyTraceId,
+    })
+    sendEvent('blocked', {
+      reason: blockedHook, hook_results: hr,
+      model, latencyMs, traceId, portkeyTraceId, cache: cacheState,
+    })
+  }
+
   try {
-    const client = buildClient(slug)
+    // Cache semantics: the Portkey config controls whether responses are
+    // cached. The UI toggle maps to cache-force-refresh — OFF forces a fresh
+    // upstream call (and rewrites the cache), ON allows cache reads (HIT).
+    const client = buildClient(slug, { cacheForceRefresh: !cacheEnabled })
     const stream = await client.chat.completions.create({
       model, messages, stream: true,
+      stream_options: { include_usage: true },
     })
 
-    for await (const chunk of stream) {
-      // Capture hook_results / fallback info from model_extra when present
-      const extra = chunk?.model_extra || {}
-      if (extra.hook_results) hookResults = extra.hook_results
-      if (extra.cache_status) cacheState = String(extra.cache_status).toUpperCase()
-      if (extra.fallback_used) fallbackUsed = true
+    // Real gateway telemetry lives in response headers (available immediately).
+    try {
+      const h = stream?.response?.headers
+      if (h) {
+        cacheState = String(h.get('x-portkey-cache-status') || cacheState).toUpperCase()
+        portkeyTraceId = h.get('x-portkey-trace-id') || null
+        if (h.get('x-portkey-last-used-option-index')?.includes('fallback')) fallbackUsed = true
+      }
+    } catch {}
 
-      // Detect input-guardrail block before any tokens
-      const before = hookResults?.before_request_hooks
-      if (Array.isArray(before) && before.some(h => h?.verdict === false)) {
-        blocked = true
-        blockReason = before.find(h => h?.verdict === false)
-        sendEvent('blocked', { reason: blockReason, hook_results: hookResults })
-        break
+    for await (const chunk of stream) {
+      // With strictOpenAiCompliance:false, hook_results arrive as dedicated
+      // chunks: input-scan results BEFORE the first token, output-scan after
+      // the last. Forward each to the client live for stage-by-stage UI.
+      if (chunk?.hook_results) {
+        const phase = (chunk.hook_results.before_request_hooks || []).length ? 'input' : 'output'
+        hookResults = mergeHookResults(hookResults, chunk.hook_results)
+        sendEvent('hooks', { phase, hook_results: chunk.hook_results })
+
+        const failed = (chunk.hook_results.before_request_hooks || []).find(h => h?.verdict === false)
+        if (failed) {
+          blocked = true
+          blockReason = failed
+          await emitBlocked(failed, hookResults)
+          break
+        }
+        continue
+      }
+
+      if (chunk?.usage) {
+        usageSeen = true
+        tokensOut = chunk.usage.completion_tokens ?? tokensOut
+        tokensIn  = chunk.usage.prompt_tokens ?? tokensIn
       }
 
       const token = chunk?.choices?.[0]?.delta?.content || ''
       if (token) {
-        tokensOut += 1
+        chunkCount += 1
         assembledText += token
         sendEvent(null, { type: 'token', text: token })
       }
@@ -236,44 +375,17 @@ router.post('/chat', async (req, res) => {
 
     if (!blocked) {
       const latencyMs = Date.now() - startedAt
-      let traceId = null
-      try {
-        // Use dynamic import to avoid circular-dependency issues at module load time.
-        // server.js imports this router, so we can't do a static top-level import back.
-        const { persistTrace } = await import('./server.js')
-        // Adapt to persistTrace's real signature:
-        // { message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta }
-        const promptText = messages.map(m => `${m.role}: ${m.content}`).join('\n')
-        traceId = persistTrace({
-          message: promptText,
-          chatResponse: { content: assembledText },
-          telemetry: {
-            timing: { total_ms: latencyMs, llm_ms: latencyMs },
-            llm: { tokens_out: tokensOut, model },
-            summary: { verdict: 'ALLOWED', category: 'benign', threats_detected: [] },
-          },
-          backend: 'portkey',
-          resolvedModelId: model,
-          airsEnabled: false,
-          attackMeta: {
-            label: configId,
-            extras: {
-              portkeyConfigId: configId,
-              portkeyConfigSlug: slug,
-              cache: cacheState,
-              fallbackUsed,
-              hookResults,
-            },
-          },
-        })
-      } catch (e) {
-        // Trace persistence failures shouldn't break the stream
-        console.warn('persistTrace failed for gateway chat:', e?.message)
-      }
+      if (!usageSeen) tokensOut = chunkCount // best-effort fallback
+      const traceId = await persistGatewayTrace({
+        configId, slug, model, promptText,
+        responseText: assembledText, verdict: 'ALLOWED', hookResults,
+        latencyMs, tokensIn, tokensOut,
+        cacheState, fallbackUsed, portkeyTraceId,
+      })
       sendEvent('metadata', {
         hook_results: hookResults,
-        model, latencyMs, tokensOut,
-        cache: cacheState, fallbackUsed, traceId,
+        model, latencyMs, tokensOut, tokensIn,
+        cache: cacheState, fallbackUsed, traceId, portkeyTraceId,
       })
     }
   } catch (e) {
@@ -287,7 +399,7 @@ router.post('/chat', async (req, res) => {
     const before = hr?.before_request_hooks || []
     const blockedHook = before.find(h => h?.verdict === false)
     if (blockedHook) {
-      sendEvent('blocked', { reason: blockedHook, hook_results: hr })
+      await emitBlocked(blockedHook, hr)
     } else {
       sendEvent('error', { message: raw })
     }
@@ -324,7 +436,7 @@ async function runLane(laneId, slug, model, messages) {
         blockReason: null,
         response: r?.text || '',
         latencyMs: r?.latencyMs ?? (Date.now() - startedAt),
-        tokens: r?.tokens?.out ?? 0,
+        tokens: r?.tokens?.output ?? 0,
         hookResults: null,
         error: null,
       }
@@ -345,7 +457,9 @@ async function runLane(laneId, slug, model, messages) {
       model, messages, stream: false,
     })
     const latencyMs = Date.now() - startedAt
-    const hookResults = completion?.model_extra?.hook_results || null
+    // Node SDK: hook_results is a top-level field on the parsed body
+    // (model_extra is a Python-SDK concept and never exists here).
+    const hookResults = completion?.hook_results || completion?.model_extra?.hook_results || null
     const before = hookResults?.before_request_hooks || []
     const after  = hookResults?.after_request_hooks || []
     const inputBlocked  = before.some(h => h?.verdict === false)
