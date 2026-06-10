@@ -161,3 +161,19 @@ npm run dev
 **Vertex AI 404** — enable the model in GCP Console → Vertex AI → Model Garden first.
 
 **Azure "deployment does not exist"** — deployment name in `AZURE_DEPLOYMENTS` must match exactly (case-sensitive) what's in Foundry. Use API version `2025-04-01-preview`.
+
+---
+
+## License
+
+Apache License 2.0 — free to use, modify, and distribute. See [LICENSE](LICENSE).
+
+## Disclaimer
+
+This is an independent, community-driven open source project. It is **not affiliated with, endorsed by, or sponsored by Palo Alto Networks**.
+
+This project builds on top of the official **Palo Alto Networks Prisma AIRS (AI Runtime Security)** API, which is an excellent foundation for securing AI applications at runtime. We are grateful to the Palo Alto Networks team for creating and maintaining Prisma AIRS and the Strata Cloud Manager platform.
+
+Prisma AIRS itself is **not included in this repository** — you must obtain your own Prisma AIRS deployment profile and API key separately from Palo Alto Networks.
+
+**Trademarks:** Palo Alto Networks, Prisma, Prisma AIRS, Strata, and Strata Cloud Manager are trademarks of Palo Alto Networks, Inc. All other trademarks — including Portkey, Google Cloud, Vertex AI, Gemini, Amazon Web Services, Amazon Bedrock, Anthropic, and Claude — are the property of their respective owners.
