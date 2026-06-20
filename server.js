@@ -81,7 +81,7 @@ async function airsFetchReports(reportIds) {
   return { data, latencyMs: Date.now() - t0, url }
 }
 
-async function airscan(prompt, response = null, model = 'unknown') {
+export async function airscan(prompt, response = null, model = 'unknown') {
   const body = {
     tr_id: `citadel-${Date.now()}`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },

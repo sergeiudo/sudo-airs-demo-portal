@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Boxes, Plug, Wrench, ArrowDownToLine, Loader2, Send, Sparkles, ChevronRight, Check, X } from 'lucide-react'
+import { Boxes, Plug, Wrench, ArrowDownToLine, Loader2, Send, Sparkles, ChevronRight, Check, X, ShieldCheck, ShieldX } from 'lucide-react'
 import { ModelPicker } from './components/ModelPicker'
 import { useAppContext } from '../../context/AppContext'
 
@@ -152,6 +152,18 @@ function StepLine({ step, isLight }) {
   const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
   const textSecondary = isLight ? '#475569' : '#94a3b8'
   const k = step.kind
+  if (k === 'airs') {
+    if (step.note) return <Row icon={ShieldCheck} color="#94a3b8" isLight={isLight}><span style={{ color: textSecondary }}>Prisma AIRS {step.phase} scan — {step.note}</span></Row>
+    const ok = step.ok
+    const Icon = ok ? ShieldCheck : ShieldX
+    const col = ok ? '#10b981' : '#ef4444'
+    return <Row icon={Icon} color={col} isLight={isLight}>
+      <b style={{ color: col }}>Prisma AIRS</b> {step.phase} scan — {ok ? 'passed' : 'BLOCKED'}
+      {step.category ? <span style={{ color: textSecondary }}> · {step.category}</span> : null}
+      {step.latencyMs != null ? <span style={{ color: textSecondary }}> · {step.latencyMs}ms</span> : null}
+      {!ok && step.threats && step.threats.length > 0 ? <span style={{ color: col }}> · {step.threats.join(', ')}</span> : null}
+    </Row>
+  }
   if (k === 'connect') {
     return <Row icon={Plug} color="#ec4899" isLight={isLight}>
       Connected to <b>Portkey MCP Registry</b> → <span style={{ color: TEAL }}>{step.server}</span> {step.version} <span style={{ color: textSecondary }}>({step.url})</span>
@@ -242,6 +254,7 @@ export function McpRegistryTab() {
   const [model, setModel] = useState('')
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [airsOn, setAirsOn] = useState(false)
   const [messages, setMessages] = useState([])
   const bottomRef = useRef(null)
 
@@ -265,7 +278,7 @@ export function McpRegistryTab() {
   const surfaceBorder = isLight ? 'rgba(0,48,135,0.14)' : 'rgba(255,255,255,0.08)'
 
   async function run(prompt) {
-    if (!prompt.trim() || !model || busy) return
+    if (!prompt.trim() || busy) return
     setBusy(true)
     const asstId = `a-${Date.now()}`
     setMessages(prev => [
@@ -278,7 +291,7 @@ export function McpRegistryTab() {
     try {
       const resp = await fetch('/api/gateway/mcp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model }),
+        body: JSON.stringify({ prompt, model, airs: airsOn }),
       })
       const reader = resp.body.getReader()
       const dec = new TextDecoder()
@@ -295,6 +308,7 @@ export function McpRegistryTab() {
             let p; try { p = JSON.parse(d) } catch { continue }
             if (ev === 'step') patch(m => ({ ...m, steps: [...m.steps, p] }))
             else if (ev === 'answer') patch(m => ({ ...m, answer: p.text, status: 'done', meta: p }))
+            else if (ev === 'blocked') patch(m => ({ ...m, status: 'blocked', answer: `Blocked by Prisma AIRS — ${p.category || 'policy violation'}${(p.threats && p.threats.length) ? ` (${p.threats.join(', ')})` : ''}` }))
             else if (ev === 'error') patch(m => ({ ...m, status: 'error', answer: p.message }))
             ev = null
           } else if (line.trim() === '') ev = null
@@ -316,6 +330,17 @@ export function McpRegistryTab() {
       <aside className="flex-shrink-0 flex flex-col gap-3 p-4 border-r overflow-y-auto"
              style={{ width: leftWidth, background: surfaceBg, borderColor: surfaceBorder }}>
         <ModelPicker value={model} onChange={setModel} />
+
+        {/* AIRS protection toggle — wraps the MCP loop with input + output scans */}
+        <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg cursor-pointer text-[11px] font-semibold"
+               style={{ background: airsOn ? `${ACCENT}14` : (isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)'), border: `1px solid ${airsOn ? `${ACCENT}55` : surfaceBorder}`, color: airsOn ? ACCENT : textPrimary }}>
+          <span className="flex items-center gap-1.5"><ShieldCheck size={13} /> AIRS protection</span>
+          <input type="checkbox" checked={airsOn} onChange={(e) => setAirsOn(e.target.checked)} />
+        </label>
+        <div className="text-[9px] leading-snug px-1 -mt-1" style={{ color: textSecondary }}>
+          {airsOn ? 'Prompt + answer scanned by Prisma AIRS around the MCP loop.' : 'Off — prompt → model → MCP, no guardrail.'}
+        </div>
+
         <div className="text-[10px] uppercase tracking-wider font-semibold pt-1" style={{ color: textSecondary }}>Example prompts</div>
         {EXAMPLE_GROUPS.map(g => (
           <div key={g.id} className="flex flex-col gap-1.5">
@@ -372,8 +397,8 @@ export function McpRegistryTab() {
                 {m.answer && (
                   <div className="flex flex-col gap-1.5 items-start">
                     <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-tl-md text-[13px] leading-relaxed"
-                         style={{ background: m.status === 'error' ? '#7f1d1d' : (isLight ? '#f1f5f9' : 'rgba(255,255,255,0.05)'), color: m.status === 'error' ? '#fff' : textPrimary }}>
-                      {renderMd(m.answer)}
+                         style={{ background: (m.status === 'error' || m.status === 'blocked') ? '#7f1d1d' : (isLight ? '#f1f5f9' : 'rgba(255,255,255,0.05)'), color: (m.status === 'error' || m.status === 'blocked') ? '#fff' : textPrimary }}>
+                      {m.status === 'blocked' && <ShieldX size={13} className="inline mr-1 -mt-0.5" />}{renderMd(m.answer)}
                     </div>
                     {m.meta && (
                       <div className="flex items-center gap-2 flex-wrap text-[10px]" style={{ color: textSecondary }}>
@@ -382,6 +407,7 @@ export function McpRegistryTab() {
                         <span>· {m.meta.rounds} tool round{m.meta.rounds === 1 ? '' : 's'}</span>
                         <span>· {m.meta.latencyMs}ms</span>
                         <span className="font-mono">· {m.meta.model}</span>
+                        {m.meta.airs && <span className="px-1.5 rounded-full" style={{ background: '#10b98122', color: '#10b981', border: '1px solid #10b98155' }}>AIRS protected</span>}
                       </div>
                     )}
                   </div>
@@ -395,12 +421,12 @@ export function McpRegistryTab() {
         {/* input footer */}
         <form onSubmit={(e) => { e.preventDefault(); run(input) }} className="flex-shrink-0 flex gap-2 p-4 border-t" style={{ borderColor: surfaceBorder }}>
           <input value={input} onChange={(e) => setInput(e.target.value)}
-                 placeholder="Ask about crypto prices, market caps…" disabled={busy || !model}
+                 placeholder="Ask about crypto prices, market caps…" disabled={busy}
                  className="flex-1 px-4 py-2.5 rounded-lg text-[13px]"
                  style={{ background: surfaceBg, border: `1px solid ${surfaceBorder}`, color: textPrimary }} />
-          <button type="submit" disabled={busy || !input.trim() || !model}
+          <button type="submit" disabled={busy || !input.trim()}
                   className="px-4 py-2.5 rounded-lg text-[13px] font-bold flex items-center gap-2"
-                  style={{ background: ACCENT, color: '#fff', opacity: (busy || !input.trim() || !model) ? 0.5 : 1 }}>
+                  style={{ background: ACCENT, color: '#fff', opacity: (busy || !input.trim()) ? 0.5 : 1 }}>
             {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} {busy ? 'Running…' : 'Ask'}
           </button>
         </form>

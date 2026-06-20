@@ -244,7 +244,7 @@ export function LiveDemoTab() {
         <form onSubmit={onSubmit} className="flex-shrink-0 flex gap-2 p-4 border-t" style={{ borderColor: surfaceBorder }}>
           <input value={input} onChange={(e) => setInput(e.target.value)}
                  placeholder="Type a prompt and press Enter…"
-                 disabled={streaming || !model}
+                 disabled={streaming}
                  className="flex-1 px-4 py-2.5 rounded-lg text-[13px]"
                  style={{ background: isLight ? '#ffffff' : 'rgba(15,20,35,0.6)', border: `1px solid ${surfaceBorder}`, color: textPrimary }} />
           <button type="button" onClick={runCompare}

@@ -58,6 +58,15 @@ function toolResultText(result) {
   return (result.content || []).map(c => c.text ?? JSON.stringify(c)).join('\n')
 }
 
+// Human-readable threats from an AIRS scan `data` object.
+function airsThreats(d) {
+  const out = []
+  for (const det of [d?.prompt_detected, d?.response_detected]) {
+    for (const [k, v] of Object.entries(det || {})) if (v === true) out.push(k.replace(/_/g, ' '))
+  }
+  return out
+}
+
 // ── Vertex OpenAI-compatible chat turn (with optional tools) ─────────────────
 // gemini-3.x lives on the `global` endpoint; gemini-2.5 on the regional one.
 function vertexLocation(bareModel) {
@@ -85,7 +94,7 @@ async function vertexTurn(messages, tools, bareModel) {
 
 // ── SSE orchestration endpoint: POST /api/gateway/mcp ────────────────────────
 export async function mcpChatHandler(req, res) {
-  const { prompt, model } = req.body || {}
+  const { prompt, model, airs } = req.body || {}
   if (!process.env.PORTKEY_API_KEY) {
     return res.status(503).json({ error: 'configure_portkey', missing: ['PORTKEY_API_KEY'] })
   }
@@ -99,10 +108,35 @@ export async function mcpChatHandler(req, res) {
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders?.()
-  const send = (event, data) => { res.write(`event: ${event}\n`); res.write(`data: ${JSON.stringify(data)}\n\n`) }
+  const send = (event, data) => {
+    if (res.writableEnded) return
+    res.write(`event: ${event}\n`)
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  }
 
   const startedAt = Date.now()
   try {
+    // 0. AIRS edge protection (optional) — scan the prompt BEFORE it reaches the
+    // model or the MCP. A blocked prompt never runs a single tool.
+    let airscanFn = null
+    if (airs) {
+      try {
+        const mod = await import('./server.js')
+        airscanFn = mod.airscan
+        const r = await airscanFn(prompt, null, bareModel)
+        const d = r?.data || {}
+        const blocked = d.action === 'block'
+        send('step', { kind: 'airs', phase: 'input', ok: !blocked, action: d.action, category: d.category, latencyMs: r.latencyMs, threats: airsThreats(d), profile: d.profile_name })
+        if (blocked) {
+          send('blocked', { reason: 'airs', phase: 'input', category: d.category, threats: airsThreats(d), latencyMs: r.latencyMs, profile: d.profile_name })
+          send('done', {})
+          return res.end()
+        }
+      } catch (e) {
+        send('step', { kind: 'airs', phase: 'input', ok: true, note: 'scan skipped: ' + String(e?.message || e).slice(0, 80) })
+      }
+    }
+
     // 1. Connect to the Portkey MCP Registry server
     const init = await mcpRpc('initialize', {
       protocolVersion: '2025-03-26', capabilities: {},
@@ -157,12 +191,24 @@ export async function mcpChatHandler(req, res) {
       answer = fin.content || '(no answer produced)'
     }
 
-    send('answer', { text: answer, rounds, latencyMs: Date.now() - startedAt, model: bareModel, server: serverInfo.name || 'coingecko' })
+    // AIRS output scan on the final answer (edge protection)
+    if (airscanFn && answer) {
+      try {
+        const r = await airscanFn(prompt, answer, bareModel)
+        const d = r?.data || {}
+        const blocked = d.action === 'block'
+        send('step', { kind: 'airs', phase: 'output', ok: !blocked, action: d.action, category: d.category, latencyMs: r.latencyMs, threats: airsThreats(d), profile: d.profile_name })
+        if (blocked) answer = '🛡 Response withheld — Prisma AIRS flagged the model output.'
+      } catch (e) {
+        send('step', { kind: 'airs', phase: 'output', ok: true, note: 'scan skipped' })
+      }
+    }
+
+    send('answer', { text: answer, rounds, latencyMs: Date.now() - startedAt, model: bareModel, server: serverInfo.name || 'coingecko', airs: !!airs })
   } catch (e) {
     send('error', { message: String(e?.message || e) })
   } finally {
-    send('done', {})
-    res.end()
+    if (!res.writableEnded) { send('done', {}); res.end() }
   }
 }
 
