@@ -136,62 +136,108 @@ function LegendRow({ icon: Icon, title, children, isLight }) {
   )
 }
 
-// One diagram, all three flows stacked and column-aligned, so the audience sees
-// that the ONLY thing that changes between flows is the inspection step in the
-// middle. Colours match the flow cards below (amber / blue / pink).
-function FlowComparison({ isLight }) {
-  const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
-  const textSecondary = isLight ? '#475569' : '#94a3b8'
-  const neutralBg = isLight ? '#f1f5f9' : 'rgba(255,255,255,0.06)'
-  const arrowColor = isLight ? '#94a3b8' : '#64748b'
+// Architecture diagram: one prompt fans into three lanes, each passing (or not)
+// through an input-scan checkpoint, the shared model, and an output-scan checkpoint,
+// then on to its response. The ONLY thing that differs between lanes is the
+// inspector in the middle. Hand-built SVG so it stays crisp, scales, and adapts
+// to light/dark (unlike a static raster). Colours match the flow cards below.
+function FlowArchitectureDiagram() {
+  // Rendered on a forced-dark panel (in both app themes) so the neon connectors
+  // and the model glow pop — a deliberate hero treatment.
+  const textPrimary = '#e2e8f0'
+  const textSecondary = '#94a3b8'
+  const boxFill = 'rgba(255,255,255,0.05)'
+  const boxStroke = 'rgba(255,255,255,0.18)'
+  const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace'
+  const sans = 'Inter, ui-sans-serif, system-ui, sans-serif'
 
-  const rows = [
-    { label: '1 · No gateway',     color: '#f59e0b', guard: null },
-    { label: '2 · Portkey native', color: '#0ea5e9', guard: 'AI GW' },
-    { label: '3 · AIRS + Portkey', color: '#ec4899', guard: 'AIRS' },
+  const lanes = [
+    { y: 80,  color: '#94a3b8', num: '1', name: 'NO GATEWAY',     sub: 'DIRECT PASS',      guard: null,    marker: 'fad-arrGray' },
+    { y: 150, color: '#0ea5e9', num: '2', name: 'PORTKEY NATIVE', sub: 'AI GW INSPECTION', guard: 'AI GW', marker: 'fad-arrBlue' },
+    { y: 222, color: '#ec4899', num: '3', name: 'AIRS + PORTKEY', sub: 'AIRS INSPECTION',  guard: 'AIRS',  marker: 'fad-arrPink' },
   ]
 
-  const Arrow = () => <ArrowRight size={12} className="justify-self-center" style={{ color: arrowColor }} />
-  const Pill = ({ children }) => (
-    <span className="px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold whitespace-nowrap text-center"
-          style={{ background: neutralBg, color: textPrimary }}>{children}</span>
+  // Rounded box + centred label. `color` set → tinted (guardrail) box; otherwise a
+  // solid neutral box (prompt / model / response).
+  const Box = ({ cx, cy, w = 104, h = 32, label, fill, stroke, color, dashed, fontSize = 11 }) => (
+    <g>
+      <rect x={cx - w / 2} y={cy - h / 2} width={w} height={h} rx={8}
+            fill={fill} fillOpacity={color ? 0.12 : 1} stroke={stroke}
+            strokeOpacity={color ? 0.6 : 1} strokeDasharray={dashed ? '4 3' : undefined} strokeWidth={1.25} />
+      <text x={cx} y={cy + fontSize / 3} textAnchor="middle" fontFamily={mono}
+            fontSize={fontSize} fontWeight={700} fill={color || textPrimary}>{label}</text>
+    </g>
   )
-  const Guard = ({ guard, color }) => guard ? (
-    <span className="px-2.5 py-1 rounded-md text-[11px] font-mono font-bold whitespace-nowrap text-center"
-          style={{ background: `${color}1f`, color, border: `1px solid ${color}66` }}>{guard}</span>
-  ) : (
-    <span className="px-2.5 py-1 rounded-md text-[10px] font-mono whitespace-nowrap text-center"
-          style={{ color: textSecondary, border: `1px dashed ${isLight ? '#cbd5e1' : '#475569'}` }}>no check</span>
-  )
-
-  const cols = 'minmax(110px,max-content) max-content 18px max-content 18px max-content 18px max-content 18px max-content'
 
   return (
-    <div className="rounded-2xl p-5 flex flex-col gap-3 overflow-x-auto"
-         style={{ background: isLight ? '#ffffff' : 'rgba(15,20,35,0.55)', border: `1px solid ${isLight ? 'rgba(0,48,135,0.12)' : 'rgba(255,255,255,0.08)'}` }}>
-      <div className="grid items-center gap-x-2 gap-y-3" style={{ gridTemplateColumns: cols, minWidth: 'max-content' }}>
-        {/* header: scan-stage hints over the two guard columns */}
-        <div /><div /><div />
-        <div className="text-[9px] uppercase tracking-wider font-bold text-center" style={{ color: textSecondary }}>input scan</div>
-        <div /><div /><div />
-        <div className="text-[9px] uppercase tracking-wider font-bold text-center" style={{ color: textSecondary }}>output scan</div>
-        <div /><div />
-        {rows.map(r => (
-          <React.Fragment key={r.label}>
-            <span className="text-[12px] font-bold pr-2 whitespace-nowrap" style={{ color: r.color }}>{r.label}</span>
-            <Pill>prompt</Pill>
-            <Arrow />
-            <Guard guard={r.guard} color={r.color} />
-            <Arrow />
-            <Pill>model</Pill>
-            <Arrow />
-            <Guard guard={r.guard} color={r.color} />
-            <Arrow />
-            <Pill>response</Pill>
-          </React.Fragment>
+    <div className="rounded-2xl p-4 flex flex-col gap-2 overflow-x-auto"
+         style={{ background: 'radial-gradient(115% 130% at 50% 32%, #141b33 0%, #090d1a 72%)', border: '1px solid rgba(255,255,255,0.10)' }}>
+      <svg viewBox="0 0 1040 290" width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: 'block', minWidth: 720 }}>
+        <defs>
+          <radialGradient id="fad-modelGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.5" />
+            <stop offset="70%" stopColor="#8b5cf6" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="fad-modelFill" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#0ea5e9" />
+            <stop offset="100%" stopColor="#ec4899" />
+          </linearGradient>
+          {[['fad-arrGray', '#94a3b8'], ['fad-arrBlue', '#0ea5e9'], ['fad-arrPink', '#ec4899']].map(([id, c]) => (
+            <marker key={id} id={id} markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
+              <path d="M0,0 L6,3.5 L0,7 Z" fill={c} />
+            </marker>
+          ))}
+        </defs>
+
+        {/* column headers */}
+        <text x={398} y={26} textAnchor="middle" fontFamily={sans} fontSize={10} fontWeight={700} letterSpacing="1.2" fill={textSecondary}>INPUT SCAN</text>
+        <text x={702} y={26} textAnchor="middle" fontFamily={sans} fontSize={10} fontWeight={700} letterSpacing="1.2" fill={textSecondary}>OUTPUT SCAN</text>
+
+        {/* connectors (drawn under the boxes) */}
+        {lanes.map(l => (
+          <g key={`c-${l.num}`} fill="none" strokeLinecap="round">
+            <path d={`M148,150 C300,150 290,${l.y} 346,${l.y}`} stroke={l.color} strokeOpacity={0.4} strokeWidth={2} />
+            <path d={`M450,${l.y} C482,${l.y} 472,150 502,150`} stroke={l.color} strokeOpacity={0.85} strokeWidth={2.4} />
+            <path d={`M588,150 C616,150 606,${l.y} 650,${l.y}`} stroke={l.color} strokeOpacity={0.85} strokeWidth={2.4} />
+            <path d={`M754,${l.y} L850,${l.y}`} stroke={l.color} strokeOpacity={0.9} strokeWidth={2.4} markerEnd={`url(#${l.marker})`} />
+          </g>
         ))}
-      </div>
-      <div className="text-[11px] italic" style={{ color: textSecondary }}>
+
+        {/* model: glow + node */}
+        <circle cx={545} cy={150} r={74} fill="url(#fad-modelGlow)" />
+        <rect x={506} y={128} width={84} height={44} rx={10} fill="#ec4899" fillOpacity={0.20} />
+        <rect x={502} y={124} width={84} height={44} rx={10} fill="url(#fad-modelFill)" fillOpacity={0.30} stroke="#8b5cf6" strokeOpacity={0.85} strokeWidth={1.4} />
+        <text x={544} y={150} textAnchor="middle" fontFamily={mono} fontSize={10.5} fontWeight={700} fill={textPrimary}>AI MODEL</text>
+
+        {/* "response generation" pill under the model */}
+        <rect x={471} y={244} width={148} height={22} rx={6} fill={boxFill} stroke={boxStroke} strokeWidth={1} />
+        <text x={545} y={258} textAnchor="middle" fontFamily={sans} fontSize={8.5} fontWeight={700} letterSpacing="0.6" fill={textSecondary}>RESPONSE GENERATION</text>
+
+        {/* prompt node (shared, centred) */}
+        <rect x={44} y={132} width={104} height={36} rx={9} fill={boxFill} stroke={boxStroke} strokeWidth={1.25} />
+        <text x={96} y={154} textAnchor="middle" fontFamily={mono} fontSize={11} fontWeight={700} fill={textPrimary}>PROMPT</text>
+
+        {/* per-lane: label, input checkpoint, output checkpoint, response */}
+        {lanes.map(l => {
+          const gFill = l.guard ? l.color : 'none'
+          const gStroke = l.guard ? l.color : boxStroke
+          const gColor = l.guard ? l.color : textSecondary
+          return (
+            <g key={`l-${l.num}`}>
+              <text x={164} y={l.y - 2} fontFamily={sans} fontSize={11} fontWeight={700} fill={textPrimary}>
+                <tspan fill={l.color} fontWeight={800}>{l.num}.</tspan> {l.name}
+              </text>
+              <text x={178} y={l.y + 11} fontFamily={sans} fontSize={8.5} letterSpacing="0.3" fill={textSecondary}>({l.sub})</text>
+
+              <Box cx={398} cy={l.y} label={l.guard || 'no check'} fill={gFill} stroke={gStroke} color={gColor} dashed={!l.guard} fontSize={l.guard ? 11 : 10} />
+              <Box cx={702} cy={l.y} label={l.guard || 'no check'} fill={gFill} stroke={gStroke} color={gColor} dashed={!l.guard} fontSize={l.guard ? 11 : 10} />
+              <Box cx={906} cy={l.y} w={112} h={34} label="RESPONSE" fill={boxFill} stroke={boxStroke} fontSize={10.5} />
+            </g>
+          )
+        })}
+      </svg>
+
+      <div className="text-[11px] italic px-1" style={{ color: textSecondary }}>
         Same prompt, same model — the only thing that changes is what inspects the traffic in the middle.
       </div>
     </div>
@@ -226,7 +272,7 @@ export function OverviewTab() {
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-bold" style={{ color: ACCENT }}>
             <Columns3 size={13} /> All three flows at a glance
           </div>
-          <FlowComparison isLight={isLight} />
+          <FlowArchitectureDiagram />
         </div>
 
         {/* The 3 flows */}
