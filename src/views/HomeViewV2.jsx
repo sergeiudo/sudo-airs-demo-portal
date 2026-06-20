@@ -46,18 +46,6 @@ const PILLARS = [
     dim: 'rgba(251,146,60,0.08)',
   },
   {
-    id: 'claudeHooks',
-    icon: Terminal,
-    title: 'AI Code Assistant Protection',
-    tag: 'IDE Security',
-    summary: 'Secure AI coding assistants with zero-change hook-based scanning.',
-    description: 'Secure the Claude Code CLI with AIRS hook scripts that scan every prompt, URL fetch, and MCP tool call in real time — before any content reaches the model. Zero code changes required.',
-    highlights: ['Prompt injection blocking', 'DLP / data exfiltration detection', 'MCP & WebFetch scanning', 'Threat model with test cases'],
-    accent: '#a855f7',
-    glow: 'rgba(168,85,247,0.32)',
-    dim: 'rgba(168,85,247,0.08)',
-  },
-  {
     id: 'llmGateway',
     icon: Waypoints,
     title: 'AI/LLM Gateway',
@@ -68,6 +56,18 @@ const PILLARS = [
     accent: '#ec4899',
     glow: 'rgba(236,72,153,0.32)',
     dim: 'rgba(236,72,153,0.08)',
+  },
+  {
+    id: 'claudeHooks',
+    icon: Terminal,
+    title: 'AI Code Assistant Protection',
+    tag: 'IDE Security',
+    summary: 'Secure AI coding assistants with zero-change hook-based scanning.',
+    description: 'Secure the Claude Code CLI with AIRS hook scripts that scan every prompt, URL fetch, and MCP tool call in real time — before any content reaches the model. Zero code changes required.',
+    highlights: ['Prompt injection blocking', 'DLP / data exfiltration detection', 'MCP & WebFetch scanning', 'Threat model with test cases'],
+    accent: '#a855f7',
+    glow: 'rgba(168,85,247,0.32)',
+    dim: 'rgba(168,85,247,0.08)',
   },
   {
     id: 'observability',
@@ -493,11 +493,11 @@ export function HomeViewV2() {
         </p>
       </motion.div>
 
-      {/* ── Grid: 5 core pillars + 4 below ── */}
+      {/* ── Grid: 4 core pillars + 5 below ── */}
       <div className="relative z-10 px-8 pb-8 max-w-[1280px] mx-auto w-full space-y-4">
-        {/* Row 1: 4 core AIRS pillars + AI/LLM Gateway */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-          {PILLARS.slice(0, 5).map((pillar, i) => (
+        {/* Row 1: 3 core AIRS pillars + AI/LLM Gateway */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          {PILLARS.slice(0, 4).map((pillar, i) => (
             <MiniCard
               key={pillar.id}
               pillar={pillar}
@@ -508,13 +508,13 @@ export function HomeViewV2() {
             />
           ))}
         </div>
-        {/* Row 2: 4 pillars */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          {PILLARS.slice(5).map((pillar, i) => (
+        {/* Row 2: 5 pillars (AI Code Assistant leads) */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+          {PILLARS.slice(4).map((pillar, i) => (
             <MiniCard
               key={pillar.id}
               pillar={pillar}
-              index={5 + i}
+              index={4 + i}
               anySelected={!!selected}
               onClick={() => handleSelect(pillar.id)}
               isDark={state.isDark}
