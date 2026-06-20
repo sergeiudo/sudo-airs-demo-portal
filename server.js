@@ -192,7 +192,7 @@ export async function callVertexAI(prompt, modelId) {
 // credentials as the Gemini client. `location` is per-model (region-locked).
 const maasAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] })
 
-async function callVertexMaaS(prompt, modelId, location = 'us-central1') {
+export async function callVertexMaaS(prompt, modelId, location = 'us-central1') {
   const project = process.env.GCP_PROJECT_ID
   const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
   const url = `https://${host}/v1/projects/${project}/locations/${location}/endpoints/openapi/chat/completions`

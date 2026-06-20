@@ -53,6 +53,20 @@ function extractAirsScan(hooks) {
   return null
 }
 
+// Direct Vertex call for the no-gateway lane (bypasses Portkey entirely).
+// Gemini 3.x models live ONLY in the `global` region and are NOT reachable via
+// the @google-cloud/vertexai SDK (it can't target `global` — returns an HTML
+// error). They must go through Vertex's OpenAI-compatible publisher endpoint
+// with a `google/` prefix. Route those via callVertexMaaS; gemini-2.5 and other
+// region-pinned models keep using the standard Gemini SDK path.
+async function callDirectVertex(prompt, bareModel) {
+  const { callVertexAI, callVertexMaaS } = await import('./server.js')
+  if (/^gemini-3/.test(bareModel)) {
+    return callVertexMaaS(prompt, `google/${bareModel}`, 'global')
+  }
+  return callVertexAI(prompt, bareModel)
+}
+
 function detectedThreats(data) {
   const out = []
   for (const [src, det] of [['prompt', data?.prompt_detected], ['response', data?.response_detected]]) {
@@ -113,11 +127,13 @@ router.get('/health', async (_req, res) => {
   // NOT required: no-guardrail bypasses Portkey entirely (no config attached),
   // and fallback (Vertex→Bedrock) is an optional control. Missing either should
   // not mark the gateway "degraded".
+  // Bedrock is no longer provisioned in the Portkey workspace (Vertex-only),
+  // so PORTKEY_BEDROCK_SLUG is intentionally NOT required — its absence must
+  // not mark the gateway "degraded".
   const required = {
     PORTKEY_API_KEY:               !!ENV.apiKey,
     PORTKEY_CONFIG_AIRS:           !!ENV.configAirs,
     PORTKEY_CONFIG_DEFAULTS:       !!ENV.configDefaults,
-    PORTKEY_BEDROCK_SLUG:          !!ENV.bedrockSlug,
   }
   const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k)
 
@@ -177,9 +193,13 @@ router.get('/configs', (_req, res) => {
 // what the user provisioned in Portkey under @sudo-bedrock.
 const MODEL_CATALOG = {
   [`${ENV.vertexSlug || '@sudo-vertexai'}`]: [
-    { id: 'gemini-2.5-flash',           displayName: 'Gemini 2.5 Flash' },
-    { id: 'gemini-2.5-pro',             displayName: 'Gemini 2.5 Pro' },
-    { id: 'gemini-2.5-flash-lite',      displayName: 'Gemini 2.5 Flash Lite' },
+    // Models provisioned on the sudo-vertexai integration (global region) AND
+    // reachable in the GCP project. The demo configs no longer pin a model
+    // (override_params removed), so the picked model flows to all three lanes —
+    // incl. the direct no-gateway lane, which routes gemini-3.x via the global
+    // OpenAI endpoint in callDirectVertex. Add more here as you provision them.
+    { id: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite' },
+    { id: 'gemini-3.5-flash',      displayName: 'Gemini 3.5 Flash (reasoning)' },
   ],
 }
 
@@ -271,10 +291,9 @@ router.post('/chat', async (req, res) => {
   // only way to demonstrate the truly-unguarded path.
   if (configId === 'no-guardrail') {
     try {
-      const { callVertexAI } = await import('./server.js')
-      // Strip the @integration/ prefix from the model id since callVertexAI wants bare model
+      // Strip the @integration/ prefix from the model id since the direct call wants a bare model
       const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
-      const r = await callVertexAI(promptText, bareModel)
+      const r = await callDirectVertex(promptText, bareModel)
       const text = r?.text || ''
       // Fake a token stream by chunking the response so the UI feels alive
       const chunkSize = 24
@@ -426,10 +445,9 @@ async function runLane(laneId, slug, model, messages) {
   // Bypass: call Vertex directly (no Portkey, no guardrails at all).
   if (slug === null) {
     try {
-      const { callVertexAI } = await import('./server.js')
       const promptText = messages.map(m => m.content).join('\n')
       const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
-      const r = await callVertexAI(promptText, bareModel)
+      const r = await callDirectVertex(promptText, bareModel)
       return {
         id: laneId, slug: '(direct vertex)',
         verdict: 'ALLOWED',
