@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Portkey + Prisma AIRS — Demo Setup Reference</title>
+  <title>Portkey + Prisma AIRS — Setup Reference</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
@@ -12,119 +12,46 @@
 
   <style>
     :root {
-      --pink: #ec4899;
-      --pink-soft: rgba(236,72,153,0.14);
-      --pink-border: rgba(236,72,153,0.45);
-      --blue: #0ea5e9;
-      --purple: #8b5cf6;
-      --bg: #0a0e1a;
-      --panel: #11172a;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --green: #22c55e;
-      --orange: #f97316;
-      --red: #ef4444;
-      --amber: #fbbf24;
+      --pink: #ec4899; --pink-soft: rgba(236,72,153,0.14); --pink-border: rgba(236,72,153,0.45);
+      --blue: #0ea5e9; --purple: #8b5cf6; --bg: #0a0e1a; --panel: #11172a;
+      --text: #e2e8f0; --muted: #94a3b8; --green: #22c55e; --orange: #f97316; --red: #ef4444; --amber: #fbbf24;
     }
-    .reveal {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--text);
-      font-size: 29px;
-    }
+    .reveal { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); font-size: 29px; }
     .reveal .slides { text-align: left; }
-    .reveal .slides section { padding: 30px 50px; height: 100%; }
+    .reveal .slides section { padding: 28px 48px; height: 100%; }
     .reveal .slides section.center { text-align: center; }
-    .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
-      color: #ffffff; font-weight: 900; text-transform: none;
-      letter-spacing: -0.01em; margin-top: 0;
-    }
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 { color: #fff; font-weight: 900; text-transform: none; letter-spacing: -0.01em; margin-top: 0; }
     .reveal h1 { font-size: 2.6em; }
-    .reveal h2 { font-size: 1.7em; margin-bottom: 0.5em; }
-    .reveal h3 { font-size: 1.3em; color: var(--pink); margin-bottom: 0.4em; }
-    .reveal h4 { font-size: 1.05em; color: var(--pink); }
-    .reveal .accent { color: var(--pink); }
-    .reveal .blue { color: var(--blue); }
-    .reveal .purple { color: var(--purple); }
-    .reveal .muted { color: var(--muted); }
-    .reveal .green { color: var(--green); }
-    .reveal .orange { color: var(--orange); }
-    .reveal .red { color: var(--red); }
-    .reveal .amber { color: var(--amber); }
-    .reveal .tag {
-      display: inline-block; padding: 4px 10px; border-radius: 999px;
-      font-size: 0.55em; font-weight: 800; letter-spacing: 0.18em;
-      text-transform: uppercase; background: var(--pink-soft);
-      color: var(--pink); border: 1px solid var(--pink-border); margin-bottom: 14px;
-    }
-    .reveal pre {
-      width: 100%; max-width: 100%; font-size: 0.45em; box-shadow: none;
-      border-radius: 8px; background: #0d1117 !important;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    .reveal pre code { padding: 14px 18px; max-height: none; line-height: 1.45; }
-    .reveal table {
-      font-size: 0.6em; width: 100%; border-collapse: separate;
-      border-spacing: 0; margin: 12px 0;
-    }
-    .reveal table th, .reveal table td {
-      padding: 7px 12px; border: none;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      text-align: left; vertical-align: top;
-    }
-    .reveal table th {
-      background: rgba(255,255,255,0.04); color: var(--pink);
-      font-weight: 700; font-size: 0.85em; text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
+    .reveal h2 { font-size: 1.65em; margin-bottom: 0.45em; }
+    .reveal h4 { font-size: 1.0em; color: var(--pink); }
+    .reveal .accent { color: var(--pink); } .reveal .blue { color: var(--blue); } .reveal .purple { color: var(--purple); }
+    .reveal .muted { color: var(--muted); } .reveal .green { color: var(--green); } .reveal .red { color: var(--red); } .reveal .amber { color: var(--amber); }
+    .reveal .tag { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.52em; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; background: var(--pink-soft); color: var(--pink); border: 1px solid var(--pink-border); margin-bottom: 12px; }
+    .reveal pre { width: 100%; max-width: 100%; font-size: 0.42em; box-shadow: none; border-radius: 8px; background: #0d1117 !important; border: 1px solid rgba(255,255,255,0.08); }
+    .reveal pre code { padding: 12px 16px; max-height: none; line-height: 1.4; }
+    .reveal table { font-size: 0.56em; width: 100%; border-collapse: separate; border-spacing: 0; margin: 10px 0; }
+    .reveal table th, .reveal table td { padding: 6px 11px; border: none; border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left; vertical-align: top; }
+    .reveal table th { background: rgba(255,255,255,0.04); color: var(--pink); font-weight: 700; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.08em; }
     .reveal table tr:last-child td { border-bottom: none; }
-    .reveal ul, .reveal ol { font-size: 0.85em; line-height: 1.55; }
-    .reveal li { margin-bottom: 6px; }
+    .reveal ul, .reveal ol { font-size: 0.8em; line-height: 1.5; }
+    .reveal li { margin-bottom: 4px; }
     .reveal li > strong { color: var(--pink); }
-    .reveal code:not(pre code) {
-      background: rgba(236,72,153,0.10); color: var(--pink);
-      padding: 1px 6px; border-radius: 4px; font-size: 0.85em;
-    }
-    .reveal blockquote {
-      border-left: 3px solid var(--pink); background: rgba(236,72,153,0.06);
-      padding: 14px 18px; font-style: normal; font-size: 0.75em;
-      border-radius: 0 8px 8px 0;
-    }
-    .reveal .small { font-size: 0.7em; }
-    .reveal .tiny { font-size: 0.55em; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-    .card {
-      background: var(--panel); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px; padding: 18px 22px;
-    }
+    .reveal code:not(pre code) { background: rgba(236,72,153,0.10); color: var(--pink); padding: 1px 6px; border-radius: 4px; font-size: 0.82em; }
+    .reveal blockquote { border-left: 3px solid var(--pink); background: rgba(236,72,153,0.06); padding: 12px 16px; font-style: normal; font-size: 0.72em; border-radius: 0 8px 8px 0; }
+    .reveal .small { font-size: 0.7em; } .reveal .tiny { font-size: 0.55em; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .card { background: var(--panel); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 18px; }
     .card.accent { border-color: var(--pink-border); background: var(--pink-soft); }
     .card.blue { border-color: rgba(14,165,233,0.4); background: rgba(14,165,233,0.07); }
-    .card.purple { border-color: rgba(139,92,246,0.4); background: rgba(139,92,246,0.07); }
     .card.gray { border-color: rgba(148,163,184,0.4); background: rgba(148,163,184,0.06); }
-    .card h4 { margin: 0 0 8px 0; }
-    .stack { display: flex; flex-direction: column; gap: 8px; }
-    .pill {
-      display: inline-block; padding: 3px 8px; border-radius: 999px;
-      font-size: 0.6em; font-weight: 800; letter-spacing: 0.06em;
-    }
+    .card h4 { margin: 0 0 6px 0; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.58em; font-weight: 800; letter-spacing: 0.06em; }
     .pill.ok { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
-    .pill.warn { background: rgba(251,191,36,0.15); color: var(--amber); border: 1px solid rgba(251,191,36,0.35); }
     .pill.bad { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.35); }
     .pill.redact { background: rgba(14,165,233,0.15); color: var(--blue); border: 1px solid rgba(14,165,233,0.35); }
-    .ascii {
-      font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.5em;
-      line-height: 1.35; white-space: pre; background: #0d1117; color: #c9d1d9;
-      padding: 18px 22px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
-    }
-    .footer {
-      position: absolute; bottom: 14px; left: 50px; right: 50px;
-      font-size: 11px; color: rgba(148,163,184,0.45);
-      display: flex; justify-content: space-between;
-    }
-    .reveal .progress { color: var(--pink); }
-    .reveal .controls { color: var(--pink); }
-    body { background: var(--bg); }
-    .reveal .slide-background-content { background: var(--bg); }
+    .footer { position: absolute; bottom: 14px; left: 48px; right: 48px; font-size: 11px; color: rgba(148,163,184,0.45); display: flex; justify-content: space-between; }
+    .reveal .progress { color: var(--pink); } .reveal .controls { color: var(--pink); }
+    body { background: var(--bg); } .reveal .slide-background-content { background: var(--bg); }
   </style>
 </head>
 
@@ -132,474 +59,157 @@
 <div class="reveal">
 <div class="slides">
 
-<!-- ═══════════ COVER ═══════════ -->
+<!-- ═══ COVER ═══ -->
 <section class="center">
-  <span class="tag">Demo Setup Reference</span>
-  <h1 style="margin-bottom: 12px;">Portkey + <span class="accent">Prisma AIRS</span></h1>
-  <p class="muted" style="font-size: 0.9em;">The exact integration, API keys, guardrails and configs that power the AI/LLM Gateway pillar — so you never have to re-remember them.</p>
-  <p class="small" style="margin-top: 36px;">Workspace: <code>sudo</code> · App: <code>sudo-demo-portal</code> · GCP: <code>sergei-playground-338006</code></p>
-  <p class="small muted" style="margin-top: 8px;">Sergei Udovenko · SE · Palo Alto Networks · 2026-06-20</p>
-  <p class="tiny muted" style="margin-top: 40px;">→ arrow keys / space to advance · <code>f</code> fullscreen · <code>esc</code> overview · <code>e</code> print to PDF</p>
+  <span class="tag">Setup Reference</span>
+  <h1 style="margin-bottom: 10px;">Portkey + <span class="accent">Prisma AIRS</span></h1>
+  <p class="muted" style="font-size: 0.9em;">The integration, keys, guardrails, configs and flows behind the AI/LLM Gateway pillar — one screen each.</p>
+  <p class="small" style="margin-top: 30px;">Workspace <code>sudo</code> · app <code>sudo-demo-portal</code> · GCP <code>sergei-playground-338006</code></p>
+  <p class="tiny muted" style="margin-top: 28px;">Sergei Udovenko · Palo Alto Networks · 2026-06-20 · <code>e</code> = print PDF</p>
 </section>
 
-<!-- ═══════════ CHEAT SHEET ═══════════ -->
+<!-- ═══ CHEAT SHEET ═══ -->
 <section>
-  <span class="tag">Read this first</span>
+  <span class="tag">The cheat sheet</span>
   <h2>Everything in one table</h2>
   <table>
     <thead><tr><th>Type</th><th>Name</th><th>ID / slug</th><th>What it is</th></tr></thead>
     <tbody>
       <tr><td>Integration</td><td>sudo-vertexai</td><td><code>@sudo-vertexai</code></td><td>Vertex AI · region <strong class="accent">global</strong> · SA-file auth</td></tr>
       <tr><td>API key</td><td><strong class="accent">sudo-demo-portal-full-key</strong></td><td><code>mg8…v2P</code></td><td><strong>Portal key — Config Override ON</strong></td></tr>
-      <tr><td>API key</td><td>sudo-demo-portal-portkey-key</td><td><code>i6H…wgv</code></td><td>Native-guardrails only (bound, override off)</td></tr>
-      <tr><td>API key</td><td>sudo-n8n-key</td><td><code>jXc…WGp</code></td><td>n8n integration (separate from portal)</td></tr>
+      <tr><td>API key</td><td>sudo-demo-portal-portkey-key</td><td><code>i6H…wgv</code></td><td>Native-only (bound, override off)</td></tr>
+      <tr><td>API key</td><td>sudo-n8n-key</td><td><code>jXc…WGp</code></td><td>n8n integration (separate)</td></tr>
       <tr><td>Guardrail</td><td>sudo-portkey-guardrails</td><td><code>pg-sudo-p-c7e4ad</code></td><td>Native: PII redact · Contains Code · banned words</td></tr>
       <tr><td>Guardrail</td><td>sudo-airs</td><td><code>pg-sudo-a-c3bfdd</code></td><td>PANW Prisma AIRS · profile <code>sudo-airs-api-profile-new</code></td></tr>
-      <tr><td>Config</td><td>sudo-demo-portal-portkey</td><td><code>pc-sudo-d-a72af9</code></td><td>AI-GW <strong class="blue">native</strong> lane → <code>pg-sudo-p-c7e4ad</code></td></tr>
-      <tr><td>Config</td><td>sudo-demo-portal-airs-portkey</td><td><code>pc-sudo-t-5a505b</code></td><td><strong class="accent">AIRS</strong> lane → <code>pg-sudo-a-c3bfdd</code></td></tr>
+      <tr><td>Config</td><td>sudo-demo-portal-portkey</td><td><code>pc-sudo-d-a72af9</code></td><td><strong class="blue">native</strong> lane → pg-sudo-p-c7e4ad</td></tr>
+      <tr><td>Config</td><td>sudo-demo-portal-airs-portkey</td><td><code>pc-sudo-t-5a505b</code></td><td><strong class="accent">AIRS</strong> lane → pg-sudo-a-c3bfdd</td></tr>
       <tr><td>Config</td><td>sudo-airs-portkey-n8n</td><td><code>pc-sudo-a-315f92</code></td><td>n8n flow (Portkey + AIRS)</td></tr>
     </tbody>
   </table>
-  <p class="tiny muted">Key secrets are masked (prefix…suffix). Config / guardrail IDs are not secret. Full key value lives only in <code>.env</code>.</p>
+  <p class="tiny muted">Key secrets masked. Config / guardrail IDs are not secret — full key value lives only in <code>.env</code>.</p>
   <div class="footer"><span>Cheat sheet</span></div>
 </section>
 
-<!-- ═══════════ THE 3 FLOWS ═══════════ -->
+<!-- ═══ FLOWS + LOGIC ═══ -->
 <section>
-  <span class="tag">The whole point</span>
+  <span class="tag">Flows &amp; logic</span>
   <h2>Three flows — same prompt, same model</h2>
   <table>
     <thead><tr><th>Flow</th><th>Path</th><th>Config</th><th>Catches</th></tr></thead>
     <tbody>
-      <tr>
-        <td><strong class="gray">1 · No gateway</strong></td>
-        <td>App → Vertex <strong>directly</strong> (bypasses Portkey)</td>
-        <td><span class="muted">none</span></td>
-        <td><span class="red">nothing — no inspection</span></td>
-      </tr>
-      <tr>
-        <td><strong class="blue">2 · AI Gateway (native)</strong></td>
-        <td>App → Portkey → Vertex</td>
-        <td><code>pc-sudo-d-a72af9</code></td>
-        <td>PII (redact) · banned words · source code</td>
-      </tr>
-      <tr>
-        <td><strong class="accent">3 · Gateway + AIRS</strong></td>
-        <td>App → Portkey → <strong>AIRS</strong> → Vertex</td>
-        <td><code>pc-sudo-t-5a505b</code></td>
-        <td>prompt injection · jailbreak · harmful · DLP · URLs</td>
-      </tr>
+      <tr><td><strong class="muted">1 · No gateway</strong></td><td>App → Vertex <strong>directly</strong> (bypasses Portkey)</td><td><span class="muted">none</span></td><td><span class="red">nothing</span></td></tr>
+      <tr><td><strong class="blue">2 · AI Gateway</strong></td><td>App → Portkey → Vertex</td><td><code>pc-sudo-d-a72af9</code></td><td>PII (redact) · banned words · code</td></tr>
+      <tr><td><strong class="accent">3 · Gateway + AIRS</strong></td><td>App → Portkey → <strong>AIRS</strong> → Vertex</td><td><code>pc-sudo-t-5a505b</code></td><td>injection · jailbreak · harmful · DLP · URLs</td></tr>
     </tbody>
   </table>
-  <blockquote style="margin-top: 18px;">The only thing that changes between flows is <strong>what inspects the traffic in the middle</strong>. Native guardrails enforce <strong class="blue">business / data policy</strong>; AIRS catches <strong class="accent">AI-native threats</strong> that regex/PII checks can't see.</blockquote>
-  <div class="footer"><span>The 3 flows</span></div>
-</section>
-
-<!-- ═══════════ PART 1 — MENTAL MODEL ═══════════ -->
-<section class="center">
-  <span class="tag">Part 1</span>
-  <h1>How it fits together</h1>
-  <p class="muted">Integration → guardrail → config → key → request.</p>
-</section>
-
-<section>
-  <span class="tag">Mental model</span>
-  <h2>How it stacks today</h2>
-<div class="ascii">          ┌──────────────────────────────────────────────────────┐
-          │                    WORKSPACE  (sudo)                   │
-          │                                                        │
-          │  INTEGRATION   @sudo-vertexai                          │
-          │     └ Vertex AI · project sergei-playground-338006     │
-          │       region GLOBAL · models gemini-3.1-flash-lite,    │
-          │       gemini-3.5-flash                                 │
-          │                                                        │
-          │  GUARDRAILS    pg-sudo-p-c7e4ad  (native: PII/code/    │
-          │                                   words)               │
-          │                pg-sudo-a-c3bfdd  (PANW Prisma AIRS)    │
-          │                                                        │
-          │  CONFIGS       pc-sudo-d-a72af9  → native guardrail    │
-          │                pc-sudo-t-5a505b  → AIRS guardrail      │
-          │                (no override_params → model from req)   │
-          │                                                        │
-          │  API KEY       sudo-demo-portal-full-key (mg8…v2P)     │
-          │                Allow Config Override = ON              │
-          │                                                        │
-          │  REQUEST       POST /v1/chat/completions               │
-          │                x-portkey-api-key:  &lt;full-key&gt;          │
-          │                x-portkey-config:   pc-…  (per request) │
-          └──────────────────────────────────────────────────────┘</div>
-  <div class="footer"><span>Part 1 — Mental model</span></div>
-</section>
-
-<section>
-  <span class="tag">Mental model</span>
-  <h2>The one design decision that makes it work</h2>
-  <div class="grid-2">
-    <div class="card accent">
-      <h4>One key + per-request config</h4>
-      <p class="small">The portal authenticates with <strong>one</strong> key (<code>sudo-demo-portal-full-key</code>) and tells Portkey <em>which config to use on each request</em>. That requires <strong class="accent">Allow Config Override = ON</strong> on the key.</p>
-      <p class="small" style="margin-top: 10px;">With override <span class="red">OFF</span>, the request's config is ignored and the key is locked to one config — the 3-lane switch would collapse to a single lane.</p>
-    </div>
-    <div class="card">
-      <h4>Configs are the policy unit</h4>
-      <ul class="small">
-        <li>Integration = credentials only</li>
-        <li>Guardrail = reusable check (AIRS, PII, words)</li>
-        <li><strong>Config</strong> = provider + which guardrails + cache + retry</li>
-        <li>App swaps <strong>config</strong> = swaps policy. No code change.</li>
-      </ul>
-      <p class="tiny muted" style="margin-top: 8px;">Per Portkey docs: a request config overrides the key's default <em>unless</em> "Allow Config Override" is turned off.</p>
-    </div>
+  <div class="grid-2" style="margin-top: 14px;">
+    <blockquote style="margin:0;"><strong>One key, per-request config.</strong> The portal sends one key + an <code>x-portkey-config</code> per request — so it needs <strong class="accent">Allow Config Override = ON</strong>. Off = every lane collapses to one config.</blockquote>
+    <blockquote style="margin:0;"><strong>Two jobs.</strong> Native guardrails enforce <strong class="blue">business / data policy</strong>; AIRS catches the <strong class="accent">AI-native threats</strong> regex/PII can't see. No-gateway is the "before".</blockquote>
   </div>
-  <div class="footer"><span>Part 1 — Mental model</span></div>
+  <div class="footer"><span>Flows &amp; logic</span></div>
 </section>
 
-<!-- ═══════════ PART 2 — INTEGRATION ═══════════ -->
+<!-- ═══ SETUP ═══ -->
 <section>
-  <span class="tag">Part 2 · Integration</span>
-  <h2><code>sudo-vertexai</code> — the only provider</h2>
-  <div class="grid-2">
-    <div class="card">
-      <h4>Settings (Portkey → Integrations)</h4>
-      <ul class="small">
-        <li><strong>Slug:</strong> <code>@sudo-vertexai</code></li>
-        <li><strong>Auth:</strong> Service Account File</li>
-        <li><strong>Project:</strong> <code>sergei-playground-338006</code></li>
-        <li><strong>Vertex Region:</strong> <strong class="accent">global</strong></li>
-        <li><strong>Model Provisioning:</strong> enable
-          <ul class="tiny">
-            <li><code>gemini-3.1-flash-lite</code> &nbsp;<span class="pill ok">demo default</span></li>
-            <li><code>gemini-3.5-flash</code> &nbsp;<span class="muted tiny">(reasoning)</span></li>
-          </ul>
-        </li>
-      </ul>
-    </div>
-    <div class="card amber" style="border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.06);">
-      <h4 class="amber">⚠ Why region = global</h4>
-      <ul class="small">
-        <li>Every <code>gemini-3.x</code> model is <strong>global-region only</strong> in this GCP project — not in us-central1 / us-east5.</li>
-        <li><code>gemini-2.5-*</code> is the opposite — us-central1 only.</li>
-        <li>The "no-gateway" lane calls Vertex directly and routes <code>gemini-3.x</code> through the <strong>OpenAI-compatible</strong> endpoint with a <code>google/</code> prefix (the Gemini SDK can't reach <code>global</code>).</li>
-      </ul>
-      <p class="tiny muted">Bedrock was removed — Vertex-only workspace.</p>
-    </div>
-  </div>
-  <div class="footer"><span>Part 2 — Integration</span></div>
-</section>
-
-<!-- ═══════════ PART 3 — API KEYS ═══════════ -->
-<section>
-  <span class="tag">Part 3 · API keys</span>
-  <h2>Three keys, three jobs</h2>
-  <table>
-    <thead><tr><th>Key</th><th>Prefix</th><th>Bound config</th><th>Override</th><th>Used by</th></tr></thead>
-    <tbody>
-      <tr><td><strong class="accent">sudo-demo-portal-full-key</strong></td><td><code>mg8…v2P</code></td><td>airs (default)</td><td><span class="pill ok">ON</span></td><td><strong>The demo portal</strong> — selects any config per request</td></tr>
-      <tr><td>sudo-demo-portal-portkey-key</td><td><code>i6H…wgv</code></td><td>native</td><td><span class="pill bad">OFF</span></td><td>Native-guardrails-only experiments</td></tr>
-      <tr><td>sudo-n8n-key</td><td><code>jXc…WGp</code></td><td>n8n (Portkey+AIRS)</td><td><span class="pill bad">OFF</span></td><td>n8n workflow demo (separate)</td></tr>
-    </tbody>
-  </table>
-  <blockquote style="margin-top: 16px;">The portal's <code>.env</code> uses <strong class="accent">sudo-demo-portal-full-key</strong> as <code>PORTKEY_API_KEY</code>. It MUST keep <strong>Allow Config Override = ON</strong> — that's what lets the same key drive the native lane and the AIRS lane.</blockquote>
-  <div class="footer"><span>Part 3 — API keys</span></div>
-</section>
-
-<!-- ═══════════ PART 4 — GUARDRAILS ═══════════ -->
-<section>
-  <span class="tag">Part 4 · Guardrail A</span>
-  <h2><code>sudo-portkey-guardrails</code> — native policy</h2>
-  <p class="small muted">id <code>pg-sudo-p-c7e4ad</code> · attached to the <strong class="blue">AI-GW native</strong> config on input + output</p>
-  <div class="grid-3">
-    <div class="card blue">
-      <h4>No PII <span class="pill redact">REDACT</span></h4>
-      <p class="tiny">Detects &amp; masks to <code>****</code> before the model sees it:</p>
-      <p class="tiny">EMAIL · PHONE · ADDRESS · NAME · IP · CREDIT_CARD · SSN</p>
-    </div>
-    <div class="card blue">
-      <h4>Contains Code</h4>
-      <p class="tiny">Format: <code>Python</code></p>
-      <p class="tiny"><strong>Inverse = ON</strong> → check fails (blocks) when the content <em>contains</em> Python code.</p>
-    </div>
-    <div class="card blue">
-      <h4>Contains (banned)</h4>
-      <p class="tiny">Words: <code>סרגיי</code> · <code>Chekpoint</code> · <code>Kokomoko</code></p>
-      <p class="tiny"><strong>Operator = none</strong> → fails (blocks) when <em>any</em> of these appears.</p>
-    </div>
-  </div>
-  <p class="small muted" style="margin-top: 14px;">→ These are <strong class="blue">business / data policy</strong> controls — org-specific, not threat detection. AIRS doesn't know your banned-word list.</p>
-  <div class="footer"><span>Part 4 — Guardrails</span></div>
-</section>
-
-<section>
-  <span class="tag">Part 4 · Guardrail B</span>
-  <h2><code>sudo-airs</code> — PANW Prisma AIRS</h2>
-  <div class="grid-2">
-    <div class="card accent">
-      <h4>Settings</h4>
-      <ul class="small">
-        <li><strong>id:</strong> <code>pg-sudo-a-c3bfdd</code></li>
-        <li><strong>Check:</strong> PANW Prisma AIRS Guardrail (PARTNER)</li>
-        <li><strong>Profile Name:</strong> <code>sudo-airs-api-profile-new</code></li>
-        <li><strong>App User:</strong> <code>sudo-app</code></li>
-        <li><strong>Action:</strong> block when AIRS returns <code>action=block</code></li>
-      </ul>
-      <p class="tiny muted" style="margin-top: 8px;">Attached to the <strong class="accent">AIRS</strong> config on input + output.</p>
-    </div>
-    <div class="card">
-      <h4>What it catches (the AI threats)</h4>
-      <ul class="small">
-        <li>Prompt injection / instruction override</li>
-        <li>Jailbreaks (DAN, roleplay)</li>
-        <li>Harmful / dangerous content</li>
-        <li>Sensitive-data exposure (DLP)</li>
-        <li>Malicious URLs · toxic content</li>
-      </ul>
-      <p class="tiny muted" style="margin-top: 8px;">Tune detections in Strata Cloud Manager on the profile.</p>
-    </div>
-  </div>
-  <div class="footer"><span>Part 4 — Guardrails</span></div>
-</section>
-
-<!-- ═══════════ PART 5 — CONFIGS ═══════════ -->
-<section>
-  <span class="tag">Part 5 · Configs</span>
-  <h2>The two portal configs (JSON)</h2>
+  <span class="tag">Setup — what to configure</span>
+  <h2>The four building blocks</h2>
   <div class="grid-2">
     <div class="card blue">
-      <h4>sudo-demo-portal-portkey · <code>pc-sudo-d-a72af9</code></h4>
-<pre style="font-size: 0.5em;"><code class="hljs language-json">{
-  "retry": { "attempts": 3 },
-  "cache": { "mode": "simple" },
-  "provider": "@sudo-vertexai",
-  "input_guardrails":  ["pg-sudo-p-c7e4ad"],
-  "output_guardrails": ["pg-sudo-p-c7e4ad"]
-}</code></pre>
-      <p class="tiny">→ the <strong class="blue">AI-GW native</strong> lane</p>
+      <h4>① Integration · <code>@sudo-vertexai</code></h4>
+      <ul class="tiny">
+        <li>Vertex AI · SA-file · project <code>sergei-playground-338006</code></li>
+        <li>Region <strong class="accent">global</strong> (gemini-3.x is global-only here)</li>
+        <li>Provision: <code>gemini-3.1-flash-lite</code> + <code>gemini-3.5-flash</code></li>
+      </ul>
     </div>
     <div class="card accent">
-      <h4>sudo-demo-portal-airs-portkey · <code>pc-sudo-t-5a505b</code></h4>
-<pre style="font-size: 0.5em;"><code class="hljs language-json">{
-  "retry": { "attempts": 3 },
-  "cache": { "mode": "simple" },
-  "provider": "@sudo-vertexai",
-  "input_guardrails":  ["pg-sudo-a-c3bfdd"],
-  "output_guardrails": ["pg-sudo-a-c3bfdd"]
-}</code></pre>
-      <p class="tiny">→ the <strong class="accent">AIRS</strong> lane</p>
-    </div>
-  </div>
-  <blockquote style="margin-top: 14px;"><strong>No <code>override_params</code></strong> in either config — that's deliberate. It lets the request's <code>model</code> flow through, so the portal's model picker drives all three lanes (e.g. switch to <code>gemini-3.5-flash</code>).</blockquote>
-  <div class="footer"><span>Part 5 — Configs</span></div>
-</section>
-
-<!-- ═══════════ PART 6 — THE FLOWS IN DEPTH ═══════════ -->
-<section class="center">
-  <span class="tag">Part 6</span>
-  <h1>What each flow does</h1>
-  <p class="muted">No protection → AI Gateway → AI Gateway + AIRS.</p>
-</section>
-
-<section>
-  <span class="tag">Flow 1 · No gateway</span>
-  <h2>Direct to the model — no inspection</h2>
-  <div class="grid-2">
-    <div class="card gray">
-      <h4>What happens</h4>
-      <ul class="small">
-        <li>The portal calls Vertex <strong>directly</strong> with its own GCP creds — <strong>Portkey is not in the path</strong>.</li>
-        <li>No config, no key, no guardrail.</li>
-        <li>This is the "before" picture: whatever the model does is all you get.</li>
+      <h4>② Key · <code>sudo-demo-portal-full-key</code></h4>
+      <ul class="tiny">
+        <li>Value in <code>.env</code> as <code>PORTKEY_API_KEY</code></li>
+        <li><strong class="accent">Allow Config Override = ON</strong> — the linchpin</li>
+        <li>Lets the portal pick native / AIRS per request</li>
       </ul>
     </div>
-    <div class="card">
-      <h4>In the code</h4>
-      <p class="small"><code>portkey-routes.js → callDirectVertex()</code>. For <code>gemini-3.x</code> it uses the Vertex OpenAI-compatible endpoint on <code>global</code> with a <code>google/</code> prefix; <code>gemini-2.5</code> uses the Gemini SDK on us-central1.</p>
-      <p class="small accent" style="margin-top: 10px;">Demo result: PII is echoed back raw · injections reach the model · only the model's own refusal (if any) stops anything.</p>
-    </div>
-  </div>
-  <div class="footer"><span>Part 6 — Flows</span></div>
-</section>
-
-<section>
-  <span class="tag">Flow 2 · AI Gateway (native)</span>
-  <h2>Portkey gateway + native guardrails</h2>
-  <div class="grid-2">
     <div class="card blue">
-      <h4>What happens</h4>
-      <ul class="small">
-        <li>Request goes through Portkey with config <code>pc-sudo-d-a72af9</code>.</li>
-        <li>Input scanned, then model, then output scanned — both stages run <code>portkey.pii</code>, <code>containsCode</code>, <code>contains</code>.</li>
+      <h4>③ Native guardrail · <code>pg-sudo-p-c7e4ad</code></h4>
+      <ul class="tiny">
+        <li><strong>No PII</strong> <span class="pill redact">redact</span> EMAIL·PHONE·ADDR·NAME·IP·CC·SSN</li>
+        <li><strong>Contains Code</strong> Python · Inverse ON (block on code)</li>
+        <li><strong>Contains</strong> none-op: סרגיי·Chekpoint·Kokomoko</li>
       </ul>
     </div>
-    <div class="card">
-      <h4>What you'll see</h4>
-      <ul class="small">
-        <li>PII → <span class="pill redact">REDACTED</span> (masked to ****), request proceeds</li>
-        <li>Banned word / Python code → <span class="pill ok">BLOCKED</span></li>
-        <li>Prompt injection / jailbreak → <span class="pill bad">allowed</span> (native can't see it)</li>
-      </ul>
-      <p class="tiny muted" style="margin-top: 8px;">"Allowed" is orange in the demo (= got through). Redaction shows as a blue <code>ALLOWED · REDACTED</code> badge.</p>
-    </div>
-  </div>
-  <div class="footer"><span>Part 6 — Flows</span></div>
-</section>
-
-<section>
-  <span class="tag">Flow 3 · Gateway + AIRS</span>
-  <h2>Portkey gateway + Prisma AIRS</h2>
-  <div class="grid-2">
     <div class="card accent">
-      <h4>What happens</h4>
-      <ul class="small">
-        <li>Request goes through Portkey with config <code>pc-sudo-t-5a505b</code>.</li>
-        <li>Portkey hands input + output to <strong>AIRS</strong> (profile <code>sudo-airs-api-profile-new</code>) for scanning.</li>
-        <li>If AIRS returns <code>action=block</code>, the request is stopped before the model.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>What you'll see</h4>
-      <ul class="small">
-        <li>Prompt injection · jailbreak · dangerous · URL · toxic → <span class="pill ok">BLOCKED</span></li>
-        <li>PII generation → <span class="pill ok">BLOCKED</span> (AIRS is stricter than redact)</li>
-        <li>Benign · banned word · benign code → <span class="pill bad">allowed</span> (no security threat)</li>
+      <h4>④ AIRS guardrail · <code>pg-sudo-a-c3bfdd</code></h4>
+      <ul class="tiny">
+        <li>PANW Prisma AIRS · profile <code>sudo-airs-api-profile-new</code></li>
+        <li>App user <code>sudo-app</code> · block on <code>action=block</code></li>
+        <li>Tune detections in Strata Cloud Manager</li>
       </ul>
     </div>
   </div>
-  <div class="footer"><span>Part 6 — Flows</span></div>
+  <p class="tiny muted" style="margin-top: 10px;">→ Each guardrail is wrapped in a config (input + output) with <strong>no <code>override_params</code></strong>, so the request's model drives all lanes. <code>{ retry:3, cache:simple, provider:@sudo-vertexai, in/out_guardrails:[…] }</code></p>
+  <div class="footer"><span>Setup</span></div>
 </section>
 
-<!-- ═══════════ PART 7 — VERIFIED OUTCOMES ═══════════ -->
+<!-- ═══ VERIFIED OUTCOMES ═══ -->
 <section>
-  <span class="tag">Part 7 · What we're looking for</span>
-  <h2>Verified outcomes (live, 2026-06-20)</h2>
+  <span class="tag">What we're looking for</span>
+  <h2>Verified outcomes (live)</h2>
   <table>
     <thead><tr><th>Scenario</th><th>No gateway</th><th>AI GW (native)</th><th>AIRS</th></tr></thead>
     <tbody>
       <tr><td>Benign Q&amp;A</td><td>allowed</td><td>allowed</td><td>allowed</td></tr>
-      <tr><td>Banned word (Kokomoko)</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td><td>allowed</td></tr>
-      <tr><td>Source code (Python block)</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td><td>allowed</td></tr>
-      <tr><td>PII (email / phone)</td><td><span class="red">leaked</span></td><td><strong class="blue">REDACTED</strong></td><td><strong class="green">BLOCKED</strong></td></tr>
-      <tr><td>Financial PII (card + SSN)</td><td><span class="red">leaked</span></td><td><strong class="blue">REDACTED</strong></td><td><strong class="green">BLOCKED</strong></td></tr>
-      <tr><td>Prompt injection</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
-      <tr><td>Jailbreak (DAN)</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
-      <tr><td>Dangerous content</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
-      <tr><td>Malicious URL</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
-      <tr><td>Toxic / harassment</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
+      <tr><td>Banned word · source code</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td><td>allowed</td></tr>
+      <tr><td>PII · financial PII</td><td><span class="red">leaked</span></td><td><strong class="blue">REDACTED</strong></td><td><strong class="green">BLOCKED</strong></td></tr>
+      <tr><td>Prompt injection · jailbreak</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
+      <tr><td>Dangerous · malicious URL · toxic</td><td>allowed</td><td>allowed</td><td><strong class="green">BLOCKED</strong></td></tr>
     </tbody>
   </table>
-  <p class="small accent" style="margin-top: 10px;">→ The story: native guardrails enforce <strong class="blue">policy</strong>; AIRS catches the <strong class="accent">AI-native threats</strong> native checks miss.</p>
-  <div class="footer"><span>Part 7 — Outcomes</span></div>
+  <blockquote style="margin-top: 14px;">Native enforces <strong class="blue">policy</strong> (your banned words, code rules, PII masking). AIRS catches the <strong class="accent">AI-native threats</strong> native checks miss. No-gateway proves the "before".</blockquote>
+  <div class="footer"><span>Outcomes</span></div>
 </section>
 
-<!-- ═══════════ PART 8 — APP WIRING ═══════════ -->
+<!-- ═══ RUN IT ═══ -->
 <section>
-  <span class="tag">Part 8 · App wiring</span>
-  <h2>The <code>.env</code> shape</h2>
-<pre><code class="hljs language-bash"># ─── Portkey LLM Gateway ───
-# sudo-demo-portal-full-key (mg8…v2P) — Allow Config Override = ON
-PORTKEY_API_KEY=&lt;sudo-demo-portal-full-key secret&gt;
-PORTKEY_CONFIG_AIRS=pc-sudo-t-5a505b           # AIRS lane
-PORTKEY_CONFIG_DEFAULTS=pc-sudo-d-a72af9       # native lane
-PORTKEY_CONFIG_NO_GUARDRAIL=pc-sudo-d-a72af9   # vestigial — no-gw lane bypasses Portkey
-PORTKEY_CONFIG_FALLBACK=                        # no Bedrock
+  <span class="tag">Run it</span>
+  <h2><code>.env</code>, deploy &amp; gotchas</h2>
+  <div class="grid-2">
+    <div>
+<pre><code class="hljs language-bash"># sudo-demo-portal-full-key — override ON
+PORTKEY_API_KEY=&lt;full-key secret&gt;
+PORTKEY_CONFIG_AIRS=pc-sudo-t-5a505b
+PORTKEY_CONFIG_DEFAULTS=pc-sudo-d-a72af9
+PORTKEY_CONFIG_NO_GUARDRAIL=pc-sudo-d-a72af9
+PORTKEY_CONFIG_FALLBACK=
 PORTKEY_VERTEX_SLUG=@sudo-vertexai
-PORTKEY_BEDROCK_SLUG=                           # Bedrock removed</code></pre>
-  <p class="small" style="margin-top: 12px;">Lane → config mapping in <code>portkey-routes.js</code>: <code>no-guardrail</code> = direct Vertex · <code>defaults</code> = <code>PORTKEY_CONFIG_DEFAULTS</code> · <code>airs</code> = <code>PORTKEY_CONFIG_AIRS</code>.</p>
-  <p class="tiny muted">All backend logic lives in <code>portkey-routes.js</code> (mounted at <code>/api/gateway</code>). The catalog lists <code>gemini-3.1-flash-lite</code> + <code>gemini-3.5-flash</code>.</p>
-  <div class="footer"><span>Part 8 — App wiring</span></div>
-</section>
-
-<section>
-  <span class="tag">Part 8 · The pillar</span>
-  <h2>AI/LLM Gateway — four tabs</h2>
-  <div class="grid-2">
-    <div class="card">
-      <h4>Overview</h4>
-      <p class="small">What a gateway is, the dark "all three flows at a glance" architecture diagram, the 3 flow cards, and a "how to read the demo" legend.</p>
-    </div>
-    <div class="card accent">
-      <h4>Scenarios</h4>
-      <p class="small">3 groups (Baseline · Business &amp; Data Policy · AI-Native Threats). <strong>▶ runs</strong> the prompt through all 3 lanes; the card expands to <strong>edit the prompt</strong>. Includes the native-guardrails reference banner.</p>
+PORTKEY_BEDROCK_SLUG=</code></pre>
+<pre style="margin-top:10px;"><code class="hljs language-bash"># EC2 deploy (origin: sudo-airs-demo-portal)
+cd /opt/sudo-airs-demo && git pull origin main \
+  && npm run build && pm2 restart airs-server
+# .env is gitignored — hand-edit on EC2</code></pre>
     </div>
     <div class="card">
-      <h4>Live Demo</h4>
-      <p class="small">Free-form chat + the "3 lanes" compare button + live pipeline trace.</p>
-    </div>
-    <div class="card">
-      <h4>Integration Guide</h4>
-      <p class="small">curl / Node / Python walkthroughs with the strict-compliance flag.</p>
+      <h4>Gotchas</h4>
+      <ul class="tiny">
+        <li><strong>Override ON</strong> on the portal key — or lanes collapse.</li>
+        <li><strong>gemini-3.x = global</strong>; direct lane uses the Vertex OpenAI endpoint + <code>google/</code> prefix.</li>
+        <li><strong>No <code>override_params</code></strong> → model picker drives all lanes.</li>
+        <li>Model must be provisioned in <strong>Portkey AND Vertex</strong> (else <code>model_not_allowed</code> / 404).</li>
+        <li>Guardrails: Code <code>Inverse=ON</code> · Contains <code>op=none</code> · PII = redact.</li>
+        <li>Redaction shows as <code>ALLOWED · REDACTED</code> (<code>transformed:true</code>).</li>
+      </ul>
     </div>
   </div>
-  <div class="footer"><span>Part 8 — The pillar</span></div>
+  <p class="tiny muted" style="margin-top: 8px;">Pillar tabs: <strong>Overview</strong> (diagram) · <strong>Scenarios</strong> (▶ runs 3 lanes, editable prompt) · <strong>Live Demo</strong> · <strong>Integration Guide</strong>. Backend: <code>portkey-routes.js</code> @ <code>/api/gateway</code>.</p>
+  <div class="footer"><span>Run it</span></div>
 </section>
 
-<!-- ═══════════ PART 9 — GOTCHAS ═══════════ -->
-<section>
-  <span class="tag">Part 9 · Key learnings</span>
-  <h2>Gotchas worth remembering</h2>
-  <ul class="small">
-    <li><strong>Allow Config Override must be ON</strong> on the portal key — otherwise per-request config switching is ignored and all lanes collapse to one.</li>
-    <li><strong>gemini-3.x is global-only</strong> here; the direct lane routes it via the Vertex OpenAI endpoint with a <code>google/</code> prefix. gemini-2.5 is us-central1.</li>
-    <li><strong>Remove <code>override_params</code></strong> from configs so the request's model wins (model picker drives all lanes).</li>
-    <li><strong>Guardrail semantics:</strong> Contains Code <code>Inverse=ON</code> = block on code present · Contains <code>operator=none</code> = block on word present · No PII = redact (allows, masks).</li>
-    <li><strong>Provision the model in Portkey</strong> (Integration → Model Provisioning) <em>and</em> enable it in Vertex — both gates must pass, else <code>model_not_allowed</code> / 404.</li>
-    <li><strong>Redaction shows as ALLOWED · REDACTED</strong> (Portkey sets <code>transformed:true</code> on the hook).</li>
-  </ul>
-  <div class="footer"><span>Part 9 — Gotchas</span></div>
-</section>
-
-<!-- ═══════════ PART 10 — DEPLOY ═══════════ -->
-<section>
-  <span class="tag">Part 10 · Deploy</span>
-  <h2>Sync to EC2</h2>
-<pre><code class="hljs language-bash"># on EC2 (/opt/sudo-airs-demo, origin = sudo-airs-demo-portal)
-cd /opt/sudo-airs-demo
-git pull origin main && npm run build && pm2 restart airs-server
-curl -s localhost:3001/api/gateway/health     # expect modelCount:2, healthy</code></pre>
-  <blockquote style="margin-top: 14px;"><strong>The one thing git won't carry:</strong> <code>.env</code> is gitignored. Hand-edit the Portkey block on EC2 (slide "App wiring"). The Portkey console changes (region global, provisioned models, removed override_params, guardrail fixes) are server-side and already live.</blockquote>
-  <p class="tiny muted">EC2: <code>16.145.84.141</code> (us-west-2) · Nginx + PM2 (<code>airs-server</code>, <code>mcp-server</code>, <code>airs-scanner</code>).</p>
-  <div class="footer"><span>Part 10 — Deploy</span></div>
-</section>
-
-<!-- ═══════════ QUICK REFERENCE ═══════════ -->
-<section>
-  <span class="tag">Quick reference</span>
-  <h2>Where everything lives in Portkey</h2>
-  <div class="grid-2">
-    <div class="card">
-      <h4>UI navigation</h4>
-      <table style="font-size: 0.8em;">
-        <tbody>
-          <tr><td>Provider credentials</td><td>Integrations</td></tr>
-          <tr><td>Available models</td><td>Integrations → Model Provisioning</td></tr>
-          <tr><td>API keys + override</td><td>API Keys → (key) → Allow Config Override</td></tr>
-          <tr><td>Guardrail definitions</td><td>Guardrails</td></tr>
-          <tr><td>Configs (policy bundles)</td><td>Configs</td></tr>
-          <tr><td>Per-request logs</td><td>Observability → Logs</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="card">
-      <h4>The IDs (copy/paste)</h4>
-<pre style="font-size: 0.5em;"><code class="hljs language-bash">@sudo-vertexai          # integration (region: global)
-pg-sudo-p-c7e4ad        # native guardrail
-pg-sudo-a-c3bfdd        # AIRS guardrail
-pc-sudo-d-a72af9        # native config  (DEFAULTS)
-pc-sudo-t-5a505b        # AIRS config    (AIRS)
-pc-sudo-a-315f92        # n8n config
-sudo-airs-api-profile-new   # AIRS profile
-sudo-app                    # AIRS app user</code></pre>
-    </div>
-  </div>
-  <div class="footer"><span>Quick reference</span></div>
-</section>
-
-<!-- ═══════════ END ═══════════ -->
+<!-- ═══ END ═══ -->
 <section class="center">
-  <span class="tag">End of deck</span>
-  <h1>That's the whole setup</h1>
-  <p class="muted" style="margin-top: 18px;">One integration · three keys · two guardrails · three configs · three flows.</p>
-  <p class="small muted" style="margin-top: 30px;">Press <code>esc</code> for slide overview · <code>e</code> to print to PDF · <code>?</code> for all shortcuts</p>
-  <p class="tiny muted" style="margin-top: 48px;">Sergei Udovenko · Palo Alto Networks · sudo-demo-portal · 2026-06-20</p>
+  <span class="tag">That's the setup</span>
+  <h1>1 integration · 3 keys<br>2 guardrails · 3 configs · 3 flows</h1>
+  <p class="small muted" style="margin-top: 26px;">Copy/paste IDs: <code>@sudo-vertexai</code> · <code>pg-sudo-p-c7e4ad</code> · <code>pg-sudo-a-c3bfdd</code> · <code>pc-sudo-d-a72af9</code> · <code>pc-sudo-t-5a505b</code></p>
+  <p class="tiny muted" style="margin-top: 30px;">Sergei Udovenko · Palo Alto Networks · sudo-demo-portal · 2026-06-20</p>
 </section>
 
 </div>
@@ -610,17 +220,9 @@ sudo-app                    # AIRS app user</code></pre>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
 <script>
   Reveal.initialize({
-    hash: true,
-    slideNumber: 'c/t',
-    transition: 'slide',
-    transitionSpeed: 'fast',
-    backgroundTransition: 'fade',
-    width: 1280,
-    height: 800,
-    margin: 0.04,
-    minScale: 0.2,
-    maxScale: 2.0,
-    plugins: [ RevealHighlight, RevealNotes ],
+    hash: true, slideNumber: 'c/t', transition: 'slide', transitionSpeed: 'fast',
+    backgroundTransition: 'fade', width: 1280, height: 800, margin: 0.04,
+    minScale: 0.2, maxScale: 2.0, plugins: [ RevealHighlight, RevealNotes ],
   });
 </script>
 
