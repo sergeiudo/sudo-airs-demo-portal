@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 290" width="1040" height="290" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+  <defs>
+    <radialGradient id="panelBg" cx="50%" cy="32%" r="80%">
+      <stop offset="0%" stop-color="#141b33"/>
+      <stop offset="72%" stop-color="#090d1a"/>
+    </radialGradient>
+    <radialGradient id="modelGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.5"/>
+      <stop offset="70%" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="modelFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+  </defs>
+
+  <!-- panel -->
+  <rect x="1" y="1" width="1038" height="288" rx="16" fill="url(#panelBg)" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
+
+  <!-- column headers -->
+  <text x="398" y="26" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="1.2" fill="#94a3b8">INPUT SCAN</text>
+  <text x="702" y="26" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="1.2" fill="#94a3b8">OUTPUT SCAN</text>
+
+  <!-- ===== connectors (under boxes) ===== -->
+  <g fill="none" stroke-linecap="round">
+    <!-- lane 1 (gray) -->
+    <path d="M148,150 C300,150 290,80 346,80" stroke="#94a3b8" stroke-opacity="0.4" stroke-width="2"/>
+    <path d="M450,80 C482,80 472,150 502,150" stroke="#94a3b8" stroke-opacity="0.85" stroke-width="2.4"/>
+    <path d="M588,150 C616,150 606,80 650,80" stroke="#94a3b8" stroke-opacity="0.85" stroke-width="2.4"/>
+    <path d="M754,80 L848,80" stroke="#94a3b8" stroke-opacity="0.9" stroke-width="2.4"/>
+    <!-- lane 2 (blue) -->
+    <path d="M148,150 C300,150 290,150 346,150" stroke="#0ea5e9" stroke-opacity="0.4" stroke-width="2"/>
+    <path d="M450,150 C482,150 472,150 502,150" stroke="#0ea5e9" stroke-opacity="0.85" stroke-width="2.4"/>
+    <path d="M588,150 C616,150 606,150 650,150" stroke="#0ea5e9" stroke-opacity="0.85" stroke-width="2.4"/>
+    <path d="M754,150 L848,150" stroke="#0ea5e9" stroke-opacity="0.9" stroke-width="2.4"/>
+    <!-- lane 3 (pink) -->
+    <path d="M148,150 C300,150 290,222 346,222" stroke="#ec4899" stroke-opacity="0.4" stroke-width="2"/>
+    <path d="M450,222 C482,222 472,150 502,150" stroke="#ec4899" stroke-opacity="0.85" stroke-width="2.4"/>
+    <path d="M588,150 C616,150 606,222 650,222" stroke="#ec4899" stroke-opacity="0.85" stroke-width="2.4"/>
+    <path d="M754,222 L848,222" stroke="#ec4899" stroke-opacity="0.9" stroke-width="2.4"/>
+  </g>
+  <!-- arrowheads into responses -->
+  <path d="M842,76 L852,80 L842,84 Z" fill="#94a3b8"/>
+  <path d="M842,146 L852,150 L842,154 Z" fill="#0ea5e9"/>
+  <path d="M842,218 L852,222 L842,226 Z" fill="#ec4899"/>
+
+  <!-- ===== model: glow + node ===== -->
+  <circle cx="545" cy="150" r="74" fill="url(#modelGlow)"/>
+  <rect x="506" y="128" width="84" height="44" rx="10" fill="#ec4899" fill-opacity="0.20"/>
+  <rect x="502" y="124" width="84" height="44" rx="10" fill="url(#modelFill)" fill-opacity="0.30" stroke="#8b5cf6" stroke-opacity="0.85" stroke-width="1.4"/>
+  <text x="544" y="150" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#e2e8f0">AI MODEL</text>
+
+  <!-- response generation pill -->
+  <rect x="471" y="244" width="148" height="22" rx="6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  <text x="545" y="258" text-anchor="middle" font-size="8.5" font-weight="700" letter-spacing="0.6" fill="#94a3b8">RESPONSE GENERATION</text>
+
+  <!-- prompt node -->
+  <rect x="44" y="132" width="104" height="36" rx="9" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="1.25"/>
+  <text x="96" y="154" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#e2e8f0">PROMPT</text>
+
+  <!-- ===== lane 1: NO GATEWAY ===== -->
+  <text x="164" y="78" font-size="11" font-weight="700" fill="#e2e8f0"><tspan fill="#94a3b8" font-weight="800">1.</tspan> NO GATEWAY</text>
+  <text x="178" y="91" font-size="8.5" letter-spacing="0.3" fill="#94a3b8">(DIRECT PASS)</text>
+  <rect x="346" y="64" width="104" height="32" rx="8" fill="none" stroke="#94a3b8" stroke-opacity="0.6" stroke-dasharray="4 3" stroke-width="1.25"/>
+  <text x="398" y="83.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#94a3b8">no check</text>
+  <rect x="650" y="64" width="104" height="32" rx="8" fill="none" stroke="#94a3b8" stroke-opacity="0.6" stroke-dasharray="4 3" stroke-width="1.25"/>
+  <text x="702" y="83.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#94a3b8">no check</text>
+  <rect x="850" y="63" width="112" height="34" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="1.25"/>
+  <text x="906" y="83.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#e2e8f0">RESPONSE</text>
+
+  <!-- ===== lane 2: PORTKEY NATIVE ===== -->
+  <text x="164" y="148" font-size="11" font-weight="700" fill="#e2e8f0"><tspan fill="#0ea5e9" font-weight="800">2.</tspan> PORTKEY NATIVE</text>
+  <text x="178" y="161" font-size="8.5" letter-spacing="0.3" fill="#94a3b8">(AI GW INSPECTION)</text>
+  <rect x="346" y="134" width="104" height="32" rx="8" fill="#0ea5e9" fill-opacity="0.12" stroke="#0ea5e9" stroke-opacity="0.6" stroke-width="1.25"/>
+  <text x="398" y="153.7" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0ea5e9">AI GW</text>
+  <rect x="650" y="134" width="104" height="32" rx="8" fill="#0ea5e9" fill-opacity="0.12" stroke="#0ea5e9" stroke-opacity="0.6" stroke-width="1.25"/>
+  <text x="702" y="153.7" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0ea5e9">AI GW</text>
+  <rect x="850" y="133" width="112" height="34" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="1.25"/>
+  <text x="906" y="153.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#e2e8f0">RESPONSE</text>
+
+  <!-- ===== lane 3: AIRS + PORTKEY ===== -->
+  <text x="164" y="220" font-size="11" font-weight="700" fill="#e2e8f0"><tspan fill="#ec4899" font-weight="800">3.</tspan> AIRS + PORTKEY</text>
+  <text x="178" y="233" font-size="8.5" letter-spacing="0.3" fill="#94a3b8">(AIRS INSPECTION)</text>
+  <rect x="346" y="206" width="104" height="32" rx="8" fill="#ec4899" fill-opacity="0.12" stroke="#ec4899" stroke-opacity="0.6" stroke-width="1.25"/>
+  <text x="398" y="225.7" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#ec4899">AIRS</text>
+  <rect x="650" y="206" width="104" height="32" rx="8" fill="#ec4899" fill-opacity="0.12" stroke="#ec4899" stroke-opacity="0.6" stroke-width="1.25"/>
+  <text x="702" y="225.7" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#ec4899">AIRS</text>
+  <rect x="850" y="205" width="112" height="34" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="1.25"/>
+  <text x="906" y="225.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#e2e8f0">RESPONSE</text>
+
+  <!-- caption -->
+  <text x="40" y="283" font-size="11" font-style="italic" fill="#94a3b8">Same prompt, same model — the only thing that changes is what inspects the traffic in the middle.</text>
+</svg>

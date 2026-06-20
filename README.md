@@ -27,7 +27,13 @@ Scan AI model files for embedded threats before deployment — malware, backdoor
 Run automated adversarial campaigns (DAN variants, role-play escapes, multi-turn manipulation) against a target model via the Palo Alto Red Team API, and track robustness over time on a live score gauge. Post-campaign report renders a severity donut + compliance bars.
 
 ### 4 — AI/LLM Gateway *(Portkey + AIRS)*
-Build an AI app the modern way: route models through the **Portkey** gateway with **Prisma AIRS** attached as a guardrail. A five-tab pillar:
+Build an AI app the modern way: route models through the **Portkey** gateway with **Prisma AIRS** attached as a guardrail.
+
+<p align="center">
+  <img src="docs/gateway-architecture.svg" alt="AI/LLM Gateway — all three flows at a glance: the same prompt and model, with only the inspection step changing between No gateway, Portkey native guardrails, and Portkey + AIRS" width="880">
+</p>
+
+A five-tab pillar:
 - **Overview** — what an LLM gateway is, an at-a-glance architecture diagram, and the three flows.
 - **Scenarios** — one-click runs of the same prompt through **3 lanes** (No gateway → Portkey native guardrails → Portkey + AIRS), grouped by Baseline / Business & Data Policy / AI-Native Threats, with editable prompts.
 - **Live Demo** — free-form streaming chat with a per-request guardrail switch + live pipeline trace + a "3 lanes" comparison.
@@ -161,6 +167,16 @@ TSG_ID=
 LOCAL_SCAN_GROUP_UUID=
 ```
 Then run once: `bash setup-scanner.sh`
+
+#### Ports & other optional settings *(defaults shown — usually leave as-is)*
+```
+PROXY_PORT=3001               # Express proxy
+MODEL_SCANNER_PORT=8001       # Python scanner
+MCP_SERVER_PORT=8002          # MCP Security server
+HF_SCAN_GROUP_UUID=           # optional: separate security group for HuggingFace scans
+SLACK_WEBHOOK_URL=            # optional: weekly AIRS release-notes → Slack notifier
+```
+> [`.env.example`](.env.example) is the source of truth for the full variable list — copy it and fill in only what you need. `.env` is **gitignored**, so these must be set on every host (local and EC2). Pre-exported shell variables take precedence over `.env`.
 
 ### 4. Run
 ```bash
