@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Waypoints, Zap, BookOpen } from 'lucide-react'
+import { Waypoints, Zap, BookOpen, LayoutDashboard, Columns3 } from 'lucide-react'
+import { OverviewTab } from './llm-gateway/OverviewTab'
+import { ScenariosTab } from './llm-gateway/ScenariosTab'
 import { LiveDemoTab } from './llm-gateway/LiveDemoTab'
 import { GuideTab } from './llm-gateway/GuideTab'
 import { PortkeyStatusStrip } from './llm-gateway/components/PortkeyStatusStrip'
@@ -7,12 +9,14 @@ import { PortkeyStatusStrip } from './llm-gateway/components/PortkeyStatusStrip'
 const ACCENT = '#ec4899'
 
 const TABS = [
-  { id: 'live',     label: 'Live Demo',         icon: Zap },
-  { id: 'guide',    label: 'Integration Guide', icon: BookOpen },
+  { id: 'overview',  label: 'Overview',          icon: LayoutDashboard },
+  { id: 'scenarios', label: 'Scenarios',         icon: Columns3 },
+  { id: 'live',      label: 'Live Demo',         icon: Zap },
+  { id: 'guide',     label: 'Integration Guide', icon: BookOpen },
 ]
 
 export function LlmGatewayView() {
-  const [tab, setTab] = useState('live')
+  const [tab, setTab] = useState('overview')
   const [health, setHealth] = useState(null)
 
   useEffect(() => {
@@ -87,9 +91,15 @@ export function LlmGatewayView() {
         </div>
       )}
 
-      {/* Body — both tabs stay mounted so switching away and back doesn't
-          destroy the chat conversation mid-demo */}
+      {/* Body — all tabs stay mounted so switching away and back doesn't
+          destroy the Live Demo conversation or scenario results mid-demo */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'overview' ? 'flex' : 'none' }}>
+          <OverviewTab />
+        </div>
+        <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'scenarios' ? 'flex' : 'none' }}>
+          <ScenariosTab />
+        </div>
         <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'live' ? 'flex' : 'none' }}>
           <LiveDemoTab />
         </div>
