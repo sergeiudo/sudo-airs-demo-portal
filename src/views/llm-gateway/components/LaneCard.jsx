@@ -21,19 +21,25 @@ export function LaneCard({ lane, isLight }) {
   // Portkey flags this with `transformed: true` on the hook. Surface it as a
   // distinct REDACTED verdict so an allowed-but-sanitised lane doesn't read as
   // "leaked" (orange) when it actually protected the data.
-  const transformed = [
+  const hooks = [
     ...(lane.hookResults?.before_request_hooks || []),
     ...(lane.hookResults?.after_request_hooks || []),
-  ].some(h => h?.transformed === true)
+  ]
+  const transformed = hooks.some(h => h?.transformed === true)
   const isRedacted = verdict === 'ALLOWED' && transformed
   const isAllowed = verdict === 'ALLOWED' && !transformed
 
+  // Colour a block by WHO stopped it: Prisma AIRS → red, native Portkey → purple.
+  // (The AIRS lane blocks via AIRS; the defaults lane via native guardrails.)
+  const blockedByAirs = lane.id === 'airs'
+    || hooks.some(h => h?.verdict === false && (h.checks || []).some(c => String(c?.id || '').includes('panw-prisma-airs') || c?.data?.profile_name))
+
   const verdictColor =
-    isBlocked  ? '#10b981' :   // BLOCKED = good (the attack was stopped)
-    isRedacted ? '#0ea5e9' :   // REDACTED = data sanitised before the model saw it
-    isAllowed  ? '#f97316' :   // ALLOWED = (in this demo) bad — got through untouched
+    isBlocked  ? (blockedByAirs ? '#ef4444' : '#8b5cf6') :  // AIRS = red · native Portkey = purple
+    isRedacted ? '#f59e0b' :   // REDACTED = native sanitised the data before the model saw it
+    isAllowed  ? '#10b981' :   // ALLOWED = passed clean through
     isUnconf   ? '#64748b' :
-    isError    ? '#ef4444' :
+    isError    ? '#f97316' :
                  '#94a3b8'
 
   const textPrimary = isLight ? '#0f172a' : '#e2e8f0'

@@ -318,9 +318,10 @@ export function OverviewTab() {
               Each scenario fires the same prompt through all three flows side by side so the difference is obvious.
             </LegendRow>
             <LegendRow icon={ShieldCheck} title="Verdicts" isLight={isLight}>
-              <span style={{ color: '#f97316', fontWeight: 600 }}>ALLOWED</span> = reached the model ·{' '}
-              <span style={{ color: '#10b981', fontWeight: 600 }}>BLOCKED</span> = stopped by a guardrail ·{' '}
-              REDACTED = sensitive data masked before the model saw it.
+              <span style={{ color: '#10b981', fontWeight: 600 }}>ALLOWED</span> = passed clean ·{' '}
+              <span style={{ color: '#8b5cf6', fontWeight: 600 }}>BLOCKED</span> = stopped by Portkey native guardrails ·{' '}
+              <span style={{ color: '#ef4444', fontWeight: 600 }}>BLOCKED</span> = stopped by Prisma AIRS ·{' '}
+              <span style={{ color: '#f59e0b', fontWeight: 600 }}>REDACTED</span> = sensitive data masked before the model saw it.
             </LegendRow>
             <LegendRow icon={Shield} title="Two-stage scan" isLight={isLight}>
               Guardrails run twice — on the input (before the model) and on the output (after). A block can happen at either stage.

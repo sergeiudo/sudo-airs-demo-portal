@@ -59,10 +59,17 @@ export function GuardrailVerdictCard({ hookResults, isLight, defaultOpen = false
   const data = airs?.data
   const threats = blocked ? airsThreats(data) : []
 
-  const accent = blocked ? '#ef4444' : '#10b981'
-  const bg = blocked
-    ? (isLight ? 'rgba(239,68,68,0.06)' : 'rgba(239,68,68,0.08)')
-    : (isLight ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.07)')
+  // A native guardrail can ALLOW but transform the request (PII redaction);
+  // Portkey flags it with transformed:true. Surface that as a distinct state.
+  const transformed = [
+    ...(hookResults.before_request_hooks || []),
+    ...(hookResults.after_request_hooks || []),
+  ].some(h => h?.transformed === true)
+  const redacted = !blocked && transformed
+
+  // Colour by who acted: AIRS block = red · native block = purple · native redact = amber · pass = green.
+  const accent = blocked ? (airs ? '#ef4444' : '#8b5cf6') : redacted ? '#f59e0b' : '#10b981'
+  const bg = isLight ? `${accent}0f` : `${accent}14`
   const textPrimary = isLight ? '#0f172a' : '#e2e8f0'
   const textSecondary = isLight ? '#475569' : '#94a3b8'
   const Icon = blocked ? ShieldX : ShieldCheck
@@ -72,7 +79,7 @@ export function GuardrailVerdictCard({ hookResults, isLight, defaultOpen = false
     const ok = !phase.anyFail
     return (
       <span key={label} className="flex items-center gap-1">
-        <span style={{ color: ok ? '#10b981' : '#ef4444', fontWeight: 700 }}>{ok ? '✓' : '✕'}</span>
+        <span style={{ color: ok ? '#10b981' : accent, fontWeight: 700 }}>{ok ? '✓' : '✕'}</span>
         <span>{label} scan</span>
         {phase.execMs != null && <span style={{ color: textSecondary }}>· {phase.execMs}ms</span>}
       </span>
@@ -90,7 +97,9 @@ export function GuardrailVerdictCard({ hookResults, isLight, defaultOpen = false
           <Icon size={14} />
           {airs
             ? (blocked ? 'BLOCKED BY PRISMA AIRS' : 'Prisma AIRS scanned — no threats')
-            : (blocked ? 'BLOCKED BY GUARDRAIL' : 'Guardrail checks passed')}
+            : (blocked ? 'BLOCKED BY GUARDRAIL'
+                      : redacted ? 'Redacted by native guardrail'
+                                 : 'Guardrail checks passed')}
         </div>
 
         <div className="flex flex-wrap items-center gap-3" style={{ color: textPrimary }}>
@@ -122,8 +131,8 @@ export function GuardrailVerdictCard({ hookResults, isLight, defaultOpen = false
               <span key={i} className="px-2 py-0.5 rounded-full font-mono"
                     style={{
                       background: isLight ? 'rgba(0,48,135,0.05)' : 'rgba(255,255,255,0.05)',
-                      border: `1px solid ${c.verdict ? '#10b98155' : '#ef444455'}`,
-                      color: c.verdict ? '#10b981' : '#ef4444',
+                      border: `1px solid ${c.verdict ? '#10b98155' : `${accent}55`}`,
+                      color: c.verdict ? '#10b981' : accent,
                     }}>
                 {c.verdict ? '✓' : '✕'} {c.id}
               </span>

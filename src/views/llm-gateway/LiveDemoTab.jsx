@@ -422,10 +422,14 @@ function PipelineTrace({ messages, isLight }) {
   const parsed = parseHookResults(md?.hookResults)
   const textSecondary = isLight ? '#475569' : '#94a3b8'
 
-  const OK = '#10b981', FAIL = '#ef4444', WARN = '#f59e0b'
+  const OK = '#10b981', FAIL = '#ef4444', WARN = '#f59e0b', NATIVE = '#8b5cf6'
   const streamingNow = lastAsst?.status === 'streaming'
   const blocked = lastAsst?.status === 'blocked'
   const bypass = !!md?.bypass || md?.configId === 'no-guardrail'
+  // Block colour by source: Prisma AIRS = red, native Portkey = purple.
+  const blockByAirs = md?.configId === 'airs'
+    || (parsed?.input?.anyFail && parsed?.input?.airs) || (parsed?.output?.anyFail && parsed?.output?.airs)
+  const BLOCKCOL = blockByAirs ? FAIL : NATIVE
   const provider = providerLabel(md?.model)
   const hasGuardrail = md?.configId === 'airs' || md?.configId === 'defaults' || md?.configId === 'fallback'
 
@@ -442,7 +446,7 @@ function PipelineTrace({ messages, isLight }) {
         const inp = parsed?.input
         if (inp) add(2, inp.anyFail ? '✕ Input guardrail' : '✓ Input guardrail',
                      `${inp.anyFail ? 'BLOCKED' : 'passed'}${inp.execMs != null ? ` · ${inp.execMs}ms` : ''}${inp.airs ? ' · Prisma AIRS' : ''}`,
-                     inp.anyFail ? FAIL : OK)
+                     inp.anyFail ? (inp.airs ? FAIL : NATIVE) : OK)
         else add(2, streamingNow ? '◌ Input guardrail' : '— Input guardrail', streamingNow ? 'scanning…' : 'no results returned', textSecondary)
       }
       if (blocked) {
@@ -455,7 +459,7 @@ function PipelineTrace({ messages, isLight }) {
           const out = parsed?.output
           if (out) add(2, out.anyFail ? '✕ Output guardrail' : '✓ Output guardrail',
                        `${out.anyFail ? 'BLOCKED' : 'passed'}${out.execMs != null ? ` · ${out.execMs}ms` : ''}${out.airs ? ' · Prisma AIRS' : ''}`,
-                       out.anyFail ? FAIL : OK)
+                       out.anyFail ? (out.airs ? FAIL : NATIVE) : OK)
           else add(2, streamingNow ? '◌ Output guardrail' : '— Output guardrail',
                    streamingNow ? 'pending…' : (md?.cache === 'HIT' ? 'skipped — cached response already scanned' : 'no results returned'),
                    textSecondary)
@@ -465,7 +469,7 @@ function PipelineTrace({ messages, isLight }) {
     add(0, blocked ? '✕ Response' : '← Response',
         blocked ? `BLOCKED${md?.latencyMs != null ? ` · ${md.latencyMs}ms total` : ''}`
                 : streamingNow ? 'streaming…' : `delivered${md?.latencyMs != null ? ` · ${md.latencyMs}ms total` : ''}`,
-        blocked ? FAIL : streamingNow ? textSecondary : OK)
+        blocked ? BLOCKCOL : streamingNow ? textSecondary : OK)
   }
 
   return (

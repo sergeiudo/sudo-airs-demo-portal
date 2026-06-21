@@ -26,7 +26,9 @@ function ExpectedPills({ expected, isLight }) {
         const v = expected?.[id]
         const blocked = v === 'BLOCKED'
         const redacted = v === 'REDACTED'
-        const color = blocked ? '#10b981' : redacted ? '#0ea5e9' : '#f97316'
+        // Block colour by source: AIRS lane = red · native (defaults) = purple.
+        const blockColor = id === 'airs' ? '#ef4444' : '#8b5cf6'
+        const color = blocked ? blockColor : redacted ? '#f59e0b' : '#10b981'
         return (
           <span key={id} className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
                 style={{ background: `${color}14`, border: `1px solid ${color}44`, color }}>
