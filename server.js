@@ -241,7 +241,7 @@ function makeBedrockRuntime() {
   })
 }
 
-async function callBedrock(prompt, modelId) {
+export async function callBedrock(prompt, modelId) {
   const client = makeBedrockRuntime()
   const t0 = Date.now()
 

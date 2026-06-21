@@ -58,18 +58,20 @@ function extractAirsScan(hooks) {
   return null
 }
 
-// Direct Vertex call for the no-gateway lane (bypasses Portkey entirely).
-// Gemini 3.x models live ONLY in the `global` region and are NOT reachable via
-// the @google-cloud/vertexai SDK (it can't target `global` — returns an HTML
-// error). They must go through Vertex's OpenAI-compatible publisher endpoint
-// with a `google/` prefix. Route those via callVertexMaaS; gemini-2.5 and other
-// region-pinned models keep using the standard Gemini SDK path.
-async function callDirectVertex(prompt, bareModel) {
-  const { callVertexAI, callVertexMaaS } = await import('./server.js')
-  if (/^gemini-3/.test(bareModel)) {
-    return callVertexMaaS(prompt, `google/${bareModel}`, 'global')
-  }
-  return callVertexAI(prompt, bareModel)
+// Direct provider call for the no-gateway lane (bypasses Portkey entirely).
+// Routes by the model's @integration prefix (so the lane is multi-provider):
+//   @sudo-bedrock/...  → Bedrock via the portal's own AWS creds (EC2 IAM role)
+//   gemini-3.x         → Vertex OpenAI-compatible endpoint on `global` (google/ prefix;
+//                        the @google-cloud/vertexai SDK can't reach `global`)
+//   gemini-2.5 / other → Gemini SDK (region-pinned)
+async function callDirectProvider(prompt, fullModel) {
+  const { callVertexAI, callVertexMaaS, callBedrock } = await import('./server.js')
+  const hasSlug = String(fullModel).includes('/')
+  const slug = hasSlug ? String(fullModel).split('/')[0] : ''
+  const bare = hasSlug ? String(fullModel).split('/').slice(1).join('/') : String(fullModel)
+  if (slug.includes('bedrock')) return callBedrock(prompt, bare)
+  if (/^gemini-3/.test(bare)) return callVertexMaaS(prompt, `google/${bare}`, 'global')
+  return callVertexAI(prompt, bare)
 }
 
 function detectedThreats(data) {
@@ -183,7 +185,7 @@ router.get('/configs', (_req, res) => {
   res.json({
     configs: [
       { id: 'airs',         label: 'Portkey + AIRS',             slug: ENV.configAirs,     attached: 'AIRS guardrail',           ready: !!ENV.configAirs },
-      { id: 'no-guardrail', label: 'Direct Vertex (no gateway)', slug: '(direct vertex)',      attached: 'none — bypasses Portkey entirely', ready: true },
+      { id: 'no-guardrail', label: 'Direct provider (no gateway)', slug: '(direct)',      attached: 'none — bypasses Portkey entirely', ready: true },
       { id: 'defaults',     label: 'Portkey default guardrails', slug: ENV.configDefaults, attached: 'Portkey regex/PII checks', ready: !!ENV.configDefaults },
       { id: 'fallback',     label: 'Vertex → Bedrock fallback',  slug: ENV.configFallback, attached: 'fallback chain',           ready: !!ENV.configFallback },
     ],
@@ -202,17 +204,35 @@ const MODEL_CATALOG = {
     // reachable in the GCP project. The demo configs no longer pin a model
     // (override_params removed), so the picked model flows to all three lanes —
     // incl. the direct no-gateway lane, which routes gemini-3.x via the global
-    // OpenAI endpoint in callDirectVertex. Add more here as you provision them.
+    // OpenAI endpoint in callDirectProvider. Add more here as you provision them.
     { id: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite' },
     { id: 'gemini-3.5-flash',      displayName: 'Gemini 3.5 Flash (reasoning)' },
   ],
 }
 
 if (ENV.bedrockSlug) {
+  // Multi-vendor Bedrock catalog — mirrors what the API Intercept picker lists.
+  // Each must be provisioned on the @sudo-bedrock integration (Portkey → Model
+  // Provisioning) AND have AWS Bedrock → Model access granted in us-west-2, or
+  // the native/AIRS lanes return `model_not_allowed`. The no-gateway lane uses
+  // Bedrock's Converse API (callBedrock) — not every open model supports it.
   MODEL_CATALOG[ENV.bedrockSlug] = [
+    // Anthropic Claude
     { id: 'anthropic.claude-sonnet-4-20250514-v1:0', displayName: 'Claude Sonnet 4 (Bedrock)' },
     { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', displayName: 'Claude 3.5 Sonnet v2 (Bedrock)' },
     { id: 'anthropic.claude-3-haiku-20240307-v1:0',  displayName: 'Claude 3 Haiku (Bedrock)' },
+    // DeepSeek
+    { id: 'deepseek.v3.2',   displayName: 'DeepSeek V3.2 (Bedrock)' },
+    { id: 'deepseek.r1-v1:0', displayName: 'DeepSeek R1 (reasoning · Bedrock)' },
+    // Qwen
+    { id: 'qwen.qwen3-235b-a22b-2507-v1:0', displayName: 'Qwen3 235B A22B 2507 (Bedrock)' },
+    { id: 'qwen.qwen3-coder-480b-a35b-v1:0', displayName: 'Qwen3 Coder 480B (Bedrock)' },
+    // Moonshot Kimi
+    { id: 'moonshotai.kimi-k2.5',     displayName: 'Kimi K2.5 (Bedrock)' },
+    { id: 'moonshot.kimi-k2-thinking', displayName: 'Kimi K2 Thinking (Bedrock)' },
+    // NVIDIA Nemotron
+    { id: 'nvidia.nemotron-nano-12b-v2', displayName: 'Nemotron Nano 12B v2 (Bedrock)' },
+    { id: 'nvidia.nemotron-super-3-120b', displayName: 'Nemotron Super 3 120B (Bedrock)' },
   ]
 }
 
@@ -296,9 +316,8 @@ router.post('/chat', async (req, res) => {
   // only way to demonstrate the truly-unguarded path.
   if (configId === 'no-guardrail') {
     try {
-      // Strip the @integration/ prefix from the model id since the direct call wants a bare model
-      const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
-      const r = await callDirectVertex(promptText, bareModel)
+      // callDirectProvider routes by the @integration prefix (bedrock vs vertex)
+      const r = await callDirectProvider(promptText, model)
       const text = r?.text || ''
       // Fake a token stream by chunking the response so the UI feels alive
       const chunkSize = 24
@@ -309,7 +328,7 @@ router.post('/chat', async (req, res) => {
       }
       const latencyMs = r?.latencyMs ?? (Date.now() - startedAt)
       const traceId = await persistGatewayTrace({
-        configId, slug: '(direct vertex)', model, promptText,
+        configId, slug: '(direct)', model, promptText,
         responseText: assembledText, verdict: 'DIRECT', hookResults: null,
         latencyMs, tokensIn: r?.tokens?.input ?? null, tokensOut: r?.tokens?.output ?? null,
         cacheState: 'disabled', fallbackUsed: false, portkeyTraceId: null,
@@ -451,10 +470,9 @@ async function runLane(laneId, slug, model, messages) {
   if (slug === null) {
     try {
       const promptText = messages.map(m => m.content).join('\n')
-      const bareModel = String(model).includes('/') ? String(model).split('/').slice(1).join('/') : String(model)
-      const r = await callDirectVertex(promptText, bareModel)
+      const r = await callDirectProvider(promptText, model)
       return {
-        id: laneId, slug: '(direct vertex)',
+        id: laneId, slug: '(direct)',
         verdict: 'ALLOWED',
         blockReason: null,
         response: r?.text || '',
@@ -465,7 +483,7 @@ async function runLane(laneId, slug, model, messages) {
       }
     } catch (e) {
       return {
-        id: laneId, slug: '(direct vertex)',
+        id: laneId, slug: '(direct)',
         verdict: 'ERROR', blockReason: null,
         response: '', latencyMs: Date.now() - startedAt,
         tokens: 0, hookResults: null,

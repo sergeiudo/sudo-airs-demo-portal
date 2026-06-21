@@ -155,8 +155,9 @@ PORTKEY_CONFIG_DEFAULTS=      # Portkey config with native guardrails (PII / cod
 PORTKEY_CONFIG_NO_GUARDRAIL=  # vestigial — the no-gateway lane bypasses Portkey (direct provider)
 PORTKEY_CONFIG_FALLBACK=      # optional fallback chain
 PORTKEY_VERTEX_SLUG=@your-vertex-integration
-PORTKEY_BEDROCK_SLUG=         # optional
+PORTKEY_BEDROCK_SLUG=@your-bedrock-integration   # optional — enables multi-provider routing (Vertex + Bedrock) through the same guardrails
 ```
+> **Multi-provider gateway:** set `PORTKEY_BEDROCK_SLUG` to a Bedrock integration (the demo uses **AWS Assumed Role** auth, region `us-west-2`) to add selectable Bedrock models — Claude, DeepSeek, Qwen, Kimi, Nemotron — alongside Vertex Gemini. The same native/AIRS guardrail configs route to whichever provider the picked model belongs to (the model id is sent as `@integration/model`). Each model must be provisioned on the integration in Portkey **and** granted in *AWS Bedrock → Model access*.
 > The MCP Registry tab also needs an MCP server registered in your Portkey **MCP Registry** (the demo uses CoinGecko). A full annotated walkthrough — integration, keys, guardrails, configs, the 3 flows, and the MCP flow — lives in [`docs/portkey-setup-deck.html`](docs/portkey-setup-deck.html) (open in a browser).
 
 #### Model Scanner *(optional)*

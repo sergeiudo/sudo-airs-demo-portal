@@ -76,6 +76,7 @@
     <thead><tr><th>Type</th><th>Name</th><th>ID / slug</th><th>What it is</th></tr></thead>
     <tbody>
       <tr><td>Integration</td><td>sudo-vertexai</td><td><code>@sudo-vertexai</code></td><td>Vertex AI · region <strong class="accent">global</strong> · SA-file auth</td></tr>
+      <tr><td>Integration</td><td>sudo-bedrock</td><td><code>@sudo-bedrock</code></td><td>AWS Bedrock · region <strong class="accent">us-west-2</strong> · <strong>Assumed Role</strong> auth · multi-vendor (Claude·DeepSeek·Qwen·Kimi·Nemotron)</td></tr>
       <tr><td>API key</td><td><strong class="accent">sudo-demo-portal-full-key</strong></td><td><code>mg8…v2P</code></td><td><strong>Portal key — Config Override ON</strong></td></tr>
       <tr><td>API key</td><td>sudo-demo-portal-portkey-key</td><td><code>i6H…wgv</code></td><td>Native-only (bound, override off)</td></tr>
       <tr><td>API key</td><td>sudo-n8n-key</td><td><code>jXc…WGp</code></td><td>n8n integration (separate)</td></tr>
@@ -115,11 +116,10 @@
   <h2>The four building blocks</h2>
   <div class="grid-2">
     <div class="card blue">
-      <h4>① Integration · <code>@sudo-vertexai</code></h4>
+      <h4>① Integrations · <code>@sudo-vertexai</code> + <code>@sudo-bedrock</code></h4>
       <ul class="tiny">
-        <li>Vertex AI · SA-file · project <code>sergei-playground-338006</code></li>
-        <li>Region <strong class="accent">global</strong> (gemini-3.x is global-only here)</li>
-        <li>Provision: <code>gemini-3.1-flash-lite</code> + <code>gemini-3.5-flash</code></li>
+        <li><strong>Vertex</strong> · SA-file · project <code>sergei-playground-338006</code> · region <strong class="accent">global</strong> (gemini-3.x is global-only); provision <code>gemini-3.1-flash-lite</code> + <code>gemini-3.5-flash</code></li>
+        <li><strong>Bedrock</strong> · <strong class="accent">Assumed Role</strong> · region us-west-2; provision Claude·DeepSeek·Qwen·Kimi·Nemotron — same configs route to whichever provider the picked model belongs to</li>
       </ul>
     </div>
     <div class="card accent">
@@ -182,7 +182,7 @@ PORTKEY_CONFIG_DEFAULTS=pc-sudo-d-a72af9
 PORTKEY_CONFIG_NO_GUARDRAIL=pc-sudo-d-a72af9
 PORTKEY_CONFIG_FALLBACK=
 PORTKEY_VERTEX_SLUG=@sudo-vertexai
-PORTKEY_BEDROCK_SLUG=</code></pre>
+PORTKEY_BEDROCK_SLUG=@sudo-bedrock</code></pre>
 <pre style="margin-top:10px;"><code class="hljs language-bash"># EC2 deploy (origin: sudo-airs-demo-portal)
 cd /opt/sudo-airs-demo && git pull origin main \
   && npm run build && pm2 restart airs-server
@@ -208,7 +208,7 @@ cd /opt/sudo-airs-demo && git pull origin main \
 <section class="center">
   <span class="tag">That's the setup</span>
   <h1>1 integration · 3 keys<br>2 guardrails · 3 configs · 3 flows</h1>
-  <p class="small muted" style="margin-top: 26px;">Copy/paste IDs: <code>@sudo-vertexai</code> · <code>pg-sudo-p-c7e4ad</code> · <code>pg-sudo-a-c3bfdd</code> · <code>pc-sudo-d-a72af9</code> · <code>pc-sudo-t-5a505b</code></p>
+  <p class="small muted" style="margin-top: 26px;">Copy/paste IDs: <code>@sudo-vertexai</code> · <code>@sudo-bedrock</code> · <code>pg-sudo-p-c7e4ad</code> · <code>pg-sudo-a-c3bfdd</code> · <code>pc-sudo-d-a72af9</code> · <code>pc-sudo-t-5a505b</code></p>
   <p class="tiny muted" style="margin-top: 30px;">Sergei Udovenko · Palo Alto Networks · sudo-demo-portal · 2026-06-20</p>
 </section>
 
