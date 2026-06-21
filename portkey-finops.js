@@ -14,6 +14,52 @@ const FINOPS_WORKSPACE_ID = '0cfd0b1a-6e24-4617-91b7-a0a44c241f23'
 const ENFORCE_KEY_NAME = 'sudo-finops-enforce'
 const ENFORCE_TOKEN_CAP = Number(process.env.FINOPS_ENFORCE_TOKEN_CAP) || 6000
 
+// Per-model token-budget keys for the Budget tab developer chat
+const BUDGET_TOKEN_CAP = Number(process.env.FINOPS_BUDGET_TOKEN_CAP) || 8000
+const BUDGET_KEY_PREFIX = 'sudo-budget-'
+// Approx blended USD per 1M tokens — for the est-$ label only (not billing).
+const MODEL_PRICING = {
+  'us.anthropic.claude-opus-4-8': 45,
+  'anthropic.claude-sonnet-4-20250514-v1:0': 9,
+  'anthropic.claude-3-haiku-20240307-v1:0': 0.75,
+  'gemini-3.1-flash-lite': 0.2,
+  'gemini-3.5-flash': 0.6,
+}
+const _budgetKeys = new Map() // modelId -> full key value
+
+function bareModel(modelId) {
+  const s = String(modelId)
+  return s.includes('/') ? s.split('/').slice(1).join('/') : s
+}
+function budgetKeyName(modelId) {
+  return BUDGET_KEY_PREFIX + bareModel(modelId).replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40)
+}
+function estCostUSD(modelId, tokens) {
+  const rate = MODEL_PRICING[bareModel(modelId)] ?? 1
+  return +(((tokens || 0) / 1e6) * rate).toFixed(4)
+}
+
+// Create/find a token-capped key for a model. fresh=true deletes+recreates to
+// zero usage and obtain the FULL key value (list returns it masked).
+async function ensureBudgetKey(modelId, { fresh = false } = {}) {
+  if (!fresh && _budgetKeys.has(modelId)) return _budgetKeys.get(modelId)
+  const name = budgetKeyName(modelId)
+  const list = await adminFetch('/api-keys?page_size=100').catch(() => ({ data: [] }))
+  const existing = (list.data || []).find(k => k.name === name)
+  if (existing?.id) await adminFetch(`/api-keys/${existing.id}`, { method: 'DELETE' }).catch(() => {})
+  const created = await adminFetch('/api-keys/workspace/service', {
+    method: 'POST',
+    body: JSON.stringify({
+      name, workspace_id: FINOPS_WORKSPACE_ID, scopes: ['completions.write'],
+      usage_limits: { type: 'tokens', credit_limit: BUDGET_TOKEN_CAP, periodic_reset: 'monthly' },
+    }),
+  })
+  const value = created.key || created.api_key
+  if (!value) throw new Error('budget key create returned no key value')
+  _budgetKeys.set(modelId, value)
+  return value
+}
+
 // Admin API helper — uses hyphen paths for list/create, underscore for delete (Portkey quirk)
 async function adminFetch(path, opts = {}) {
   const resp = await fetch(`${PK_BASE}${path}`, {
@@ -304,6 +350,48 @@ export function registerFinopsRoutes(router) {
         await adminFetch(`/api-keys/${existing.id}`, { method: 'DELETE' })
       }
       res.json({ ok: true })
+    } catch (e) {
+      res.status(502).json({ error: 'reset_failed', message: String(e?.message || e) })
+    }
+  })
+
+  // POST /finops/devchat — route a prompt through a per-model token-budget key.
+  // Returns a real answer while under budget; 412 envelope when exhausted.
+  router.post('/finops/devchat', async (req, res) => {
+    if (!ADMIN_KEY()) return res.status(503).json({ error: 'configure_admin_key' })
+    const { model, prompt } = req.body || {}
+    if (!model || !String(prompt || '').trim()) {
+      return res.status(400).json({ error: 'bad_request', message: 'model and prompt required' })
+    }
+    try {
+      const keyValue = await ensureBudgetKey(model)
+      const client = new Portkey({ apiKey: keyValue, strictOpenAiCompliance: false })
+      try {
+        const r = await client.chat.completions.create({
+          model, max_tokens: 1024, messages: [{ role: 'user', content: String(prompt) }],
+        })
+        const tokensUsed = r?.usage?.total_tokens ?? 0
+        const answer = r?.choices?.[0]?.message?.content ?? ''
+        res.json({ blocked: false, answer, tokensUsed, estCost: estCostUSD(model, tokensUsed), cap: BUDGET_TOKEN_CAP, model })
+      } catch (e) {
+        const code = e?.status || e?.response?.status || (/412/.test(String(e?.message)) ? 412 : null)
+        if (code === 412) return res.json({ blocked: true, code: 412, reason: 'budget_exceeded', cap: BUDGET_TOKEN_CAP, model })
+        res.json({ blocked: false, error: String(e?.message || e).slice(0, 200), cap: BUDGET_TOKEN_CAP, model })
+      }
+    } catch (e) {
+      res.status(502).json({ error: 'devchat_failed', message: String(e?.message || e) })
+    }
+  })
+
+  // POST /finops/budget/reset — recreate budget key(s) to zero usage.
+  // Body: { model? } — omit to reset all cached models.
+  router.post('/finops/budget/reset', async (req, res) => {
+    if (!ADMIN_KEY()) return res.status(503).json({ error: 'configure_admin_key' })
+    const { model } = req.body || {}
+    try {
+      const targets = model ? [model] : [..._budgetKeys.keys()]
+      for (const m of targets) await ensureBudgetKey(m, { fresh: true })
+      res.json({ ok: true, reset: targets })
     } catch (e) {
       res.status(502).json({ error: 'reset_failed', message: String(e?.message || e) })
     }
