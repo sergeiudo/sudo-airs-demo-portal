@@ -10,6 +10,10 @@ const FINOPS_DEMO_KEY_NAME = 'sudo-finops-demo'
 const DEMO_CAP_USD = Number(process.env.FINOPS_DEMO_CAP_USD || 1)
 const FINOPS_WORKSPACE_ID = '0cfd0b1a-6e24-4617-91b7-a0a44c241f23'
 
+// Enforcement demo — isolated token-capped key that trips 412 fast and cheaply
+const ENFORCE_KEY_NAME = 'sudo-finops-enforce'
+const ENFORCE_TOKEN_CAP = Number(process.env.FINOPS_ENFORCE_TOKEN_CAP) || 6000
+
 // Admin API helper — uses hyphen paths for list/create, underscore for delete (Portkey quirk)
 async function adminFetch(path, opts = {}) {
   const resp = await fetch(`${PK_BASE}${path}`, {
@@ -45,6 +49,31 @@ export async function ensureDemoKey() {
       usage_limits: {
         type: 'cost',
         credit_limit: DEMO_CAP_USD,
+        periodic_reset: 'monthly',
+      },
+    }),
+  })
+}
+
+// Recreate the enforcement key fresh each run so usage starts at 0 and we hold the full key value.
+// List returns masked keys — delete any existing one, then create a fresh token-capped key.
+async function recreateEnforceKey() {
+  const list = await adminFetch('/api-keys?page_size=100').catch(() => ({ data: [] }))
+  const existing = (list.data || []).find(k => k.name === ENFORCE_KEY_NAME)
+  if (existing?.id) {
+    await adminFetch(`/api-keys/${existing.id}`, { method: 'DELETE' }).catch(e => {
+      console.warn('[finops/enforce] delete existing key failed (continuing):', e?.message)
+    })
+  }
+  return adminFetch('/api-keys/workspace/service', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: ENFORCE_KEY_NAME,
+      workspace_id: FINOPS_WORKSPACE_ID,
+      scopes: ['completions.write'],
+      usage_limits: {
+        type: 'tokens',
+        credit_limit: ENFORCE_TOKEN_CAP,
         periodic_reset: 'monthly',
       },
     }),
@@ -211,6 +240,72 @@ export function registerFinopsRoutes(router) {
       send('done', { generated })
     } finally {
       if (!res.writableEnded) res.end()
+    }
+  })
+
+  // POST /finops/enforce/run — SSE: fires real requests through a fresh token-capped key until 412
+  // Token caps trip fast + cheap (Portkey blocks before provider call on 412).
+  router.post('/finops/enforce/run', async (_req, res) => {
+    if (!ADMIN_KEY()) return res.status(503).json({ error: 'configure_admin_key' })
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders?.()
+
+    const send = (event, data) => {
+      if (res.writableEnded) return
+      res.write(`event: ${event}\n`)
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+
+    try {
+      const enforceKey = await recreateEnforceKey()
+      const keyValue = enforceKey.key || enforceKey.api_key
+      if (!keyValue) throw new Error('recreateEnforceKey returned no usable key value')
+
+      const client = new Portkey({ apiKey: keyValue, strictOpenAiCompliance: false })
+      let blocked = false
+
+      for (let n = 1; n <= 8 && !blocked; n++) {
+        try {
+          await client.chat.completions.create({
+            model: '@sudo-bedrock/us.anthropic.claude-opus-4-8',
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: LONG_PROMPT }],
+          })
+          send('req', { n, status: 'allowed', code: 200 })
+        } catch (e) {
+          // Log the full error once on first failure to expose where 412 lives
+          if (n === 1 || process.env.FINOPS_DEBUG) console.log('[finops/enforce] error shape:', JSON.stringify({ status: e?.status, responseStatus: e?.response?.status, message: String(e?.message || '').slice(0, 300) }))
+          const code = e?.status ?? e?.response?.status ?? (/412/.test(String(e?.message)) ? 412 : null)
+          if (code === 412) {
+            send('req', { n, status: 'blocked', code: 412 })
+            blocked = true
+          } else {
+            send('req', { n, status: 'error', code, error: String(e?.message || e).slice(0, 200) })
+          }
+        }
+      }
+      send('done', { blocked })
+    } catch (e) {
+      send('error', { message: String(e?.message || e).slice(0, 300) })
+    } finally {
+      if (!res.writableEnded) res.end()
+    }
+  })
+
+  // POST /finops/enforce/reset — delete the enforce key so next run starts fresh
+  router.post('/finops/enforce/reset', async (_req, res) => {
+    if (!ADMIN_KEY()) return res.status(503).json({ error: 'configure_admin_key' })
+    try {
+      const list = await adminFetch('/api-keys?page_size=100').catch(() => ({ data: [] }))
+      const existing = (list.data || []).find(k => k.name === ENFORCE_KEY_NAME)
+      if (existing?.id) {
+        await adminFetch(`/api-keys/${existing.id}`, { method: 'DELETE' })
+      }
+      res.json({ ok: true })
+    } catch (e) {
+      res.status(502).json({ error: 'reset_failed', message: String(e?.message || e) })
     }
   })
 }
