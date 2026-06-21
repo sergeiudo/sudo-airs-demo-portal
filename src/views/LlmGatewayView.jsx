@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { Waypoints, Zap, BookOpen, LayoutDashboard, Columns3, Boxes } from 'lucide-react'
+import { Waypoints, Zap, BookOpen, LayoutDashboard, Columns3, Boxes, Wallet } from 'lucide-react'
 import { OverviewTab } from './llm-gateway/OverviewTab'
 import { ScenariosTab } from './llm-gateway/ScenariosTab'
 import { LiveDemoTab } from './llm-gateway/LiveDemoTab'
 import { McpRegistryTab } from './llm-gateway/McpRegistryTab'
+import { FinOpsTab } from './llm-gateway/FinOpsTab'
 import { GuideTab } from './llm-gateway/GuideTab'
 import { PortkeyStatusStrip } from './llm-gateway/components/PortkeyStatusStrip'
 
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'scenarios', label: 'Scenarios',         icon: Columns3 },
   { id: 'live',      label: 'Live Demo',         icon: Zap },
   { id: 'mcp',       label: 'MCP Registry',      icon: Boxes },
+  { id: 'finops',    label: 'Budget',            icon: Wallet },
   { id: 'guide',     label: 'Integration Guide', icon: BookOpen },
 ]
 
@@ -107,6 +109,9 @@ export function LlmGatewayView() {
         </div>
         <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'mcp' ? 'flex' : 'none' }}>
           <McpRegistryTab />
+        </div>
+        <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'finops' ? 'flex' : 'none' }}>
+          <FinOpsTab />
         </div>
         <div className="flex-1 flex-col min-h-0 overflow-hidden" style={{ display: tab === 'guide' ? 'flex' : 'none' }}>
           <GuideTab />
