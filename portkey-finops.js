@@ -1,6 +1,8 @@
 // Budget / FinOps backend for the AI/LLM Gateway pillar.
 // Real Portkey data: Analytics API for dashboards, Admin API for budget
 // enforcement on an isolated demo key, plus a bounded traffic generator.
+import { Portkey } from 'portkey-ai'
+
 const PK_BASE = 'https://api.portkey.ai/v1'
 const ADMIN_KEY = () => process.env.PORTKEY_ADMIN_API_KEY || ''
 
@@ -170,6 +172,81 @@ export function registerFinopsRoutes(router) {
       res.status(502).json({ error: 'budget_failed', message: String(e?.message || e) })
     }
   })
+
+  // POST /finops/generate — bounded SSE traffic generator.
+  // Fires real, metadata-tagged LLM calls so attribution dashboards have data.
+  router.post('/finops/generate', async (req, res) => {
+    if (!ADMIN_KEY()) return res.status(503).json({ error: 'configure_admin_key' })
+    const maxRequests = Math.min(50, Math.max(1, Number(req.body?.maxRequests) || 12))
+    const models = Array.isArray(req.body?.models) && req.body.models.length
+      ? req.body.models
+      : GEN_MODELS_DEFAULT
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders?.()
+
+    const send = (event, data) => {
+      if (res.writableEnded) return
+      res.write(`event: ${event}\n`)
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+
+    try {
+      let generated = 0
+      for (let i = 0; i < maxRequests; i++) {
+        const model = models[i % models.length]
+        try {
+          const r = await finopsChat(model, i)
+          send('step', { i: i + 1, of: maxRequests, ok: true, ...r })
+          generated++
+        } catch (e) {
+          send('step', {
+            i: i + 1, of: maxRequests, ok: false, model,
+            error: String(e?.message || e).slice(0, 160),
+          })
+        }
+      }
+      send('done', { generated })
+    } finally {
+      if (!res.writableEnded) res.end()
+    }
+  })
 }
 
 export { analyticsGet, isoRange }
+
+// ─── Traffic generator constants ────────────────────────────────────────────
+
+const GEN_TEAMS = ['Platform', 'Support bot', 'Data Science', 'Marketing', 'Sandbox']
+const GEN_MODELS_DEFAULT = [
+  '@sudo-bedrock/us.anthropic.claude-opus-4-8',
+  '@sudo-bedrock/anthropic.claude-3-haiku-20240307-v1:0',
+  '@sudo-vertexai/gemini-3.5-flash',
+]
+const LONG_PROMPT = 'Write a detailed, approximately 600-word technical explainer on how an AI gateway enforces cost budgets, ' +
+  'with clear sections and concrete examples. Cover: (1) request-level metadata tagging for attribution, ' +
+  '(2) hard credit caps and periodic reset policies, (3) real-time analytics dashboards, ' +
+  '(4) alert thresholds and automated throttling, (5) multi-team chargeback workflows.'
+
+// One tagged, token-heavy call routed by the model\'s @integration prefix.
+// Creates a fresh Portkey client per call so metadata is per-request.
+async function finopsChat(model, idx) {
+  if (!process.env.PORTKEY_API_KEY) throw new Error('PORTKEY_API_KEY not set')
+  const team = GEN_TEAMS[idx % GEN_TEAMS.length]
+  const user = `user-${(idx % 7) + 1}`
+  const metadata = { _user: user, team, app: 'finops-generator', env: 'demo' }
+  const client = new Portkey({
+    apiKey: process.env.PORTKEY_API_KEY,
+    strictOpenAiCompliance: false,
+    metadata,
+  })
+  const r = await client.chat.completions.create({
+    model,
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: LONG_PROMPT }],
+  })
+  const usage = r?.usage || {}
+  return { model, team, user, tokens: usage.total_tokens ?? null }
+}
