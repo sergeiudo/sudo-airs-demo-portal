@@ -33,11 +33,12 @@ Build an AI app the modern way: route models through the **Portkey** gateway wit
   <img src="docs/gateway-architecture.svg" alt="AI/LLM Gateway — all three flows at a glance: the same prompt and model, with only the inspection step changing between No gateway, Portkey native guardrails, and Portkey + AIRS" width="880">
 </p>
 
-A five-tab pillar:
+A six-tab pillar:
 - **Overview** — what an LLM gateway is, an at-a-glance architecture diagram, and the three flows.
 - **Scenarios** — one-click runs of the same prompt through **3 lanes** (No gateway → Portkey native guardrails → Portkey + AIRS), grouped by Baseline / Business & Data Policy / AI-Native Threats, with editable prompts.
 - **Live Demo** — free-form streaming chat with a per-request guardrail switch + live pipeline trace + a "3 lanes" comparison.
 - **MCP Registry** — agentic **CoinGecko** tool-calling routed through the **Portkey MCP Registry** (`search_docs` → `execute`), with a collapsible chain-of-thought timeline and an optional **AIRS edge-protection toggle**.
+- **Budget** — a FinOps cost console for CFO/CTO audiences: real spend dashboards from the Portkey Analytics API (cost and requests by model, time-series, metadata attribution), live budget enforcement (HTTP 412), and a bounded traffic generator. Requires `PORTKEY_ADMIN_API_KEY`; degrades gracefully to a setup screen when missing.
 - **Integration Guide** — curl / Node / Python walkthroughs.
 
 The story: Portkey's native guardrails enforce **business/data policy** (PII redaction, banned terms, code), while AIRS catches the **AI-native threats** (prompt injection, jailbreak, DLP, malicious URLs) that regex/PII checks miss.
@@ -156,7 +157,11 @@ PORTKEY_CONFIG_NO_GUARDRAIL=  # vestigial — the no-gateway lane bypasses Portk
 PORTKEY_CONFIG_FALLBACK=      # optional fallback chain
 PORTKEY_VERTEX_SLUG=@your-vertex-integration
 PORTKEY_BEDROCK_SLUG=@your-bedrock-integration   # optional — enables multi-provider routing (Vertex + Bedrock) through the same guardrails
+PORTKEY_ADMIN_API_KEY=                           # admin/org service key with analytics-read + API-key-management scopes — powers the Budget tab
+FINOPS_DEMO_CAP_USD=1                            # cost cap (USD) for the Budget tab's demo key (default: 1)
+FINOPS_ENFORCE_TOKEN_CAP=6000                    # token cap for the enforcement demo key (default: 6000)
 ```
+> **`PORTKEY_ADMIN_API_KEY`** is a separate **admin/org service key** (distinct from `PORTKEY_API_KEY`, which is a workspace chat key). Create it in the Portkey console under Organization → API Keys with analytics-read and API-key-management scopes. Without it the Budget tab shows a setup screen. The generator and enforcement demo **spend real money** (they intentionally use higher-tier models) — the `FINOPS_DEMO_CAP_USD` cap limits exposure.
 > **Multi-provider gateway:** set `PORTKEY_BEDROCK_SLUG` to a Bedrock integration (the demo uses **AWS Assumed Role** auth, region `us-west-2`) to add selectable Bedrock models — Claude, DeepSeek, Qwen, Kimi, Nemotron — alongside Vertex Gemini. The same native/AIRS guardrail configs route to whichever provider the picked model belongs to (the model id is sent as `@integration/model`). Each model must be provisioned on the integration in Portkey **and** granted in *AWS Bedrock → Model access*.
 > The MCP Registry tab also needs an MCP server registered in your Portkey **MCP Registry** (the demo uses CoinGecko). A full annotated walkthrough — integration, keys, guardrails, configs, the 3 flows, and the MCP flow — lives in [`docs/portkey-setup-deck.html`](docs/portkey-setup-deck.html) (open in a browser).
 
@@ -204,6 +209,8 @@ npm run dev
 **Azure "deployment does not exist"** — the name in `AZURE_DEPLOYMENTS` must match Foundry exactly (case-sensitive). Use API version `2025-04-01-preview`.
 
 **AI/LLM Gateway pillar shows a setup screen** — `PORTKEY_API_KEY` is missing. If lanes don't switch, the key needs **Allow Config Override = ON**. If a model errors with `model_not_allowed`, provision it in both Portkey (Model Provisioning) **and** Vertex.
+
+**Budget tab shows a setup screen** — `PORTKEY_ADMIN_API_KEY` is missing or lacks analytics-read / API-key-management scopes. This key is separate from `PORTKEY_API_KEY` — it must be an admin/org service key created in Portkey Organization settings.
 
 ---
 
