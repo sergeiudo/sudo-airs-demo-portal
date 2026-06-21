@@ -31,11 +31,12 @@ const ENV = {
 // scan after the last), and as a top-level field on non-streaming bodies.
 // They sit directly on the chunk/completion object in the Node SDK — there is
 // NO model_extra (that's the Python SDK's pydantic accessor).
-function buildClient(configId, { cacheForceRefresh = false } = {}) {
+function buildClient(configId, { cacheForceRefresh = false, metadata } = {}) {
   if (!ENV.apiKey) throw new Error('PORTKEY_API_KEY not set')
   const opts = { apiKey: ENV.apiKey, strictOpenAiCompliance: false }
   if (configId) opts.config = configId
   if (cacheForceRefresh) opts.cacheForceRefresh = true
+  if (metadata) opts.metadata = metadata
   return new Portkey(opts)
 }
 
@@ -375,7 +376,10 @@ router.post('/chat', async (req, res) => {
     // Cache semantics: the Portkey config controls whether responses are
     // cached. The UI toggle maps to cache-force-refresh — OFF forces a fresh
     // upstream call (and rewrites the cache), ON allows cache reads (HIT).
-    const client = buildClient(slug, { cacheForceRefresh: !cacheEnabled })
+    const client = buildClient(slug, {
+      cacheForceRefresh: !cacheEnabled,
+      metadata: { app: 'gateway-livedemo', _user: 'demo', team: 'Platform', env: 'demo' },
+    })
     const stream = await client.chat.completions.create({
       model, messages, stream: true,
       stream_options: { include_usage: true },
@@ -463,7 +467,7 @@ router.post('/chat', async (req, res) => {
 //   string     → use that Portkey config
 //   null       → BYPASS Portkey entirely, call Vertex directly (no-guardrail lane)
 //   undefined  → config missing → UNCONFIGURED lane
-async function runLane(laneId, slug, model, messages) {
+async function runLane(laneId, slug, model, messages, metadata) {
   const startedAt = Date.now()
   if (slug === undefined) {
     return {
@@ -501,7 +505,7 @@ async function runLane(laneId, slug, model, messages) {
   }
 
   try {
-    const client = buildClient(slug)
+    const client = buildClient(slug, { metadata })
     const completion = await client.chat.completions.create({
       model, messages, stream: false,
     })
@@ -572,12 +576,13 @@ router.post('/compare', async (req, res) => {
     return res.status(400).json({ error: 'bad_request', message: 'prompt + model required' })
   }
   const messages = [{ role: 'user', content: prompt }]
+  const compareMeta = { app: 'gateway-scenarios', _user: 'demo', team: 'Platform', env: 'demo' }
   const [noGuard, defaults, airs] = await Promise.all([
     // no-guardrail lane: pass null = bypass (no config attached). Routes via
     // the @integration prefix in the model id. Always available, never UNCONFIGURED.
-    runLane('no-guardrail', null,                        model, messages),
-    runLane('defaults',     ENV.configDefaults || undefined, model, messages),
-    runLane('airs',         ENV.configAirs     || undefined, model, messages),
+    runLane('no-guardrail', null,                        model, messages, compareMeta),
+    runLane('defaults',     ENV.configDefaults || undefined, model, messages, compareMeta),
+    runLane('airs',         ENV.configAirs     || undefined, model, messages, compareMeta),
   ])
   res.json({ prompt, model, lanes: [noGuard, defaults, airs] })
 })
