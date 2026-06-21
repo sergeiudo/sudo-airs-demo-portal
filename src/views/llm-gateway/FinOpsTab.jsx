@@ -1,10 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Wallet, RefreshCw, Play, AlertTriangle } from 'lucide-react'
+import {
+  AreaChart, Area, ResponsiveContainer, Tooltip, XAxis,
+  PieChart, Pie, Cell,
+} from 'recharts'
 import { useAppContext } from '../../context/AppContext'
 import { FINOPS_RANGES, FINOPS_ATTR_KEYS } from '../../data/finopsConfig'
 
 const ACCENT = '#ec4899'
 const AMBER  = '#f59e0b'
+const MODEL_COLORS = ['#ec4899', '#38bdf8', '#fbbf24', '#a78bfa', '#475569']
+const FMT_USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
 // ─── Setup screen ────────────────────────────────────────────────────────────
 function SetupScreen({ isLight }) {
@@ -22,9 +28,9 @@ function SetupScreen({ isLight }) {
         <p className="text-[12px] mb-4" style={{ color: muted }}>
           The Budget &amp; FinOps tab reads cost analytics from the Portkey Admin API.
           Add your Admin key to{' '}
-          <code className="px-1 rounded" style={{ background: 'rgba(255,255,255,0.08)' }}>.env</code>{' '}
+          <code className="px-1 rounded" style={{ background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>.env</code>{' '}
           as{' '}
-          <code className="px-1 rounded" style={{ background: 'rgba(255,255,255,0.08)' }}>PORTKEY_ADMIN_API_KEY</code>,
+          <code className="px-1 rounded" style={{ background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>PORTKEY_ADMIN_API_KEY</code>,
           then restart the dev server.
         </p>
         <a href="https://app.portkey.ai/api-keys" target="_blank" rel="noreferrer"
@@ -281,53 +287,162 @@ export function FinOpsTab() {
         <div>
           <SectionLabel>② Spend over time · by model</SectionLabel>
           {loading ? (
-            <LoadingPulse isLight={isLight} height={160} />
+            <LoadingPulse isLight={isLight} height={200} />
           ) : (
             <div className="flex gap-3">
-              {/* Spend chart placeholder — Task 7 */}
+              {/* Spend trend — recharts AreaChart */}
               <Panel isLight={isLight} style={{ flex: 2 }}>
-                <div className="text-[9px] font-semibold mb-3" style={{ color: textSecondary }}>
-                  Spend over time — chart coming in Task 7
+                <div className="text-[9px] font-semibold mb-2" style={{ color: textSecondary }}>
+                  Spend over time
                 </div>
-                <div className="flex items-end gap-1" style={{ height: 72 }}>
-                  {(overview?.series ?? []).slice(-14).map((pt, i) => {
-                    const max = Math.max(...(overview?.series ?? []).map(p => p.cost), 0.01)
-                    const h   = Math.max(8, (pt.cost / max) * 100)
-                    return (
-                      <div key={i} className="flex-1 rounded-t"
-                           style={{ height: `${h}%`, background: 'linear-gradient(180deg,#ec4899,#8b5cf6)', opacity: 0.75 }} />
-                    )
-                  })}
-                  {(overview?.series ?? []).length === 0 && (
-                    <div className="w-full text-center text-[10px] self-center" style={{ color: textSecondary }}>
-                      No spend data for this range
-                    </div>
-                  )}
-                </div>
-                <div className="text-[9px] mt-2" style={{ color: '#64748b' }}>
-                  last {range} · toggle by model / by lane — Tasks 7 &amp; 8
+                {(overview?.series ?? []).length > 0 ? (
+                  <div style={{ height: 160 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={overview.series}
+                        margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#ec4899" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#ec4899" stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis
+                          dataKey="timestamp"
+                          tickFormatter={v => {
+                            const d = new Date(v)
+                            return isNaN(d) ? v : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          }}
+                          tick={{ fill: textSecondary, fontSize: 9 }}
+                          axisLine={false}
+                          tickLine={false}
+                          interval="preserveStartEnd"
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: isLight ? '#fff' : 'rgba(15,20,35,0.98)',
+                            border: `1px solid ${isLight ? 'rgba(0,48,135,0.14)' : 'rgba(255,255,255,0.12)'}`,
+                            borderRadius: 8,
+                            fontSize: 11,
+                            color: isLight ? '#1e293b' : '#e2e8f0',
+                          }}
+                          labelStyle={{ color: textSecondary, fontSize: 9 }}
+                          labelFormatter={v => {
+                            const d = new Date(v)
+                            return isNaN(d) ? v : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          }}
+                          formatter={v => [FMT_USD.format(v), 'Spend']}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="cost"
+                          stroke="#ec4899"
+                          strokeWidth={2}
+                          fill="url(#spendGrad)"
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#ec4899' }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center text-[10px]" style={{ height: 160, color: textSecondary }}>
+                    No spend data for this range — try "Generate traffic"
+                  </div>
+                )}
+                <div className="text-[9px] mt-1" style={{ color: textSecondary }}>
+                  last {range} · cost per day
                 </div>
               </Panel>
 
-              {/* By model list placeholder — Task 7 */}
+              {/* By model — recharts Pie donut */}
               <Panel isLight={isLight} style={{ flex: 1 }}>
-                <div className="text-[9px] font-semibold mb-3" style={{ color: textSecondary }}>
-                  By model — donut in Task 7
+                <div className="text-[9px] font-semibold mb-2" style={{ color: textSecondary }}>
+                  By model
                 </div>
-                {byModel.length > 0 ? (
-                  <div className="flex flex-col gap-1.5">
-                    {byModel.slice(0, 5).map((m, i) => (
-                      <div key={i} className="flex items-center justify-between text-[10px]">
-                        <span className="truncate max-w-[100px]" style={{ color: textPrimary }} title={m.model}>
-                          {m.model.split('/').pop()}
-                        </span>
-                        <span style={{ color: ACCENT, fontWeight: 700 }}>${m.cost.toFixed(2)}</span>
+                {(() => {
+                  const withCost = (overview?.byModel ?? []).filter(m => m.cost > 0)
+                  if (withCost.length === 0) {
+                    return (
+                      <div className="flex flex-col gap-1.5">
+                        {(overview?.byModel ?? []).slice(0, 5).map((m, i) => (
+                          <div key={i} className="flex items-center justify-between text-[10px]">
+                            <span className="truncate max-w-[100px]" style={{ color: textPrimary }} title={m.model}>
+                              {m.model.split('/').pop()}
+                            </span>
+                            <span style={{ color: textSecondary }}>—</span>
+                          </div>
+                        ))}
+                        {(overview?.byModel ?? []).length === 0 && (
+                          <div style={{ color: textSecondary }}>No model data</div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-[10px]" style={{ color: textSecondary }}>No model data</div>
-                )}
+                    )
+                  }
+                  const sorted = [...withCost].sort((a, b) => b.cost - a.cost)
+                  const top4   = sorted.slice(0, 4)
+                  const others = sorted.slice(4)
+                  const pieData = [
+                    ...top4.map(m => ({ name: m.model.split('/').pop(), value: m.cost })),
+                    ...(others.length > 0
+                      ? [{ name: 'others', value: others.reduce((s, m) => s + m.cost, 0) }]
+                      : []),
+                  ]
+                  const total = pieData.reduce((s, d) => s + d.value, 0)
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div style={{ height: 90 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={26}
+                              outerRadius={42}
+                              paddingAngle={2}
+                              dataKey="value"
+                              startAngle={90}
+                              endAngle={-270}
+                            >
+                              {pieData.map((_, i) => (
+                                <Cell key={i} fill={MODEL_COLORS[i % MODEL_COLORS.length]} fillOpacity={0.9} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{
+                                background: isLight ? '#fff' : 'rgba(15,20,35,0.98)',
+                                border: `1px solid ${isLight ? 'rgba(0,48,135,0.14)' : 'rgba(255,255,255,0.12)'}`,
+                                borderRadius: 8,
+                                fontSize: 10,
+                                color: isLight ? '#1e293b' : '#e2e8f0',
+                              }}
+                              formatter={v => [FMT_USD.format(v), 'Spend']}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {pieData.map((d, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-[9px]">
+                            <span style={{
+                              display: 'inline-block',
+                              width: 8, height: 8,
+                              borderRadius: 2,
+                              background: MODEL_COLORS[i % MODEL_COLORS.length],
+                              flexShrink: 0,
+                            }} />
+                            <span className="truncate" style={{ color: textPrimary, flex: 1 }} title={d.name}>{d.name}</span>
+                            <span style={{ color: textSecondary, flexShrink: 0 }}>
+                              {total > 0 ? `${((d.value / total) * 100).toFixed(0)}%` : '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </Panel>
             </div>
           )}
@@ -373,7 +488,7 @@ export function FinOpsTab() {
                           {row.requests?.toLocaleString() ?? '—'}
                         </td>
                         <td style={{ padding: '5px 8px', width: 80, borderBottom: `1px solid ${borderColor}` }}>
-                          <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 3, height: 7, overflow: 'hidden' }}>
+                          <div style={{ background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)', borderRadius: 3, height: 7, overflow: 'hidden' }}>
                             <div style={{
                               width: `${Math.min(100, (row.cost / maxCost) * 100)}%`,
                               height: '100%',
@@ -393,7 +508,7 @@ export function FinOpsTab() {
                   <span className="text-[10px]">Try "Generate traffic" to seed some data.</span>
                 </div>
               )}
-              <div className="text-[9px] mt-3" style={{ color: '#64748b' }}>
+              <div className="text-[9px] mt-3" style={{ color: textSecondary }}>
                 grouped by Portkey metadata — toggle: team · user · application
               </div>
             </Panel>
@@ -419,7 +534,7 @@ export function FinOpsTab() {
                       )}
                       {budget.periodicReset && <> · resets {budget.periodicReset}</>}
                     </div>
-                    <div className="rounded-full overflow-hidden" style={{ height: 12, background: 'rgba(255,255,255,0.08)' }}>
+                    <div className="rounded-full overflow-hidden" style={{ height: 12, background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>
                       <div style={{
                         width:      `${budgetUsedPct}%`,
                         height:     '100%',
@@ -450,7 +565,7 @@ export function FinOpsTab() {
                       Fire requests against the isolated demo key until the budget cap is hit.
                       Requests beyond the cap are blocked by Portkey in real time.
                     </div>
-                    <div className="text-[9px] mt-2" style={{ color: '#64748b' }}>
+                    <div className="text-[9px] mt-2" style={{ color: textSecondary }}>
                       real Portkey Admin API · isolated key · $0.50 cap
                     </div>
                   </div>
@@ -459,7 +574,7 @@ export function FinOpsTab() {
                 <div className="flex items-center gap-2 text-[11px]" style={{ color: textSecondary }}>
                   <AlertTriangle size={14} style={{ color: AMBER }} />
                   Budget data unavailable — check <code className="px-1 rounded"
-                    style={{ background: 'rgba(255,255,255,0.08)' }}>PORTKEY_ADMIN_API_KEY</code>
+                    style={{ background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>PORTKEY_ADMIN_API_KEY</code>
                 </div>
               )}
             </Panel>
