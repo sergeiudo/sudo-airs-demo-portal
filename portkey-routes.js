@@ -4,12 +4,16 @@
 import express from 'express'
 import { Portkey } from 'portkey-ai'
 import { mcpChatHandler, mcpHealth } from './portkey-mcp.js'
+import { registerFinopsRoutes } from './portkey-finops.js'
 
 const router = express.Router()
 
 // MCP Registry demo (CoinGecko via Portkey MCP Registry) — see portkey-mcp.js
 router.get('/mcp/health', mcpHealth)
 router.post('/mcp', mcpChatHandler)
+
+// Budget / FinOps routes — see portkey-finops.js
+registerFinopsRoutes(router)
 
 const ENV = {
   apiKey:           process.env.PORTKEY_API_KEY || '',
