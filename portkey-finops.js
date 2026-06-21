@@ -7,7 +7,7 @@ const PK_BASE = 'https://api.portkey.ai/v1'
 const ADMIN_KEY = () => process.env.PORTKEY_ADMIN_API_KEY || ''
 
 const FINOPS_DEMO_KEY_NAME = 'sudo-finops-demo'
-const DEMO_CAP_USD = Number(process.env.FINOPS_DEMO_CAP_USD || 1)
+const DEMO_CAP_USD = Number(process.env.FINOPS_DEMO_CAP_USD) || 1
 const FINOPS_WORKSPACE_ID = '0cfd0b1a-6e24-4617-91b7-a0a44c241f23'
 
 // Enforcement demo — isolated token-capped key that trips 412 fast and cheaply
