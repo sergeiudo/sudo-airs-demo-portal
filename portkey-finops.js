@@ -15,7 +15,7 @@ const ENFORCE_KEY_NAME = 'sudo-finops-enforce'
 const ENFORCE_TOKEN_CAP = Number(process.env.FINOPS_ENFORCE_TOKEN_CAP) || 6000
 
 // Per-model token-budget keys for the Budget tab developer chat
-const BUDGET_TOKEN_CAP = Number(process.env.FINOPS_BUDGET_TOKEN_CAP) || 8000
+const BUDGET_TOKEN_CAP = Number(process.env.FINOPS_BUDGET_TOKEN_CAP) || 1000
 const BUDGET_KEY_PREFIX = 'sudo-budget-'
 // Approx blended USD per 1M tokens — for the est-$ label only (not billing).
 const MODEL_PRICING = {

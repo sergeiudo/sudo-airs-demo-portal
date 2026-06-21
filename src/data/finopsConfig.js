@@ -28,4 +28,4 @@ export const BUDGET_MODELS = [
 
 // Mirror of the backend default (FINOPS_BUDGET_TOKEN_CAP) for display fallback;
 // the backend returns the authoritative `cap` in each devchat response.
-export const BUDGET_TOKEN_CAP = 8000
+export const BUDGET_TOKEN_CAP = 1000
