@@ -217,7 +217,11 @@ if (ENV.bedrockSlug) {
   // the native/AIRS lanes return `model_not_allowed`. The no-gateway lane uses
   // Bedrock's Converse API (callBedrock) — not every open model supports it.
   MODEL_CATALOG[ENV.bedrockSlug] = [
-    // Anthropic Claude
+    // Anthropic Claude — Claude 4.x requires the us. cross-region inference
+    // profile (no on-demand throughput); the role's IAM policy must allow
+    // bedrock:InvokeModel on inference-profile/* ARNs (see CLAUDE.md gotcha).
+    { id: 'us.anthropic.claude-opus-4-8', displayName: 'Claude Opus 4.8 (Bedrock)' },
+    { id: 'us.anthropic.claude-fable-5',  displayName: 'Claude Fable 5 (Bedrock)' },
     { id: 'anthropic.claude-sonnet-4-20250514-v1:0', displayName: 'Claude Sonnet 4 (Bedrock)' },
     { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', displayName: 'Claude 3.5 Sonnet v2 (Bedrock)' },
     { id: 'anthropic.claude-3-haiku-20240307-v1:0',  displayName: 'Claude 3 Haiku (Bedrock)' },
