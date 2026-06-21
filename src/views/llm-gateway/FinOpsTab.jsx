@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Wallet, RotateCcw, Send } from 'lucide-react'
+import { Wallet, RotateCcw, Send, Info, ChevronRight } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { BUDGET_MODELS, BUDGET_TOKEN_CAP } from '../../data/finopsConfig'
 
@@ -168,6 +168,61 @@ function ChatBubble({ msg, isLight, modelLabel }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── "How it works" explainer (collapsible) — self-documents the mechanism ────
+function HowItWorks({ isLight, cap }) {
+  const [open, setOpen] = useState(false)
+  const textPrimary   = isLight ? '#0f172a' : '#e2e8f0'
+  const textSecondary = isLight ? '#475569' : '#94a3b8'
+  const cardBg = isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)'
+  const codeBg = isLight ? 'rgba(0,48,135,0.06)' : 'rgba(255,255,255,0.06)'
+  const border = isLight ? 'rgba(0,48,135,0.10)' : 'rgba(255,255,255,0.08)'
+  const Code = ({ children }) => (
+    <code className="px-1 rounded font-mono text-[10px]" style={{ background: codeBg }}>{children}</code>
+  )
+  const Step = ({ n, title, children }) => (
+    <div className="flex gap-2.5">
+      <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
+            style={{ background: `${ACCENT}22`, color: ACCENT }}>{n}</span>
+      <div className="text-[11px] leading-relaxed" style={{ color: textSecondary }}>
+        <span className="font-semibold" style={{ color: textPrimary }}>{title}</span> {children}
+      </div>
+    </div>
+  )
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: cardBg, border: `1px solid ${border}` }}>
+      <button onClick={() => setOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-semibold"
+              style={{ color: ACCENT }}>
+        <Info size={13} />
+        How per-model budgets work
+        <ChevronRight size={13} style={{ marginLeft: 'auto', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+      {open && (
+        <div className="px-3 pb-3 flex flex-col gap-2.5">
+          <Step n="1" title="Create —">
+            the backend calls the Portkey Admin API to create one <strong>API key per model</strong> with a{' '}
+            <strong>token budget</strong>: <Code>usage_limits: {'{'} type:"tokens", credit_limit:{cap} {'}'}</Code>.
+            The budget rides on the <strong>key</strong> — Portkey never ties the key to a model.
+          </Step>
+          <Step n="2" title="Route —">
+            each prompt is sent through <em>that model's</em> key, with the model in the request
+            (<Code>@sudo-bedrock/…</Code>). Portkey routes to the provider by the <Code>@integration/</Code> prefix.
+          </Step>
+          <Step n="3" title="Enforce —">
+            Portkey meters tokens against the key. At the cap it returns <strong style={{ color: RED }}>HTTP 412</strong>{' '}
+            <em>before</em> the model runs — so a blocked request costs <strong>$0</strong>.
+          </Step>
+          <div className="text-[10px] pt-2 leading-relaxed" style={{ color: textSecondary, borderTop: `1px solid ${border}` }}>
+            <span className="font-semibold" style={{ color: textPrimary }}>What's bound where:</span>{' '}
+            budget ↔ key <span style={{ color: ACCENT }}>(enforced by Portkey)</span> · model ↔ provider (per request) ·
+            model ↔ key (mapped by this app — one capped key per model).
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -359,6 +414,11 @@ export function FinOpsTab() {
         <p className="text-[9px] mt-1.5" style={{ color: textSecondary }}>
           Real calls to your Vertex/Bedrock accounts via the gateway.
         </p>
+      </div>
+
+      {/* ── How it works (collapsible explainer) ──────────────────────────── */}
+      <div className="flex-shrink-0 px-5 pb-3">
+        <HowItWorks isLight={isLight} cap={cap} />
       </div>
 
       {/* ── Chat messages ────────────────────────────────────────────────── */}
