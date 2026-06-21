@@ -43,6 +43,16 @@ async function mcpRpc(method, params, id) {
     signal: AbortSignal.timeout(60000),
   })
   const text = await resp.text()
+  // An inline web filter / firewall (e.g. PAN-OS URL filtering, "cryptocurrency"
+  // category) returns an HTML "Web Page Blocked" page instead of JSON-RPC. Detect
+  // that and surface an actionable message rather than "no JSON-RPC message".
+  const ct = resp.headers.get('content-type') || ''
+  if (!resp.ok || ct.includes('text/html') || /web page blocked/i.test(text)) {
+    if (/web page blocked/i.test(text)) {
+      throw new Error(`MCP ${method}: blocked by a network URL filter — the CoinGecko MCP endpoint is categorised as cryptocurrency. Allow mcp.portkey.ai (and api.coingecko.com) in your URL-filtering policy, or disconnect the filtering VPN/network.`)
+    }
+    throw new Error(`MCP ${method}: HTTP ${resp.status} from the MCP Registry (non-JSON response).`)
+  }
   const datas = text.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).filter(Boolean)
   let msg = null
   for (const d of datas) {
@@ -116,6 +126,15 @@ export async function mcpChatHandler(req, res) {
 
   const startedAt = Date.now()
   try {
+    // Guard: the agentic loop runs the model on Vertex's OpenAI-compatible
+    // endpoint, which only serves Google (Gemini) models. Bedrock/other providers
+    // can't drive it — fail clearly instead of returning an empty answer.
+    if (/bedrock/i.test(String(model || '')) || !/^gemini/i.test(bareModel)) {
+      send('error', { message: `MCP Registry runs the agentic loop on Vertex (Gemini). "${bareModel}" isn't a Gemini model — pick a Gemini model for this tab.` })
+      send('done', {})
+      return res.end()
+    }
+
     // 0. AIRS edge protection (optional) — scan the prompt BEFORE it reaches the
     // model or the MCP. A blocked prompt never runs a single tool.
     let airscanFn = null

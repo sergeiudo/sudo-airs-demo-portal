@@ -3,7 +3,7 @@ import { ShieldOff, Shield, ShieldCheck } from 'lucide-react'
 import { GuardrailVerdictCard } from './GuardrailVerdictCard'
 
 const LANE_META = {
-  'no-guardrail': { label: 'Vertex (no guardrail)',  icon: ShieldOff,   color: '#94a3b8' },
+  'no-guardrail': { label: 'Direct (no guardrail)',  icon: ShieldOff,   color: '#94a3b8' },
   'defaults':     { label: 'Portkey defaults',       icon: Shield,      color: '#0ea5e9' },
   'airs':         { label: 'Portkey + AIRS',         icon: ShieldCheck, color: '#ec4899' },
 }

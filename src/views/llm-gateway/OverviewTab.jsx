@@ -182,7 +182,7 @@ function FlowArchitectureDiagram() {
             <stop offset="0%" stopColor="#0ea5e9" />
             <stop offset="100%" stopColor="#ec4899" />
           </linearGradient>
-          {[['fad-arrGray', '#94a3b8'], ['fad-arrBlue', '#0ea5e9'], ['fad-arrPink', '#ec4899']].map(([id, c]) => (
+          {[['fad-arrGray', '#94a3b8'], ['fad-arrBlue', '#0ea5e9'], ['fad-arrPink', '#ec4899'], ['fad-arrPurple', '#8b5cf6']].map(([id, c]) => (
             <marker key={id} id={id} markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
               <path d="M0,0 L6,3.5 L0,7 Z" fill={c} />
             </marker>
@@ -208,6 +208,27 @@ function FlowArchitectureDiagram() {
         <rect x={506} y={128} width={84} height={44} rx={10} fill="#ec4899" fillOpacity={0.20} />
         <rect x={502} y={124} width={84} height={44} rx={10} fill="url(#fad-modelFill)" fillOpacity={0.30} stroke="#8b5cf6" strokeOpacity={0.85} strokeWidth={1.4} />
         <text x={544} y={150} textAnchor="middle" fontFamily={mono} fontSize={10.5} fontWeight={700} fill={textPrimary}>AI MODEL</text>
+
+        {/* model providers — the gateway routes the model call to ONE of two
+            providers: @sudo-vertexai (above the model) or @sudo-bedrock (below). */}
+        {[
+          { cy: 100, place: 'top',    color: '#38bdf8', label: '@sudo-vertexai' },
+          { cy: 205, place: 'bottom', color: '#fbbf24', label: '@sudo-bedrock' },
+        ].map(p => {
+          const w = 116, h = 28
+          // connector runs from the nearest model edge to the chip (arrow at chip)
+          const conn = p.place === 'top'
+            ? `M545,124 L545,${p.cy + h / 2}`   // model top → vertex chip (points up)
+            : `M545,172 L545,${p.cy - h / 2}`   // model bottom → bedrock chip (points down)
+          return (
+            <g key={p.label}>
+              <path d={conn} fill="none" stroke="#8b5cf6" strokeOpacity={0.7} strokeWidth={1.6} strokeLinecap="round" markerEnd="url(#fad-arrPurple)" />
+              <rect x={545 - w / 2} y={p.cy - h / 2} width={w} height={h} rx={8}
+                    fill={p.color} fillOpacity={0.12} stroke={p.color} strokeOpacity={0.65} strokeWidth={1.2} />
+              <text x={545} y={p.cy + 3.5} textAnchor="middle" fontFamily={mono} fontSize={9} fontWeight={700} fill={p.color}>{p.label}</text>
+            </g>
+          )
+        })}
 
         {/* "response generation" pill under the model */}
         <rect x={471} y={244} width={148} height={22} rx={6} fill={boxFill} stroke={boxStroke} strokeWidth={1} />
@@ -238,7 +259,8 @@ function FlowArchitectureDiagram() {
       </svg>
 
       <div className="text-[11px] italic px-1" style={{ color: textSecondary }}>
-        Same prompt, same model — the only thing that changes is what inspects the traffic in the middle.
+        Same prompt, same providers — Portkey routes the call to either <span style={{ color: '#38bdf8' }}>@sudo-vertexai</span> (Gemini) or{' '}
+        <span style={{ color: '#fbbf24' }}>@sudo-bedrock</span> (Claude · DeepSeek · Qwen · Kimi · Nemotron). The only thing that changes per lane is what inspects the traffic in the middle.
       </div>
     </div>
   )

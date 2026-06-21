@@ -329,7 +329,12 @@ export function McpRegistryTab() {
       {/* LEFT — model picker + grouped example library (resizable) */}
       <aside className="flex-shrink-0 flex flex-col gap-3 p-4 border-r overflow-y-auto"
              style={{ width: leftWidth, background: surfaceBg, borderColor: surfaceBorder }}>
-        <ModelPicker value={model} onChange={setModel} />
+        <div className="flex flex-col gap-1">
+          <ModelPicker value={model} onChange={setModel} filterProviders={(p) => /vertex/i.test(p)} />
+          <div className="text-[9px] leading-snug px-1" style={{ color: textSecondary }}>
+            Gemini drives the MCP agentic loop (runs on Vertex's tool-calling endpoint).
+          </div>
+        </div>
 
         {/* AIRS protection toggle — wraps the MCP loop with input + output scans */}
         <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg cursor-pointer text-[11px] font-semibold"

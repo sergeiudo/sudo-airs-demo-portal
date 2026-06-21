@@ -10,7 +10,7 @@ import { LLM_GATEWAY_ATTACKS, LLM_GATEWAY_ATTACK_CATEGORIES } from '../../data/l
 const ACCENT = '#ec4899'
 
 const GUARDRAIL_CHOICES = [
-  { id: 'no-guardrail', label: 'None',           icon: ShieldOff,  desc: 'Direct Vertex — bypasses the gateway' },
+  { id: 'no-guardrail', label: 'None',           icon: ShieldOff,  desc: 'Direct to provider — bypasses the gateway' },
   { id: 'defaults',     label: 'Portkey default',icon: Shield,     desc: 'Regex/PII checks' },
   { id: 'airs',         label: 'AIRS',           icon: ShieldCheck,desc: 'Prisma AIRS guardrail' },
 ]
