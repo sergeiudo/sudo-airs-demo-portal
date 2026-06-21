@@ -60,7 +60,7 @@ async function ensureBudgetKey(modelId, { fresh = false } = {}) {
   return value
 }
 
-// Admin API helper — uses hyphen paths for list/create, underscore for delete (Portkey quirk)
+// Admin API helper — all key endpoints use hyphen paths (/api-keys, /api-keys/{id})
 async function adminFetch(path, opts = {}) {
   const resp = await fetch(`${PK_BASE}${path}`, {
     ...opts,
