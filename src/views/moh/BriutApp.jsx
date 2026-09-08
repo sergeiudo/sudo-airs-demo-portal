@@ -392,11 +392,15 @@ function BlockedCard({ msg, theme }) {
     : stage === 'prompt' ? msg.metadata.inputScan
     : msg.metadata.outputScan || msg.metadata.inputScan
   const isOutput = stage === 'downstream' || stage === 'output' || stage === 2
+  // 'input'/'output' come from the streaming chat, 1/2/'prompt'/'narration'
+  // from the agent route. Both reach this card, so both have to be mapped or
+  // the label silently disappears on ordinary chat blocks.
   const pointKey =
-    stage === 'prompt' ? 'prompt'
+    stage === 'prompt' || stage === 'input' ? 'prompt'
     : stage === 1 ? 'params'
     : stage === 2 ? 'output'
     : stage === 'narration' ? 'answer'
+    : stage === 'output' || stage === 'downstream' ? 'answer'
     : null
 
   return (
