@@ -825,7 +825,7 @@ router.post('/agent', async (req, res) => {
   const result = {
     tool, params, lang, airsEnabled, model, scenario: scenario || null,
     prompt,
-    stage1: null, stage2: null, toolResult: null,
+    inputScan: null, outputScan: null, stage1: null, stage2: null, toolResult: null,
     answer: null, hookResults: null,
     blocked: false, blockStage: null, blockReason: null,
     latencyMs: 0, traceId: null, replayed: false, error: null,
@@ -836,11 +836,71 @@ router.post('/agent', async (req, res) => {
   const toolInput = JSON.stringify(params)
 
   try {
+    // ── Step 0: the user prompt goes through the AI-GW guardrail ──
+    //
+    // This is the enforcement point every other tab uses, and the agent tab
+    // was skipping it. Stage 1 used to fold the prompt into its tool_event
+    // scan, which had two bad effects: it duplicated work the gateway
+    // guardrail is already responsible for, and — because the direct scan
+    // returns first — a plain prompt DLP hit was reported to the audience as
+    // a tool-parameter catch. Measured on ag-02: the params
+    // {"patient_id":"P-1004"} scan clean on their own; the whole block came
+    // from the ת.ז. in the prompt. Only ag-04 is a real parameter catch.
+    //
+    // Doing the model turn first also restores the honest ordering — the
+    // prompt is judged before anything executes — and puts agent traffic in
+    // the AI Gateway logs alongside every other scenario.
+    if (prompt) {
+      try {
+        const { configId, mode } = resolveConfig(airsEnabled)
+        result.laneMode = mode
+        const client = buildAigwClient(configId, {
+          metadata: gwMetadata({ lang, scenario, family: 'agent' }),
+        })
+        const decideSys = lang === 'he'
+          ? 'אתה עוזר בריאות דיגיטלי. ציין במשפט קצר באיזה שירות בריאות תשתמש כדי לענות. אל תמציא מידע.'
+          : 'You are a health assistant. State in one short sentence which health service you would use to answer. Do not invent information.'
+        const decide = await client.chat.completions.create({
+          model,
+          messages: [{ role: 'system', content: decideSys }, { role: 'user', content: prompt }],
+          max_tokens: 48,
+        })
+        const hr = decide?.hook_results || null
+        result.hookResults = hr
+        result.inputScan = stageFromHook(hr?.before_request_hooks, 'prompt')
+        // On this tenant a failed guardrail returns HTTP 200 with the content
+        // swapped out, so the verdict has to be read rather than caught.
+        if (hookVerdictFailed(hr)) {
+          result.blocked = true
+          result.blockStage = 'prompt'
+          result.blockReason = result.inputScan?.category || 'blocked by the AI-GW AIRS guardrail'
+          result.latencyMs = Date.now() - startedAt
+          saveReplay(replayKey, result)
+          return res.json(result)
+        }
+      } catch (e) {
+        const { raw, hookResults: hr, blockedHook } = parseBlockError(e)
+        if (blockedHook) {
+          result.blocked = true
+          result.blockStage = 'prompt'
+          result.blockReason = blockedHook
+          result.hookResults = hr
+          result.inputScan = stageFromHook(hr?.before_request_hooks, 'prompt')
+          result.latencyMs = Date.now() - startedAt
+          saveReplay(replayKey, result)
+          return res.json(result)
+        }
+        result.error = raw.slice(0, 300)
+      }
+    }
+
     // ── Stage 1: scan the tool parameters BEFORE anything executes ──
+    // Parameters only. The prompt is the gateway's job (step 0) — including it
+    // here is what made every scenario look like a tool-parameter catch.
     if (airsEnabled) {
       try {
         const s1 = await airscanMoh({
-          prompt: prompt || toolInput, toolName: tool, toolInput, model,
+          toolName: tool, toolInput, model,
         })
         result.stage1 = {
           action: s1.data.action, category: s1.data.category, scan_id: s1.data.scan_id,
@@ -916,7 +976,10 @@ router.post('/agent', async (req, res) => {
           ],
           max_tokens: 400,
         })
-        result.hookResults = completion?.hook_results || null
+        // Merge, don't overwrite — step 0's prompt verdict is still the
+        // evidence that the gateway inspected this turn.
+        result.hookResults = mergeHookResults(result.hookResults, completion?.hook_results)
+        result.outputScan = stageFromHook(completion?.hook_results?.after_request_hooks, 'response')
         result.answer = completion?.choices?.[0]?.message?.content ?? ''
       } catch (e) {
         const { raw, hookResults: hr, blockedHook } = parseBlockError(e)

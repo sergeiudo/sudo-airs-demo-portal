@@ -254,6 +254,11 @@ export function useMohChat() {
           content: d.blocked ? '' : d.answer || d.error || '',
           metadata: {
             model: d.model, latencyMs: d.latencyMs,
+            // The agent turn now passes through the AI-GW guardrail before the
+            // tool runs, so it reports gateway scans as well as tool scans —
+            // the console renders both, which is what makes it visible whether
+            // a block came from the prompt or from the tool.
+            inputScan: d.inputScan, outputScan: d.outputScan,
             stage1: d.stage1, stage2: d.stage2, toolResult: d.toolResult,
             tool: d.tool, params: d.params, memory: d.memory,
             hookResults: d.hookResults,

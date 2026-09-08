@@ -57,6 +57,14 @@ export const STRINGS = {
       showDetails: 'הצגת פרטים',
       hideDetails: 'הסתרת פרטים',
       stage: 'שלב חסימה',
+      // Which of the enforcement points actually stopped it. Without this the
+      // audience cannot tell a prompt block from a tool block.
+      points: {
+        prompt: 'שער ה-AI · הפרומפט',
+        params: 'AIRS ישיר · פרמטרי הכלי',
+        output: 'AIRS ישיר · פלט הכלי',
+        answer: 'שער ה-AI · התשובה',
+      },
     },
     console: {
       title: 'קונסולת אבטחה',
@@ -259,6 +267,12 @@ export const STRINGS = {
       showDetails: 'Show details',
       hideDetails: 'Hide details',
       stage: 'Blocked at',
+      points: {
+        prompt: 'AI Gateway · prompt',
+        params: 'Direct AIRS · tool parameters',
+        output: 'Direct AIRS · tool output',
+        answer: 'AI Gateway · answer',
+      },
     },
     console: {
       title: 'Security console',

@@ -381,8 +381,23 @@ function CitationCards({ docs, theme }) {
 function BlockedCard({ msg, theme }) {
   const { t } = useMohLang()
   const [open, setOpen] = useState(false)
-  const scan = msg.metadata.inputScan || msg.metadata.outputScan
-  const isOutput = msg.metadata.blockStage === 'downstream' || msg.metadata.blockStage === 'output'
+  // Show the scan that actually blocked, not merely the first one present.
+  // An agent turn now carries a gateway scan AND up to two tool scans, so
+  // `inputScan || outputScan` would happily print the *allowing* gateway
+  // verdict — category "benign" — next to a blocked card.
+  const { blockStage: stage } = msg.metadata
+  const scan =
+    stage === 1 ? msg.metadata.stage1
+    : stage === 2 ? msg.metadata.stage2
+    : stage === 'prompt' ? msg.metadata.inputScan
+    : msg.metadata.outputScan || msg.metadata.inputScan
+  const isOutput = stage === 'downstream' || stage === 'output' || stage === 2
+  const pointKey =
+    stage === 'prompt' ? 'prompt'
+    : stage === 1 ? 'params'
+    : stage === 2 ? 'output'
+    : stage === 'narration' ? 'answer'
+    : null
 
   return (
     <div
@@ -400,6 +415,12 @@ function BlockedCard({ msg, theme }) {
       </p>
 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 9, fontSize: 10.5, color: theme.textMuted }}>
+        {pointKey && (
+          <span>
+            <b>{t('blocked.stage')}:</b>{' '}
+            <span style={{ color: theme.blocked, fontWeight: 700 }}>{t(`blocked.points.${pointKey}`)}</span>
+          </span>
+        )}
         {scan?.category && <span><b>{t('blocked.category')}:</b> {scan.category}</span>}
         {scan?.scan_id && (
           <span dir="ltr"><b>{t('blocked.scanId')}:</b> <code style={{ fontSize: 10 }}>{scan.scan_id}</code></span>
