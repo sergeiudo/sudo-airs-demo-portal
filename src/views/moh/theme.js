@@ -37,6 +37,16 @@ export function mohTheme(isLight) {
     headerBg: isLight
       ? 'linear-gradient(135deg, #0d9488 0%, #0e7490 55%, #0369a1 100%)'
       : 'linear-gradient(135deg, #0b3b38 0%, #0c3a45 55%, #0a2f4d 100%)',
+    // Unprotected lane. The calm clinical teal is the point of this screen, so
+    // the strongest way to show AIRS being switched off is to take it away:
+    // the whole chrome goes red, readable from the back of a room, instead of
+    // one small badge changing wording. Same 135deg / three-stop shape as the
+    // protected gradient so it reads as the same UI in a different state.
+    headerBgUnprotected: isLight
+      ? 'linear-gradient(135deg, #b91c1c 0%, #a41d1d 55%, #8b1a2b 100%)'
+      : 'linear-gradient(135deg, #4a1216 0%, #45141a 55%, #3d1220 100%)',
+    headerShadow: '0 2px 18px rgba(6,60,66,0.28)',
+    headerShadowUnprotected: '0 2px 18px rgba(120,20,20,0.38)',
     headerText: '#ffffff',
     headerSub: 'rgba(255,255,255,0.72)',
 

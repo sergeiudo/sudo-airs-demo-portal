@@ -160,13 +160,20 @@ function ModelMenu({ models, value, onChange, theme, isLight }) {
 
 function Header({ theme, isLight, protectionOn, onToggleProtection, models, model, setModel, onOpenConsole, onOpenDrawer, health, embedded, canCompareLanes }) {
   const { t } = useMohLang()
+  // Only go red when there is genuinely an unprotected lane being used. Under
+  // a workspace-enforced guardrail the switch is a status badge and traffic is
+  // scanned regardless, so colouring the app red there would be a lie.
+  const unprotected = canCompareLanes && !protectionOn
   return (
     <header
       style={{
-        background: theme.headerBg, color: theme.headerText, flexShrink: 0,
+        background: unprotected ? theme.headerBgUnprotected : theme.headerBg,
+        color: theme.headerText, flexShrink: 0,
         padding: embedded ? '10px 16px' : '14px 22px',
         display: 'flex', alignItems: 'center', gap: 14,
-        boxShadow: '0 2px 18px rgba(6,60,66,0.28)', zIndex: 30,
+        boxShadow: unprotected ? theme.headerShadowUnprotected : theme.headerShadow,
+        transition: 'background 260ms ease, box-shadow 260ms ease',
+        zIndex: 30,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -211,10 +218,13 @@ function Header({ theme, isLight, protectionOn, onToggleProtection, models, mode
           title={protectionOn ? t('protection.toggleOff') : t('protection.toggleOn')}
           style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 999,
-            border: `1px solid ${protectionOn ? 'rgba(255,255,255,0.45)' : 'rgba(255,190,190,0.6)'}`,
-            background: protectionOn ? 'rgba(255,255,255,0.16)' : 'rgba(239,68,68,0.32)',
+            // The red-on-red case needs an inset fill rather than the previous
+            // translucent red, which vanished once the header itself went red.
+            border: `1px solid ${protectionOn ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.55)'}`,
+            background: protectionOn ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.26)',
             color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer',
             fontFamily: 'Heebo, Inter, sans-serif', whiteSpace: 'nowrap',
+            transition: 'background 260ms ease, border-color 260ms ease',
           }}
         >
           {protectionOn ? <ShieldCheck size={14} /> : <ShieldOff size={14} />}
