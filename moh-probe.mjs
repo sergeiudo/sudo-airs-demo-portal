@@ -23,8 +23,14 @@ const SCAN_GAP_MS = Number(process.env.MOH_PROBE_GAP_MS) || 2200
 
 // ─── AIRS call ────────────────────────────────────────────────────────────────
 
-const BASE = process.env.AIRS_BASE_URL
-const KEY = process.env.AIRS_API_KEY
+// Same override chain as moh-routes.js. The profile already honoured
+// MOH_AIRS_PROFILE_NAME but the key and base URL did not, so on a host where
+// the portal-wide AIRS_* point at one SCM tenant and MOH_AIRS_* at another —
+// which is exactly the EC2 setup — this sent the *team* key with the
+// *personal* profile and every scan came back "AI Profile not found". It only
+// ever worked on a machine where both happened to be the same tenant.
+const BASE = process.env.MOH_AIRS_BASE_URL || process.env.AIRS_BASE_URL
+const KEY = process.env.MOH_AIRS_API_KEY || process.env.AIRS_API_KEY
 const PROFILE = process.env.MOH_AIRS_PROFILE_NAME || process.env.AIRS_PROFILE_NAME
 
 /**
