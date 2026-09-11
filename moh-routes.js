@@ -1484,4 +1484,15 @@ router.get('/replay', (_req, res) => {
 })
 
 export default router
-export { ENV as MOH_ENV, MOH_MODELS }
+// Exported for API Intercept's SCM AI-GW backend, which replays the attack
+// library through this same gateway. Shared rather than duplicated so the two
+// pillars can never disagree about how a guardrail verdict is read.
+export {
+  ENV as MOH_ENV,
+  MOH_MODELS,
+  buildAigwClient,
+  resolveConfig as resolveAigwConfig,
+  stageFromHook,
+  hookVerdictFailed,
+  parseBlockError,
+}

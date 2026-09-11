@@ -27,7 +27,15 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_SCAN_CHARS,
 } from './file-extract.js'
-import mohRouter from './moh-routes.js'
+import mohRouter, {
+  MOH_ENV as SCM_ENV,
+  MOH_MODELS as SCM_MODELS,
+  buildAigwClient,
+  resolveAigwConfig,
+  stageFromHook,
+  hookVerdictFailed,
+  parseBlockError,
+} from './moh-routes.js'
 
 const app = express()
 app.use(cors())
@@ -514,9 +522,50 @@ app.post('/api/chat', async (req, res) => {
   const resolvedModelId = modelId || (
     backend === 'vertex'  ? process.env.VERTEX_MODEL :
     backend === 'azure'   ? process.env.AZURE_OPENAI_DEPLOYMENT :
+    backend === 'aigw'    ? `${SCM_ENV.bedrockSlug}/${SCM_MODELS[0].id}` :
     process.env.BEDROCK_MODEL_ID
   )
   const modelLabel = `${backend}/${resolvedModelId}`
+
+  // ── SCM AI-GW: the guardrail lives in the gateway, so this backend does not
+  // use airscan() at all. One call carries both the model turn and the verdict.
+  if (backend === 'aigw') {
+    if (!SCM_ENV.apiKey) return res.status(503).json({ error: 'AIGW_API_KEY is not set — the SCM AI-GW backend is unavailable' })
+    try {
+      const g = await callScmGateway(llmInput, resolvedModelId, airsEnabled)
+      const payload = {
+        summary: {
+          verdict: g.blocked ? 'BLOCKED' : airsEnabled ? 'ALLOWED' : 'DIRECT',
+          action: g.blocked ? 'block' : 'allow',
+          category: g.inputScan?.category ?? (g.blocked ? 'malicious' : 'benign'),
+          threats_detected: [
+            ...Object.entries(g.inputScan?.prompt_detected ?? {}).filter(([, v]) => v).map(([k]) => `prompt:${k}`),
+            ...Object.entries(g.outputScan?.response_detected ?? {}).filter(([, v]) => v).map(([k]) => `response:${k}`),
+          ],
+          model: modelLabel,
+          // Says plainly which enforcement point produced this verdict — the
+          // other backends scan via the API, this one via the gateway.
+          enforcement: airsEnabled ? 'ai-gateway-guardrail' : 'none',
+          lane: g.laneMode,
+        },
+        inputScan: g.inputScan,
+        outputScan: g.outputScan,
+        timing: { llm_ms: g.latencyMs, airs_input_scan_ms: g.inputScan?.latencyMs ?? null, airs_output_scan_ms: g.outputScan?.latencyMs ?? null, total_ms: g.latencyMs },
+        llm: {
+          model: modelLabel, latency_ms: g.latencyMs,
+          tokens_in: g.tokens.input, tokens_out: g.tokens.output, tokens_total: g.tokens.total,
+          throughput_tps: (g.tokens.output && g.latencyMs) ? Math.round((g.tokens.output / g.latencyMs) * 1000) : null,
+          finish_reason: g.finishReason,
+        },
+        chatResponse: { role: 'assistant', content: g.text, blocked: g.blocked, block_reason: g.blockReason },
+      }
+      const traceId = persistTrace({ message: traceMessage, chatResponse: payload.chatResponse, telemetry: payload, backend, resolvedModelId, airsEnabled, attackMeta: req.body.attackMeta ?? null })
+      return res.json({ ...payload, trace_id: traceId })
+    } catch (err) {
+      console.error('[SCM AI-GW] Error:', err.message)
+      return res.status(502).json({ error: `SCM AI-GW call failed: ${err.message}` })
+    }
+  }
 
   console.log(`[chat] airsEnabled=${airsEnabled} backend=${backend} model=${resolvedModelId}`)
 
@@ -888,6 +937,88 @@ app.get('/api/redteam/scan/:id/attacks', async (req, res) => {
 // PORTAL-WIDE AIRS profile — this pillar lives on the team SCM tenant, MOH on
 // the personal one. The extraction itself is shared (file-extract.js); only the
 // scan call and the tenant differ.
+
+
+// ─── SCM AI-GW backend for API Intercept ─────────────────────────────────────
+//
+// A fourth target alongside Vertex/Bedrock/Azure that replays the same attack
+// library through the SCM AI Gateway (aigw.portkey.ai) instead of calling a
+// provider directly. Deliberately NOT the legacy Portkey pillar: that one is
+// bound to the old tenant and stays as it is.
+//
+// The enforcement point is what makes this worth having. On the other three
+// backends AIRS runs as two explicit airscan() calls against the TEAM tenant.
+// Here the guardrail lives inside the gateway on the PERSONAL tenant, and the
+// protection toggle swaps the config rather than skipping a scan:
+//   ON  -> AIGW_CONFIG_PROTECTED    (guardrail attached)
+//   OFF -> AIGW_CONFIG_UNPROTECTED  (no guardrail)
+// Same payload, two architectures, two SCM tenants — flip the tile and the
+// identical attack is stopped somewhere else, by something else.
+//
+// On this tenant a blocked request returns HTTP 200 with the content replaced,
+// so the verdict is read from the hook results rather than caught as an error.
+async function callScmGateway(prompt, modelId, airsEnabled) {
+  const model = modelId || `${SCM_ENV.bedrockSlug}/${SCM_MODELS[0].id}`
+  const { configId, mode } = resolveAigwConfig(airsEnabled)
+  const client = buildAigwClient(configId, {
+    metadata: { demo: 'api-intercept', _user: 'demo-user', lane: airsEnabled ? 'airs' : 'none' },
+  })
+
+  const t0 = Date.now()
+  let completion, hookResults = null, blockedHook = null, raw = null
+  try {
+    completion = await client.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+    })
+    hookResults = completion?.hook_results || null
+  } catch (e) {
+    const parsed = parseBlockError(e)
+    hookResults = parsed.hookResults
+    blockedHook = parsed.blockedHook
+    raw = parsed.raw
+    if (!blockedHook) throw new Error(raw.slice(0, 300))
+  }
+
+  const blocked = !!blockedHook || hookVerdictFailed(hookResults)
+  const usage = completion?.usage ?? {}
+  return {
+    text: blocked ? '' : (completion?.choices?.[0]?.message?.content ?? ''),
+    blocked,
+    blockReason: blockedHook || (blocked ? 'blocked by the AI-GW AIRS guardrail' : null),
+    inputScan: stageFromHook(hookResults?.before_request_hooks, 'prompt'),
+    outputScan: stageFromHook(hookResults?.after_request_hooks, 'response'),
+    hookResults,
+    laneMode: mode,
+    model,
+    latencyMs: Date.now() - t0,
+    tokens: {
+      input:  usage.prompt_tokens ?? null,
+      output: usage.completion_tokens ?? null,
+      total:  usage.total_tokens ?? null,
+    },
+    finishReason: completion?.choices?.[0]?.finish_reason ?? null,
+  }
+}
+
+app.get('/api/models/aigw', (_req, res) => {
+  res.json({
+    provider: 'SCM AI Gateway',
+    baseUrl: SCM_ENV.baseUrl,
+    configured: !!SCM_ENV.apiKey,
+    curated: true,
+    models: SCM_MODELS.map((m) => ({
+      id: `${SCM_ENV.bedrockSlug}/${m.id}`,
+      label: m.displayName,
+      provider: 'via @sudo-bedrock',
+      status: m.status === 'verified' ? 'available' : m.status === 'unavailable' ? 'unavailable' : 'available',
+      tier: m.status === 'leaky' ? 'weak' : m.status === 'unavailable' ? 'denied' : 'frontier',
+      note: m.note,
+      verified: m.status === 'verified' || m.status === 'leaky',
+    })),
+  })
+})
 
 app.get('/api/upload/limits', (_req, res) => {
   res.json({

@@ -16,6 +16,7 @@ const DEFAULT_MODELS = {
   vertex:  'gemini-2.5-flash',
   bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
   azure:   'gpt-5.4-nano',
+  aigw:    '@sudo-bedrock/moonshotai.kimi-k2.5',
 }
 
 const MIN_SIDEBAR  = 220

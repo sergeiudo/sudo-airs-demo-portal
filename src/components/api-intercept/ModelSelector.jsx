@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu } from 'lucide-react'
+import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu, ShieldCheck } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 
@@ -31,6 +31,18 @@ const TABS = [
     activeColor: '#0078D4',
     activeBorder: 'border-blue-600/40',
     activeBg: 'bg-blue-600/10',
+  },
+  // Not a provider — a ROUTE. The prompt goes through the SCM AI Gateway to
+  // Bedrock, and AIRS runs as an in-gateway guardrail rather than as the two
+  // direct airscan() calls the other three backends use. Different enforcement
+  // point, different SCM tenant, same attack library.
+  {
+    id: 'aigw',
+    label: 'SCM AI-GW',
+    sublabel: 'Prisma AIRS Gateway',
+    activeColor: '#EC4899',
+    activeBorder: 'border-pink-500/40',
+    activeBg: 'bg-pink-500/10',
   },
 ]
 
@@ -72,6 +84,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
     inputText:   isLight ? '#1e293b' : '#cbd5e1',
   }
   const [open, setOpen] = useState(false)
+  const [aigwModels, setAigwModels] = useState([])
   const [vertexModels, setVertexModels] = useState([])
   const [bedrockModels, setBedrockModels] = useState([])
   const [azureModels, setAzureModels] = useState([])
@@ -98,6 +111,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
       if (!res.ok) throw new Error(data.error || 'Failed to load models')
       if (provider === 'vertex') setVertexModels(data.models ?? [])
       else if (provider === 'bedrock') setBedrockModels(data.models ?? [])
+      else if (provider === 'aigw') setAigwModels(data.models ?? [])
       else setAzureModels(data.models ?? [])
     } catch (err) {
       setErrors(prev => ({ ...prev, [provider]: err.message }))
@@ -110,10 +124,11 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
     fetchModels('vertex')
     fetchModels('bedrock')
     fetchModels('azure')
+    fetchModels('aigw')
   }, [])
 
 
-  const currentModels = backend === 'vertex' ? vertexModels : backend === 'azure' ? azureModels : bedrockModels
+  const currentModels = backend === 'vertex' ? vertexModels : backend === 'azure' ? azureModels : backend === 'aigw' ? aigwModels : bedrockModels
   const isLoading = loading[backend]
 
   // Self-heal a stale selection. If the chosen model is not in the list the
@@ -142,7 +157,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
       <div className="space-y-2">
 
         {/* ── Provider tabs ── */}
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-4 gap-1.5">
           {TABS.map(tab => {
             const isActive = backend === tab.id
             return (
@@ -156,12 +171,21 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
                     : 'bg-black/20 border-white/10 hover:bg-white/5 hover:border-white/20'
                   }`}
               >
-                <img
-                  src={tab.logo}
-                  alt={tab.label}
-                  className="h-5 w-auto object-contain transition-all duration-200"
-                  style={{ opacity: isActive ? 1 : 0.4, filter: isActive ? 'none' : 'grayscale(40%)' }}
-                />
+                {tab.logo ? (
+                  <img
+                    src={tab.logo}
+                    alt={tab.label}
+                    className="h-5 w-auto object-contain transition-all duration-200"
+                    style={{ opacity: isActive ? 1 : 0.4, filter: isActive ? 'none' : 'grayscale(40%)' }}
+                  />
+                ) : (
+                  // SCM AI-GW ships no vendor logo — it is a route, not a vendor.
+                  <ShieldCheck
+                    size={20}
+                    className="transition-all duration-200"
+                    style={{ color: isActive ? tab.activeColor : 'rgb(100,116,139)', opacity: isActive ? 1 : 0.5 }}
+                  />
+                )}
                 <span
                   className="text-[10px] font-semibold leading-tight text-center transition-colors duration-200"
                   style={{ color: isActive ? tab.activeColor : 'rgb(100,116,139)' }}
