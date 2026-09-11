@@ -58,6 +58,7 @@ export const STRINGS = {
       truncated: 'נסרקו {n} התווים הראשונים בלבד',
       incomplete: 'חלק מהמסמך לא נסרק — אין להתייחס לתוצאה כ"נקי"',
       viewInScm: 'צפייה ביומן SCM',
+      unscanned: 'לא נסרק — הגנת AIRS כבויה',
     },
     blocked: {
       title: 'הבקשה נחסמה על ידי Prisma AIRS',
@@ -279,6 +280,7 @@ export const STRINGS = {
       truncated: 'only the first {n} characters were scanned',
       incomplete: 'part of the document was not scanned — do not read this as clean',
       viewInScm: 'View in SCM',
+      unscanned: 'NOT SCANNED — AIRS is off',
     },
     blocked: {
       title: 'Request blocked by Prisma AIRS',

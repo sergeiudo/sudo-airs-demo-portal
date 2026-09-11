@@ -1,11 +1,16 @@
 /**
- * moh-upload.js — text extraction for citizen file uploads.
+ * file-extract.js — text extraction for uploaded files, shared by every pillar.
  *
- * A citizen attaching a referral letter, a lab result or a discharge summary is
- * the most realistic indirect-injection vector this pillar has: the document is
- * untrusted input written by somebody else, the citizen has usually not read
- * every line of it, and its text goes to the model verbatim. So the file gets
- * scanned by AIRS before it is allowed anywhere near the chat.
+ * An attached document is the most realistic indirect-injection vector a chat
+ * app has: untrusted text written by somebody else, which the person attaching
+ * it has usually not read line by line, going to the model verbatim. So the
+ * file is extracted here and scanned by AIRS before it reaches any model.
+ *
+ * Deliberately pillar-agnostic — no AIRS call, no tenant, no routing. MOH scans
+ * the result against its own SCM tenant via airscanMoh(); API Intercept scans
+ * the same output against the portal-wide tenant via airscan(). Keep it that
+ * way: the moment this file knows which pillar called it, the two pillars stop
+ * being able to share it.
  *
  * Extraction is server-side on purpose. Doing PDF in the browser means shipping
  * ~1MB of pdfjs to every visitor of every pillar; here it costs two Node deps

@@ -706,13 +706,14 @@ function AttachChip({ file, theme, onRemove }) {
   const bad = file.status === 'blocked'
   const err = file.status === 'error'
   const pending = file.status === 'scanning'
-  const c = bad || err ? theme.blocked : pending ? theme.flagged : theme.allowed
+  const unscanned = file.status === 'unscanned'
+  const c = bad || err ? theme.blocked : pending || unscanned ? theme.flagged : theme.allowed
   return (
     <div
       style={{
         display: 'flex', flexDirection: 'column', gap: 5, padding: '7px 10px', borderRadius: 10,
-        background: bad || err ? theme.blockedBg : pending ? theme.flaggedBg : theme.allowedBg,
-        border: `1px solid ${bad || err ? theme.blockedBorder : pending ? theme.flaggedBorder : theme.allowedBorder}`,
+        background: bad || err ? theme.blockedBg : pending || unscanned ? theme.flaggedBg : theme.allowedBg,
+        border: `1px solid ${bad || err ? theme.blockedBorder : pending || unscanned ? theme.flaggedBorder : theme.allowedBorder}`,
         maxWidth: '100%',
       }}
     >
@@ -726,6 +727,7 @@ function AttachChip({ file, theme, onRemove }) {
           {pending ? t('upload.scanning')
             : bad ? t('upload.blocked')
             : err ? t('upload.failed')
+            : unscanned ? `▲ ${t('upload.unscanned')}`
             : t('upload.clean')}
         </span>
         {file.detected?.length > 0 && (
@@ -778,7 +780,7 @@ function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemo
   const fileRef = useRef(null)
   const chips = t('chat.chips') || []
   // A blocked or still-scanning document must not ride along with the message.
-  const canSendFile = attachment?.status === 'clean'
+  const canSendFile = attachment?.status === 'clean' || attachment?.status === 'unscanned'
 
   const submit = (value) => {
     const v = (value ?? text).trim()
@@ -1229,7 +1231,9 @@ function BriutAppInner({ embedded = false }) {
         const d = await resp.json()
         setAttachment({
           name: d.name || file.name,
-          status: d.blocked ? 'blocked' : d.error ? 'error' : 'clean',
+          // With protection off nothing was scanned; saying "clean" would be
+          // a lie in exactly the lane built to show what happens without AIRS.
+          status: d.error ? 'error' : d.blocked ? 'blocked' : d.airsEnabled === false ? 'unscanned' : 'clean',
           detected: d.detected || [],
           text: d.text || null,
           error: d.error || null,

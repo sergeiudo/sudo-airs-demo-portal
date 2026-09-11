@@ -45,7 +45,7 @@ import {
   extOf,
   MAX_UPLOAD_BYTES,
   MAX_SCAN_CHARS,
-} from './moh-upload.js'
+} from './file-extract.js'
 import { PAIRS } from './moh-probe-pairs.js'
 
 const router = express.Router()

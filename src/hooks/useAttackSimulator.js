@@ -36,12 +36,14 @@ export function useAttackSimulator() {
   const [activeTelemetry, setActiveTelemetry] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const send = useCallback(async ({ payload, attackMeta = null, backend = 'vertex', modelId = null }) => {
+  const send = useCallback(async ({ payload, attackMeta = null, backend = 'vertex', modelId = null, document = null }) => {
     const userMsg = {
       id: `msg-${Date.now()}-user`,
       role: 'user',
       content: payload,
       attackMeta,
+      // Card metadata only — the extracted text is never held on the message.
+      attachment: document ? { name: document.name, kind: document.kind, pages: document.pages, chars: document.chars } : null,
       timestamp: new Date().toISOString(),
     }
 
@@ -55,6 +57,7 @@ export function useAttackSimulator() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: payload,
+          document: document ? { name: document.name, text: document.text } : null,
           backend,
           modelId,
           airsEnabled: isProtected,
@@ -203,8 +206,8 @@ export function useAttackSimulator() {
   }, [send, sendMcpAttack])
 
   // Called from free chat input
-  const sendMessage = useCallback((text, backend, modelId) => {
-    send({ payload: text, attackMeta: null, backend, modelId })
+  const sendMessage = useCallback((text, backend, modelId, document = null) => {
+    send({ payload: text, attackMeta: null, backend, modelId, document })
   }, [send])
 
   const clearChat = useCallback(() => {

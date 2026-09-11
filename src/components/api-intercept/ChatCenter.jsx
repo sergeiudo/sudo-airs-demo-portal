@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, MessageSquare, Send, RotateCcw, Plus, ShieldCheck, Cpu, User, AlertTriangle, CheckCircle2, ShieldX, Zap, Lock } from 'lucide-react'
+import { Loader2, MessageSquare, Send, RotateCcw, Plus, ShieldCheck, Cpu, User, AlertTriangle, CheckCircle2, ShieldX, Zap, Lock, Paperclip, X, FileText } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
@@ -343,6 +343,42 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
   const inputRef = useRef(null)
   const [input, setInput] = useState('')
   const [translating, setTranslating] = useState(null)
+  // Attached document. Scanned by AIRS before it can be sent — a blocked file
+  // never gets its text back from the server, so it cannot become model input.
+  const [attachment, setAttachment] = useState(null)
+  const [uploadBusy, setUploadBusy] = useState(false)
+  const fileRef = useRef(null)
+
+  const uploadFile = useCallback(async (file) => {
+    setUploadBusy(true)
+    setAttachment({ name: file.name, status: 'scanning', detected: [] })
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      // Chunked base64 — fromCharCode(...bytes) blows the argument limit.
+      let bin = ''
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+      const resp = await fetch('/api/upload/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, dataBase64: btoa(bin), airsEnabled: theme.isProtected }),
+      })
+      const d = await resp.json()
+      setAttachment({
+        name: d.name || file.name,
+        // "clean" must mean AIRS looked and found nothing. With protection off
+        // nothing was scanned at all, and calling that clean is the same lie as
+        // reporting a truncated file as fully checked.
+        status: d.error ? 'error' : d.blocked ? 'blocked' : d.airsEnabled === false ? 'unscanned' : 'clean',
+        detected: d.detected || [], text: d.text || null, error: d.error || null,
+        kind: d.kind, pages: d.pages, chars: d.chars, truncated: !!d.truncated,
+        scanIncomplete: !!d.scanIncomplete, scanId: d.scanId || null,
+      })
+    } catch (e) {
+      setAttachment({ name: file.name, status: 'error', detected: [], error: String(e?.message || e) })
+    } finally {
+      setUploadBusy(false)
+    }
+  }, [theme.isProtected])
 
   const handleTranslate = async (text, language) => {
     setTranslating(text)
@@ -375,8 +411,13 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
     e?.preventDefault()
     const text = input.trim()
     if (!text || isLoading) return
-    onSendMessage(text, backend, model)
+    // Only a cleared document travels with the message.
+    const doc = (attachment?.status === 'clean' || attachment?.status === 'unscanned') && attachment.text
+      ? { name: attachment.name, text: attachment.text, kind: attachment.kind, pages: attachment.pages, chars: attachment.chars }
+      : null
+    onSendMessage(text, backend, model, doc)
     setInput('')
+    setAttachment(null)
   }
 
   const handleKeyDown = (e) => {
@@ -476,11 +517,74 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
       {/* Chat input */}
       <div className="flex-shrink-0 px-4 pb-4">
         <form onSubmit={handleSubmit}>
+          {/* Attached document + its AIRS verdict. A blocked file stays on
+              screen rather than vanishing — the point of the beat is showing
+              what was in it and which detector caught it. */}
+          {attachment && (
+            <div className={`flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded-lg border text-[10px] ${
+              attachment.status === 'blocked' || attachment.status === 'error'
+                ? 'border-red-500/40 bg-red-500/10'
+                : attachment.status === 'scanning' || attachment.status === 'unscanned'
+                  ? 'border-amber-500/40 bg-amber-500/10'
+                  : 'border-emerald-500/40 bg-emerald-500/10'
+            }`}>
+              {attachment.status === 'scanning'
+                ? <Loader2 size={11} className="animate-spin text-amber-400 flex-shrink-0" />
+                : attachment.status === 'clean'
+                  ? <ShieldCheck size={11} className="text-emerald-400 flex-shrink-0" />
+                  : <ShieldX size={11} className="text-red-400 flex-shrink-0" />}
+              <span className="font-semibold text-slate-200 truncate max-w-[200px]">{attachment.name}</span>
+              <span className={
+                attachment.status === 'blocked' || attachment.status === 'error' ? 'text-red-400 font-semibold'
+                : attachment.status === 'scanning' || attachment.status === 'unscanned' ? 'text-amber-400 font-semibold'
+                : 'text-emerald-400 font-semibold'
+              }>
+                {attachment.status === 'scanning' ? 'scanning…'
+                  : attachment.status === 'blocked' ? 'blocked — will not be sent'
+                  : attachment.status === 'error' ? (attachment.error || 'could not read')
+                  : attachment.status === 'unscanned' ? '▲ NOT SCANNED — AIRS is off'
+                  : 'clean'}
+              </span>
+              {attachment.detected?.length > 0 && (
+                <span className="text-slate-500">{attachment.detected.join(' · ')}</span>
+              )}
+              {attachment.scanId && (
+                <span className="text-slate-600 font-mono">{attachment.scanId.slice(0, 8)}…</span>
+              )}
+              {(attachment.truncated || attachment.scanIncomplete) && (
+                <span className="text-amber-400">▲ {attachment.scanIncomplete ? 'partially scanned' : `first ${attachment.chars} chars`}</span>
+              )}
+              <button type="button" onClick={() => setAttachment(null)} className="ml-auto text-slate-500 hover:text-slate-300 flex-shrink-0" title="Remove">
+                <X size={11} />
+              </button>
+            </div>
+          )}
+
           <div className={`flex items-end gap-2 rounded-xl border p-2 transition-all duration-300 ${
             theme.isProtected
               ? 'border-emerald-500/30 bg-emerald-500/5 focus-within:border-emerald-500/50'
               : 'border-white/10 bg-white/5 focus-within:border-white/20'
           }`}>
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.docx,.csv,.txt,.md,.json,.tsv,.log,.rtf,.xml,.yaml,.yml"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) uploadFile(f)
+                e.target.value = '' // allow re-picking the same file after a block
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={isLoading || uploadBusy}
+              title="Attach a document — scanned by AIRS before it is sent"
+              className="flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors disabled:opacity-30"
+            >
+              <Paperclip size={12} />
+            </button>
             <textarea
               ref={inputRef}
               value={input}

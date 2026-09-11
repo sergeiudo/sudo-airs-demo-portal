@@ -18,6 +18,15 @@ import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
 import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity } from './src/traceStore.js'
 import portkeyRouter from './portkey-routes.js'
+import {
+  extractText as extractUploadText,
+  chunkText as chunkUploadText,
+  isSupported as isSupportedUpload,
+  supportedList as supportedUploadList,
+  extOf as uploadExtOf,
+  MAX_UPLOAD_BYTES,
+  MAX_SCAN_CHARS,
+} from './file-extract.js'
 import mohRouter from './moh-routes.js'
 
 const app = express()
@@ -460,8 +469,18 @@ export function persistTrace({ message, chatResponse, telemetry, backend, resolv
 
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
-  const { message, backend = 'vertex', modelId, airsEnabled = false } = req.body
+  const { message, backend = 'vertex', modelId, airsEnabled = false, document = null } = req.body
   if (!message) return res.status(400).json({ error: 'message is required' })
+
+  // An attached document reaches the model and the guardrail, but NOT the
+  // trace: traces.db has no TTL, so archiving the full text buys nothing that
+  // the upload's own scan_id does not already give us.
+  const llmInput = document?.text
+    ? `${message}\n\n--- attached document: ${document.name} ---\n${document.text}`
+    : message
+  const traceMessage = document?.text
+    ? `${message}\n[attachment: ${document.name} · ${document.text.length} chars · scanned on upload]`
+    : message
 
   const resolvedModelId = modelId || (
     backend === 'vertex'  ? process.env.VERTEX_MODEL :
@@ -476,9 +495,9 @@ app.post('/api/chat', async (req, res) => {
   if (!airsEnabled) {
     console.log(`[LLM] Unprotected — calling ${modelLabel} directly…`)
     try {
-      const r = backend === 'vertex'  ? await callVertexModel(message, resolvedModelId)
-              : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
-              : await callBedrock(message, resolvedModelId)
+      const r = backend === 'vertex'  ? await callVertexModel(llmInput, resolvedModelId)
+              : backend === 'azure'   ? await callAzureOpenAI(llmInput, resolvedModelId)
+              : await callBedrock(llmInput, resolvedModelId)
       console.log(`[LLM] Response received (${r.latencyMs}ms, ${r.tokens?.total ?? '?'} tokens) — no AIRS scan`)
       const responsePayload = {
         summary: null,
@@ -497,7 +516,7 @@ app.post('/api/chat', async (req, res) => {
         },
         chatResponse: { role: 'assistant', content: r.text, blocked: false, block_reason: null },
       }
-      const traceId = persistTrace({ message, chatResponse: responsePayload.chatResponse, telemetry: responsePayload, backend, resolvedModelId, airsEnabled: false, attackMeta: req.body.attackMeta ?? null })
+      const traceId = persistTrace({ message: traceMessage, chatResponse: responsePayload.chatResponse, telemetry: responsePayload, backend, resolvedModelId, airsEnabled: false, attackMeta: req.body.attackMeta ?? null })
       return res.json({ ...responsePayload, trace_id: traceId })
     } catch (err) {
       console.error('[LLM] Error:', err.message)
@@ -509,12 +528,12 @@ app.post('/api/chat', async (req, res) => {
   try {
     // Step 1: AIRS scan the prompt
     console.log(`[AIRS] Scanning prompt via profile "${process.env.AIRS_PROFILE_NAME}"…`)
-    const airsPromptScan = await airscan(message, null, modelLabel)
+    const airsPromptScan = await airscan(llmInput, null, modelLabel)
     console.log(`[AIRS] Prompt verdict: ${airsPromptScan.data.action} / ${airsPromptScan.data.category}`)
 
     if (airsPromptScan.data.action === 'block') {
       const telemetry = buildTelemetry({ airsPromptScan, airsResponseScan: null, llmLatencyMs: null, modelLabel, llmText: null, llmTokens: null, llmFinishReason: null })
-      const traceId = persistTrace({ message, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
+      const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
       return res.json({ ...telemetry, trace_id: traceId })
     }
 
@@ -522,9 +541,9 @@ app.post('/api/chat', async (req, res) => {
     let llmText = '', llmLatencyMs = 0, llmTokens = null, llmFinishReason = null
     try {
       console.log(`[LLM] Calling ${modelLabel}…`)
-      const r = backend === 'vertex'  ? await callVertexModel(message, resolvedModelId)
-              : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
-              : await callBedrock(message, resolvedModelId)
+      const r = backend === 'vertex'  ? await callVertexModel(llmInput, resolvedModelId)
+              : backend === 'azure'   ? await callAzureOpenAI(llmInput, resolvedModelId)
+              : await callBedrock(llmInput, resolvedModelId)
       llmText = r.text; llmLatencyMs = r.latencyMs; llmTokens = r.tokens; llmFinishReason = r.finishReason
       console.log(`[LLM] Response received (${llmLatencyMs}ms)`)
     } catch (err) {
@@ -538,7 +557,7 @@ app.post('/api/chat', async (req, res) => {
     console.log(`[AIRS] Response verdict: ${airsResponseScan.data.action} / ${airsResponseScan.data.category}`)
 
     const telemetry = buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelLabel, llmText, llmTokens, llmFinishReason })
-    const traceId = persistTrace({ message, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
+    const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
     return res.json({ ...telemetry, trace_id: traceId })
   } catch (err) {
     console.error('[server] Unhandled error:', err)
@@ -561,9 +580,9 @@ app.post('/api/redteam/proxy', async (req, res) => {
   )
 
   try {
-    const r = backend === 'vertex'  ? await callVertexModel(message, resolvedModelId)
-            : backend === 'azure'   ? await callAzureOpenAI(message, resolvedModelId)
-            : await callBedrock(message, resolvedModelId)
+    const r = backend === 'vertex'  ? await callVertexModel(llmInput, resolvedModelId)
+            : backend === 'azure'   ? await callAzureOpenAI(llmInput, resolvedModelId)
+            : await callBedrock(llmInput, resolvedModelId)
     return res.json({ reply: r.text })
   } catch (err) {
     console.error('[redteam/proxy] Error:', err.message)
@@ -743,6 +762,123 @@ app.get('/api/redteam/scan/:id/attacks', async (req, res) => {
 })
 
 // ─── GET /api/scanner/health — check if Python scanner is running ────────────
+
+// ─── File upload scanning (API Intercept) ────────────────────────────────────
+// Same contract as /api/moh/upload/scan, but scanned with airscan() against the
+// PORTAL-WIDE AIRS profile — this pillar lives on the team SCM tenant, MOH on
+// the personal one. The extraction itself is shared (file-extract.js); only the
+// scan call and the tenant differ.
+
+app.get('/api/upload/limits', (_req, res) => {
+  res.json({
+    maxBytes: MAX_UPLOAD_BYTES,
+    maxScanChars: MAX_SCAN_CHARS,
+    supported: supportedUploadList(),
+    accept: supportedUploadList().map((e) => `.${e}`).join(','),
+    profile: process.env.AIRS_PROFILE_NAME || null,
+  })
+})
+
+app.post('/api/upload/scan', async (req, res) => {
+  const { name, dataBase64, airsEnabled = true } = req.body || {}
+  if (!name || !dataBase64) {
+    return res.status(400).json({ error: 'bad_request', message: 'name and dataBase64 are required' })
+  }
+  if (!isSupportedUpload(name)) {
+    return res.status(415).json({ error: 'unsupported_type', message: `Unsupported file type '.${uploadExtOf(name)}'`, supported: supportedUploadList() })
+  }
+
+  const result = {
+    name, kind: uploadExtOf(name), airsEnabled,
+    bytes: 0, chars: 0, totalChars: 0, pages: null, truncated: false,
+    chunks: 0, scans: [], scanIncomplete: false,
+    blocked: false, blockReason: null, blockedChunk: null,
+    detected: [], excerpt: null, text: null, scanId: null,
+    latencyMs: 0, error: null,
+  }
+  const startedAt = Date.now()
+
+  try {
+    const buffer = Buffer.from(dataBase64, 'base64')
+    result.bytes = buffer.length
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ ...result, error: 'too_large',
+        message: `File is ${(buffer.length / 1048576).toFixed(1)} MB; the limit is ${(MAX_UPLOAD_BYTES / 1048576).toFixed(0)} MB` })
+    }
+
+    let extracted
+    try {
+      extracted = await extractUploadText(buffer, name)
+    } catch (e) {
+      result.error = `Could not read this file: ${String(e?.message || e).slice(0, 200)}`
+      result.latencyMs = Date.now() - startedAt
+      return res.status(e?.status === 415 ? 415 : 422).json(result)
+    }
+
+    result.kind = extracted.kind
+    result.pages = extracted.pages
+    result.truncated = extracted.truncated
+    result.totalChars = extracted.totalChars
+    result.chars = extracted.text.length
+    result.excerpt = extracted.text.slice(0, 600)
+
+    if (!extracted.text.trim()) {
+      result.error = 'No readable text found in this file (it may be a scanned image).'
+      result.latencyMs = Date.now() - startedAt
+      return res.json(result)
+    }
+
+    const chunks = chunkUploadText(extracted.text)
+    result.chunks = chunks.length
+
+    if (airsEnabled) {
+      for (const c of chunks) {
+        let scan
+        try {
+          scan = await airscan(c.text, null, 'file-upload')
+        } catch (e) {
+          // One flaky chunk must not discard the whole upload, and a partially
+          // scanned file must never be reported as clean.
+          result.scans.push({ chunk: c.index, start: c.start, chars: c.text.length, action: 'error', error: String(e?.message || e).slice(0, 200) })
+          result.scanIncomplete = true
+          if (c.index < chunks.length - 1) await new Promise((r) => setTimeout(r, 2200))
+          continue
+        }
+        const d = scan.data || scan
+        const detected = Object.entries(d.prompt_detected || {}).filter(([, v]) => v).map(([k]) => k)
+        result.scans.push({
+          chunk: c.index, start: c.start, chars: c.text.length,
+          action: d.action, category: d.category, scan_id: d.scan_id,
+          latencyMs: scan.latencyMs ?? null, prompt_detected: d.prompt_detected || {},
+        })
+        for (const x of detected) if (!result.detected.includes(x)) result.detected.push(x)
+
+        if (d.action === 'block') {
+          result.blocked = true
+          result.blockReason = d.category || 'blocked by AIRS'
+          result.blockedChunk = { index: c.index, start: c.start, excerpt: c.text.slice(0, 400) }
+          result.scanId = d.scan_id || null
+          break
+        }
+        // AIRS silently skips DLP faster than ~1 scan / 2s.
+        if (c.index < chunks.length - 1) await new Promise((r) => setTimeout(r, 2200))
+      }
+    }
+
+    if (!result.scanId) result.scanId = result.scans.find((s) => s.scan_id)?.scan_id || null
+    // A blocked document never travels back to the browser, so it cannot become
+    // chat context even if the UI were bypassed.
+    if (!result.blocked) result.text = extracted.text
+
+    result.latencyMs = Date.now() - startedAt
+    return res.json(result)
+  } catch (e) {
+    result.error = String(e?.message || e).slice(0, 400)
+    result.latencyMs = Date.now() - startedAt
+    return res.status(502).json(result)
+  }
+})
+
 app.get('/api/scanner/health', async (_req, res) => {
   const scannerPort = process.env.MODEL_SCANNER_PORT || 8001
   try {
