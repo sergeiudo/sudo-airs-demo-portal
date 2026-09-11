@@ -16,7 +16,14 @@
  * import time when `module.parent` is unset, which throws in an ESM project.
  */
 
-import mammoth from 'mammoth'
+// Both extraction libraries are imported LAZILY, inside extractText.
+//
+// mammoth used to be a top-level import here, and moh-routes.js imports this
+// module at load time — so a dependency that failed to resolve on a host took
+// the whole Express server down and every pillar with it, surfacing as an
+// nginx 502 rather than as "uploads are broken". A file-upload dependency must
+// never be able to stop the portal from booting. Now a missing or broken
+// library degrades to one failing upload with a readable message.
 
 // Anything larger is refused rather than silently truncated — a citizen
 // uploading a 300-page PDF is not a demo case, and express.json is capped at
@@ -194,6 +201,7 @@ export async function extractText(buffer, name) {
     text = await extractPdfTextRtlAware(pdf)
     kind = 'pdf'
   } else if (ext === 'docx') {
+    const { default: mammoth } = await import('mammoth')
     const { value } = await mammoth.extractRawText({ buffer })
     text = value || ''
     kind = 'docx'
