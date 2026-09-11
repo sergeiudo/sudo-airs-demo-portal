@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
+import { useAppContext } from '../../context/AppContext'
 
 const TABS = [
   {
@@ -33,6 +34,19 @@ const TABS = [
   },
 ]
 
+// Curated-tier badges. `weak` and `denied` are the two that matter on stage:
+// weak models actually comply with an injection, and denied ones are blocked by
+// the org SCP rather than by anything in this app.
+// Two palettes: the /15 alphas that read on a dark panel are invisible on
+// white, so light mode gets solid tints and darker text.
+const TIER_BADGE = {
+  frontier: { text: 'FRONTIER',   dark: 'bg-sky-500/20 text-sky-300',     light: 'bg-sky-100 text-sky-800' },
+  fast:     { text: 'FAST',       dark: 'bg-cyan-500/20 text-cyan-300',   light: 'bg-cyan-100 text-cyan-800' },
+  mid:      { text: 'MID',        dark: 'bg-slate-500/25 text-slate-300', light: 'bg-slate-200 text-slate-700' },
+  weak:     { text: 'WEAK',       dark: 'bg-amber-500/25 text-amber-300', light: 'bg-amber-100 text-amber-800' },
+  denied:   { text: 'SCP DENIED', dark: 'bg-red-500/25 text-red-300',     light: 'bg-red-100 text-red-800' },
+}
+
 const STATUS_DOT = {
   available:    'bg-emerald-400',
   experimental: 'bg-yellow-400',
@@ -42,6 +56,21 @@ const STATUS_DOT = {
 
 export function ModelSelector({ backend, model, onBackendChange, onModelChange }) {
   const theme = useProtectionTheme()
+  // Reactive theme. Every colour below was hardcoded to dark-theme greys, which
+  // rendered the model names near-invisible on the light background.
+  const { state } = useAppContext()
+  const isLight = state.isDark === false
+  const C = {
+    panelBg:     isLight ? '#ffffff' : 'rgba(15,20,35,0.97)',
+    panelShadow: isLight ? '0 12px 32px rgba(0,48,135,0.14)' : '0 12px 32px rgba(0,0,0,0.6)',
+    divider:     isLight ? 'rgba(0,48,135,0.10)' : 'rgba(255,255,255,0.10)',
+    name:        isLight ? '#0f172a' : '#e2e8f0',
+    meta:        isLight ? '#64748b' : '#94a3b8',
+    mono:        isLight ? '#475569' : '#8b9bb4',
+    note:        isLight ? '#5b6b7c' : '#94a3b8',
+    rowHover:    isLight ? 'rgba(0,48,135,0.05)' : 'rgba(255,255,255,0.05)',
+    inputText:   isLight ? '#1e293b' : '#cbd5e1',
+  }
   const [open, setOpen] = useState(false)
   const [vertexModels, setVertexModels] = useState([])
   const [bedrockModels, setBedrockModels] = useState([])
@@ -83,8 +112,20 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
     fetchModels('azure')
   }, [])
 
+
   const currentModels = backend === 'vertex' ? vertexModels : backend === 'azure' ? azureModels : bedrockModels
   const isLoading = loading[backend]
+
+  // Self-heal a stale selection. If the chosen model is not in the list the
+  // server actually serves — a retired id, a model dropped from the curated
+  // set, a hand-edited default — the button used to display the raw id and the
+  // first send would fail. Fall back to the first selectable model instead.
+  useEffect(() => {
+    if (isLoading || !currentModels.length) return
+    if (currentModels.some((m) => m.id === model)) return
+    const fallback = currentModels.find((m) => m.status !== 'unavailable') ?? currentModels[0]
+    if (fallback && fallback.id !== model) onModelChange(fallback.id)
+  }, [currentModels, isLoading, model, onModelChange])
   const error = errors[backend]
   const activeTab = TABS.find(t => t.id === backend)
 
@@ -173,19 +214,19 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className={`absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border overflow-hidden bg-base-800/95 backdrop-blur-xl shadow-2xl shadow-black/60
+            className={`absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border overflow-hidden backdrop-blur-xl
               ${activeTab?.activeBorder ?? 'border-white/15'}`}
-            style={{ minWidth: '230px' }}
+            style={{ minWidth: '300px', background: C.panelBg, boxShadow: C.panelShadow }}
           >
             {/* Search + refresh */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+            <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: C.divider }}>
               <img src={activeTab?.logo} alt="" className="h-3.5 w-auto object-contain opacity-60 flex-shrink-0" />
               <input
                 autoFocus
                 value={filter}
                 onChange={e => setFilter(e.target.value)}
                 placeholder={`Filter ${activeTab?.label} models…`}
-                className="flex-1 bg-transparent text-xs text-slate-300 placeholder-slate-600 outline-none"
+                className="flex-1 bg-transparent text-xs outline-none" style={{ color: C.inputText }}
               />
               <button
                 onClick={() => fetchModels(backend)}
@@ -198,7 +239,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             </div>
 
             {/* Model list */}
-            <div className="max-h-64 overflow-y-auto">
+            <div className="max-h-80 overflow-y-auto">
               {isLoading && filtered.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-slate-500">
                   <Loader2 size={12} className="animate-spin" />
@@ -213,7 +254,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
                   </button>
                 </div>
               ) : filtered.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-600">No models match</div>
+                <div className="py-6 text-center text-xs" style={{ color: C.meta }}>No models match</div>
               ) : (
                 filtered.map((m, i) => {
                   const isSelected = m.id === model
@@ -222,7 +263,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
                     <button
                       key={m.id}
                       onClick={() => { onModelChange(m.id); setOpen(false); setFilter('') }}
-                      className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left transition-colors duration-100 border-l-2
+                      className={`w-full flex items-start gap-2.5 px-3 py-3 text-left transition-colors duration-100 border-l-2
                         ${isSelected
                           ? `${activeTab?.activeBg} border-l-[${activeTab?.activeColor}]`
                           : 'border-l-transparent hover:bg-white/5'
@@ -233,16 +274,32 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span
-                            className="text-xs font-medium truncate"
-                            style={{ color: isSelected ? activeTab?.activeColor : '#cbd5e1' }}
+                            className="text-[13px] font-semibold truncate"
+                            style={{ color: isSelected ? activeTab?.activeColor : C.name }}
                           >
                             {m.label ?? m.id}
                           </span>
                           {m.provider && (
-                            <span className="text-[9px] text-slate-600 flex-shrink-0">{m.provider}</span>
+                            <span className="text-[10px] flex-shrink-0" style={{ color: C.meta }}>{m.provider}</span>
+                          )}
+                          {/* Tier is the whole point of the curated list: which
+                              models resist an injection and which comply. */}
+                          {/* Never let an untested model look tested. */}
+                          {m.verified === false && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 tracking-wide ${isLight ? 'bg-violet-100 text-violet-700' : 'bg-violet-500/25 text-violet-300'}`}>
+                              UNVERIFIED
+                            </span>
+                          )}
+                          {m.tier && TIER_BADGE[m.tier] && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 tracking-wide ${isLight ? TIER_BADGE[m.tier].light : TIER_BADGE[m.tier].dark}`}>
+                              {TIER_BADGE[m.tier].text}
+                            </span>
                           )}
                         </div>
-                        <span className="text-[9px] font-mono text-slate-600 truncate block">{m.id}</span>
+                        <span className="text-[10px] font-mono truncate block mt-0.5" style={{ color: C.mono }}>{m.id}</span>
+                        {m.note && (
+                          <span className="text-[10.5px] block leading-snug mt-1" style={{ color: C.note }}>{m.note}</span>
+                        )}
                       </div>
                       {isSelected && (
                         <CheckCircle2 size={11} className="flex-shrink-0 mt-0.5" style={{ color: activeTab?.activeColor }} />
@@ -254,8 +311,8 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-t border-white/10">
-              <span className="text-[9px] text-slate-600">
+            <div className="flex items-center justify-between px-3 py-1.5 border-t" style={{ borderColor: C.divider }}>
+              <span className="text-[10px]" style={{ color: C.meta }}>
                 {filtered.length} model{filtered.length !== 1 ? 's' : ''}
               </span>
               <span className="text-[9px]" style={{ color: activeTab?.activeColor, opacity: 0.8 }}>

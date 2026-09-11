@@ -265,8 +265,20 @@ export async function callBedrock(prompt, modelId) {
     candidateIds.push(`us.${modelId}`)
   }
 
+  // Transient capacity errors are real and common on newer models. Measured on
+  // us.anthropic.claude-opus-5: three consecutive ServiceUnavailableException
+  // ("Bedrock is unable to process your request") in one minute, then 3/3
+  // successes a minute later, while Sonnet 5 and Opus 4.8 were fine throughout.
+  // It is capacity, not the request — identical failures at maxTokens 1024,
+  // 4096 and 16384. Without a retry that surfaces to the audience as a broken
+  // model mid-demo.
+  const RETRYABLE = new Set(['ServiceUnavailableException', 'ThrottlingException', 'ModelNotReadyException', 'InternalServerException'])
+  const MAX_ATTEMPTS = 3
+
   let lastErr
   for (const id of candidateIds) {
+    let profileMiss = false
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const cmd = new ConverseCommand({
         modelId: id,
@@ -275,7 +287,14 @@ export async function callBedrock(prompt, modelId) {
       })
       const response = await client.send(cmd)
       const latencyMs = Date.now() - t0
-      const text = response.output?.message?.content?.[0]?.text ?? ''
+      // Reasoning models return MULTIPLE content blocks — typically
+      // [{reasoningContent}, {text}] — so content[0].text is empty and the real
+      // answer is discarded. That is what made Opus 5, gpt-oss, Kimi K2
+      // Thinking and MiniMax look like they "return an empty body" while
+      // reporting hundreds of output tokens and finish_reason=end_turn.
+      // Concatenate every text block instead of trusting the first.
+      const blocks = response.output?.message?.content ?? []
+      const text = blocks.map((b) => b?.text).filter(Boolean).join('') || ''
       const usage = response.usage ?? {}
       if (id !== modelId) console.log(`[Bedrock] Auto-retried with inference profile: ${id}`)
       return {
@@ -290,9 +309,19 @@ export async function callBedrock(prompt, modelId) {
       }
     } catch (err) {
       lastErr = err
-      // Only retry on inference-profile errors; surface everything else immediately
-      if (!err.message?.includes('on-demand throughput')) throw err
+      // Wrong id shape — stop retrying this one and try the us. profile.
+      if (err.message?.includes('on-demand throughput')) { profileMiss = true; break }
+      // Transient capacity — back off and try the same id again.
+      if (RETRYABLE.has(err.name) && attempt < MAX_ATTEMPTS) {
+        const wait = 700 * attempt
+        console.warn(`[Bedrock] ${err.name} on ${id} (attempt ${attempt}/${MAX_ATTEMPTS}) — retrying in ${wait}ms`)
+        await new Promise((r) => setTimeout(r, wait))
+        continue
+      }
+      throw err
     }
+    }
+    if (!profileMiss) break
   }
   throw lastErr
 }
@@ -602,7 +631,79 @@ app.get('/api/models/vertex', (_req, res) => {
 })
 
 // ─── GET /api/models/bedrock ──────────────────────────────────────────────────
-app.get('/api/models/bedrock', async (_req, res) => {
+//
+// Bedrock lists 85 text models in us-west-2; a picker that long is unusable on
+// stage and most of the entries are rerankers, vision variants or duplicates.
+// This is a curated shortlist, and every `available` entry below was verified
+// with a real InvokeModel call — not assumed from the catalogue, which happily
+// advertises models this account cannot invoke.
+//
+// The spread is deliberate. Frontier models resist prompt injection unaided,
+// so an attack demo against Opus mostly shows the model refusing. The `weak`
+// tier is what makes AIRS visible: small models that actually comply. Nemotron
+// Nano is the documented leaker — with protection off it will hand over a
+// system prompt.
+//
+// The three `denied` entries are kept ON PURPOSE. Confirmed from CloudShell
+// against the account's own admin SSO role, so this is not a credential
+// problem in this app:
+//
+//   AccessDeniedException ... is not authorized to perform: bedrock:InvokeModel
+//   on resource: .../foundation-model/xai.grok-4.6
+//   WITH AN EXPLICIT DENY IN A SERVICE CONTROL POLICY
+//
+// An AWS Organizations SCP evaluated ABOVE IAM blocks non-approved vendors, so
+// no IAM policy, model-access grant or inference profile can unblock them —
+// verified for Grok on all three ids (bare, `us.`, `global.`). Vendor
+// allow-listing sitting above IAM is itself worth showing, and the error names
+// the policy, which makes it a concrete artifact rather than an assertion.
+// DeepSeek and Grok ARE reachable on the Azure backend — demo them there.
+//
+// `verified: true` means a real InvokeModel call succeeded from this repo.
+// `verified: true` means the model is in the account's catalogue but has NOT
+// been invoked yet — the picker labels those UNVERIFIED rather than implying
+// they work. Confirm with the CloudShell reachability loop, then flip the flag.
+//
+// One entry per model family per purpose — no two versions of the same model.
+// Where a vendor appears twice (Llama, Mistral) the two entries are deliberately
+// at opposite ends of the capability range, because the contrast between a
+// model that refuses an injection and one that complies IS the demo.
+//
+// GET /api/models/bedrock?all=1 returns the unfiltered catalogue.
+const BEDROCK_CURATED = [
+  // ── frontier: resist injection unaided — the clean baseline ──
+  { id: 'anthropic.claude-opus-5',                  label: 'Claude Opus 5',      provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
+  { id: 'anthropic.claude-sonnet-5',                label: 'Claude Sonnet 5',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
+  { id: 'anthropic.claude-opus-4-8',                label: 'Claude Opus 4.8',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
+  { id: 'openai.gpt-6-astra',                       label: 'GPT-6 Astra',        provider: 'OpenAI',      tier: 'frontier', status: 'available', verified: true },
+  { id: 'moonshotai.kimi-k2.5',                     label: 'Kimi K2.5',          provider: 'Moonshot AI', tier: 'frontier', status: 'available', verified: true,  note: 'Very fast; refuses runtime attacks unaided.' },
+
+  // ── fast ──
+  { id: 'anthropic.claude-haiku-4-5-20251001-v1:0', label: 'Claude Haiku 4.5',   provider: 'Anthropic',   tier: 'fast',     status: 'available', verified: true,  note: 'Fastest Claude — good default for live demos.' },
+
+  // ── mid-tier ──
+  { id: 'meta.llama4-maverick-17b-instruct-v1:0',   label: 'Llama 4 Maverick',   provider: 'Meta',        tier: 'mid',      status: 'available', verified: true },
+  { id: 'mistral.mistral-large-3-675b-instruct',    label: 'Mistral Large 3',    provider: 'Mistral AI',  tier: 'mid',      status: 'available', verified: true },
+  { id: 'zai.glm-5',                                label: 'GLM 5',              provider: 'Z.AI',        tier: 'mid',      status: 'available', verified: true },
+  { id: 'amazon.nova-pro-v1:0',                     label: 'Nova Pro',           provider: 'Amazon',      tier: 'mid',      status: 'available', verified: true },
+  { id: 'writer.palmyra-x5-v1:0',                   label: 'Palmyra X5',         provider: 'Writer',      tier: 'mid',      status: 'available', verified: true },
+  { id: 'google.gemma-3-12b-it',                    label: 'Gemma 3 12B',        provider: 'Google',      tier: 'mid',      status: 'available', verified: true },
+
+  // ── weak: these COMPLY, which is what makes the protected/unprotected split land ──
+  { id: 'nvidia.nemotron-nano-12b-v2',              label: 'Nemotron Nano 12B',  provider: 'NVIDIA',      tier: 'weak',     status: 'available', verified: true,  note: 'LEAKS. With AIRS off it will disclose the system prompt. The unprotected exhibit.' },
+  { id: 'mistral.mistral-7b-instruct-v0:2',         label: 'Mistral 7B',         provider: 'Mistral AI',  tier: 'weak',     status: 'available', verified: true,  note: 'Oldest model here and the least guarded. Best first choice for a jailbreak that lands.' },
+  { id: 'mistral.ministral-3-3b-instruct',          label: 'Ministral 3 3B',     provider: 'Mistral AI',  tier: 'weak',     status: 'available', verified: true,  note: 'Smallest model in the list at 3B — very compliant.' },
+  { id: 'meta.llama3-1-8b-instruct-v1:0',           label: 'Llama 3.1 8B',       provider: 'Meta',        tier: 'weak',     status: 'available', verified: true,  note: 'Small and compliant — injections land.' },
+  { id: 'amazon.nova-micro-v1:0',                   label: 'Nova Micro',         provider: 'Amazon',      tier: 'weak',     status: 'available', verified: true },
+
+  // ── blocked by the org SCP — kept visible, the denial IS the demo ──
+  { id: 'deepseek.v3.2',                            label: 'DeepSeek V3.2',      provider: 'DeepSeek',    tier: 'denied',   status: 'unavailable', verified: true, note: 'Explicit deny in an AWS Organizations SCP. Available on the Azure backend.' },
+  { id: 'qwen.qwen3-235b-a22b-2507-v1:0',           label: 'Qwen3 235B',         provider: 'Qwen',        tier: 'denied',   status: 'unavailable', verified: true, note: 'Denied by the same org SCP as DeepSeek.' },
+  { id: 'xai.grok-4.6',                             label: 'Grok 4.6',           provider: 'xAI',         tier: 'denied',   status: 'unavailable', verified: true, note: 'Explicit SCP deny on every id (bare, us., global.). Use the Azure backend for Grok.' },
+]
+
+app.get('/api/models/bedrock', async (req, res) => {
+  const wantAll = req.query.all === '1'
   try {
     const creds = awsCredentials()
     const client = new BedrockClient({
@@ -612,19 +713,38 @@ app.get('/api/models/bedrock', async (_req, res) => {
     const cmd = new ListFoundationModelsCommand({ byOutputModality: 'TEXT' })
     const result = await client.send(cmd)
 
-    const models = (result.modelSummaries ?? []).map(m => ({
-      id: m.modelId,
-      label: m.modelName,
-      provider: m.providerName,
-      status: m.modelLifecycle?.status === 'ACTIVE' ? 'available' : m.modelLifecycle?.status?.toLowerCase() ?? 'unknown',
-      inputModalities: m.inputModalities ?? [],
-      outputModalities: m.outputModalities ?? [],
-      streamingSupported: m.responseStreamingSupported ?? false,
-    }))
+    const live = new Map()
+    for (const m of result.modelSummaries ?? []) {
+      live.set(m.modelId, {
+        id: m.modelId,
+        label: m.modelName,
+        provider: m.providerName,
+        status: m.modelLifecycle?.status === 'ACTIVE' ? 'available' : m.modelLifecycle?.status?.toLowerCase() ?? 'unknown',
+        inputModalities: m.inputModalities ?? [],
+        outputModalities: m.outputModalities ?? [],
+        streamingSupported: m.responseStreamingSupported ?? false,
+      })
+    }
 
-    res.json({ provider: 'AWS Bedrock', region: process.env.AWS_REGION, models })
+    if (wantAll) {
+      return res.json({ provider: 'AWS Bedrock', region: process.env.AWS_REGION, curated: false, models: [...live.values()] })
+    }
+
+    // Curated order wins; the live catalogue only downgrades status (a model
+    // AWS has retired must not show as available just because it is listed
+    // here), never upgrades a vendor the SCP denies.
+    const models = BEDROCK_CURATED.map((c) => {
+      const l = live.get(c.id)
+      const status = c.status === 'unavailable' ? 'unavailable'
+        : (l && l.status !== 'available') ? l.status
+        : c.status
+      return { ...c, status, streamingSupported: l?.streamingSupported ?? true, missingFromCatalogue: !l }
+    })
+    res.json({ provider: 'AWS Bedrock', region: process.env.AWS_REGION, curated: true, total: live.size, models })
   } catch (err) {
     console.error('[bedrock] ListFoundationModels error:', err.message)
+    // Still serve the curated list — a picker that works beats an empty one.
+    if (!wantAll) return res.json({ provider: 'AWS Bedrock', region: process.env.AWS_REGION, curated: true, offline: true, models: BEDROCK_CURATED })
     res.status(502).json({ error: err.message })
   }
 })

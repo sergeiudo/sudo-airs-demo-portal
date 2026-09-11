@@ -6,9 +6,15 @@ import { useAttackSimulator } from '../hooks/useAttackSimulator'
 import { useProtectionTheme } from '../hooks/useProtectionTheme'
 import { PromptTelemetryDrawer } from '../components/api-intercept/PromptTelemetryDrawer'
 
+// Starting selection per backend. These must exist in the curated list the
+// server serves — claude-3-5-sonnet-20241022 sat here long after AWS retired
+// it ("This model version has reached the end of its life"), so the picker
+// opened on a model that could not answer. ModelSelector also self-corrects if
+// the selection is missing from the fetched list, so this is a preference
+// rather than a single point of failure.
 const DEFAULT_MODELS = {
   vertex:  'gemini-2.5-flash',
-  bedrock: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+  bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
   azure:   'gpt-5.4-nano',
 }
 
