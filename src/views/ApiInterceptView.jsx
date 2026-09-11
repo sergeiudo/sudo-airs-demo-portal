@@ -28,8 +28,8 @@ const MAX_LIBRARY  = 576
 const DEFAULT_LEFT  = 312
 
 export function ApiInterceptView() {
-  const [backend, setBackend] = useState('vertex')
-  const [model, setModel] = useState(DEFAULT_MODELS.vertex)
+  const [backend, setBackend] = useState('bedrock')
+  const [model, setModel] = useState(DEFAULT_MODELS.bedrock)
 
   // Right telemetry sidebar
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_RIGHT)
