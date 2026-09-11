@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, HeartPulse, ShieldCheck, ShieldOff, Languages, Sliders, X,
   Activity, FileText, Wrench, Sparkles, AlertTriangle, RotateCcw, ChevronDown, Trash2,
+  Paperclip, RefreshCw, ExternalLink,
 } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { useMohChat } from '../../hooks/useMohChat'
 import { MohLangProvider, useMohLang, isHebrewText } from './i18n'
 import { mohTheme, MOH_RISK_COLORS, mohPopover } from './theme'
 import { MOH_ATTACKS_BY_FAMILY, MOH_SEVERITY_COLORS, MOH_DETECTORS } from '../../data/moh/attacks'
-import { ScanStageCard, AirsPayloadViewer, VerdictPill, DetectionBadges } from './components/ScanPanels'
+import { ScanStageCard, AirsPayloadViewer, VerdictPill, DetectionBadges, CopyButton } from './components/ScanPanels'
 import { subscribe, publish, MOH_EVENTS } from './bus'
 
 /**
@@ -318,6 +319,35 @@ const UserBubble = React.memo(function UserBubble({ msg, theme }) {
           </span>
         </div>
       )}
+      {/* Attached document. The extracted text is deliberately NOT shown here
+          — the citizen attached a file, they did not type six thousand
+          characters of lab report. The model still receives the full text as
+          its own turn; this is just the artifact card, like any real chat app. */}
+      {msg.attachment && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12,
+            background: theme.userBubble, boxShadow: theme.shadowSm, maxWidth: '78%',
+          }}
+        >
+          <FileText size={15} color="#fff" style={{ flexShrink: 0, opacity: 0.9 }} />
+          <div style={{ minWidth: 0 }}>
+            <div dir="ltr" style={{ fontSize: 12, fontWeight: 700, color: theme.userText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
+              {msg.attachment.name}
+            </div>
+            <div dir="ltr" style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>
+              {[
+                msg.attachment.kind?.toUpperCase(),
+                msg.attachment.pages ? `${msg.attachment.pages} pages` : null,
+                msg.attachment.chars ? `${msg.attachment.chars.toLocaleString()} chars` : null,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          <ShieldCheck size={13} color="#5eead4" style={{ flexShrink: 0, marginInlineStart: 4 }} />
+        </div>
+      )}
+
+      {msg.content && (
       <div
         dir={dir}
         style={{
@@ -329,6 +359,7 @@ const UserBubble = React.memo(function UserBubble({ msg, theme }) {
       >
         {msg.content}
       </div>
+      )}
     </motion.div>
   )
 })
@@ -663,16 +694,96 @@ function TypingDots({ color }) {
 
 // ─── Composer ─────────────────────────────────────────────────────────────────
 
-function Composer({ theme, onSend, busy, onClear }) {
+/**
+ * Attachment chip — the citizen's uploaded document and its AIRS verdict.
+ *
+ * A blocked file stays visible rather than vanishing: the point of the beat is
+ * that the operator can show what was in the document and which detector
+ * caught it, so it has to remain on screen until dismissed.
+ */
+function AttachChip({ file, theme, onRemove }) {
+  const { t } = useMohLang()
+  const bad = file.status === 'blocked'
+  const err = file.status === 'error'
+  const pending = file.status === 'scanning'
+  const c = bad || err ? theme.blocked : pending ? theme.flagged : theme.allowed
+  return (
+    <div
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 5, padding: '7px 10px', borderRadius: 10,
+        background: bad || err ? theme.blockedBg : pending ? theme.flaggedBg : theme.allowedBg,
+        border: `1px solid ${bad || err ? theme.blockedBorder : pending ? theme.flaggedBorder : theme.allowedBorder}`,
+        maxWidth: '100%',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {pending ? <RefreshCw size={13} color={c} className="animate-spin" />
+          : bad || err ? <ShieldOff size={13} color={c} /> : <ShieldCheck size={13} color={c} />}
+        <span dir="ltr" style={{ fontSize: 11, fontWeight: 700, color: theme.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+          {file.name}
+        </span>
+        <span dir="auto" style={{ fontSize: 10, color: c, fontWeight: 700, whiteSpace: 'nowrap' }}>
+          {pending ? t('upload.scanning')
+            : bad ? t('upload.blocked')
+            : err ? t('upload.failed')
+            : t('upload.clean')}
+        </span>
+        {file.detected?.length > 0 && (
+          <span dir="ltr" style={{ fontSize: 9.5, color: theme.textMuted }}>{file.detected.join(' · ')}</span>
+        )}
+        <button
+          onClick={onRemove}
+          title={t('upload.remove')}
+          style={{ marginInlineStart: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: theme.textFaint, display: 'grid', placeItems: 'center' }}
+        >
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* Evidence row. Every other surface in this pillar prints the scan_id;
+          without it here an upload verdict cannot be looked up in SCM mid-demo.
+          The SCM link carries the MOH tenant, which is NOT the one hardcoded in
+          useAttackSimulator.js. */}
+      {file.scanId && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingInlineStart: 21 }}>
+          <code dir="ltr" style={{ fontSize: 9.5, color: theme.textFaint }}>scan_id: {file.scanId}</code>
+          <CopyButton text={file.scanId} accent={theme.accent} />
+          {file.scmUrl && (
+            <a
+              href={file.scmUrl}
+              target="_blank"
+              rel="noreferrer"
+              dir="auto"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 700, color: theme.accent, textDecoration: 'none' }}
+            >
+              <ExternalLink size={10} /> {t('upload.viewInScm')}
+            </a>
+          )}
+        </div>
+      )}
+
+      {(file.truncated || file.scanIncomplete) && (
+        <div dir="auto" style={{ fontSize: 9.5, color: theme.flagged, paddingInlineStart: 21 }}>
+          ▲ {file.scanIncomplete ? t('upload.incomplete') : t('upload.truncated').replace('{n}', file.chars)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemoveFile, uploadBusy }) {
   const { t, dir } = useMohLang()
   const [text, setText] = useState('')
   const taRef = useRef(null)
+  const fileRef = useRef(null)
   const chips = t('chat.chips') || []
+  // A blocked or still-scanning document must not ride along with the message.
+  const canSendFile = attachment?.status === 'clean'
 
   const submit = (value) => {
     const v = (value ?? text).trim()
     if (!v || busy) return
-    onSend(v)
+    onSend(v, canSendFile ? attachment : null)
     setText('')
     if (taRef.current) taRef.current.style.height = 'auto'
   }
@@ -708,6 +819,12 @@ function Composer({ theme, onSend, busy, onClear }) {
         </button>
       </div>
 
+      {attachment && (
+        <div style={{ marginBottom: 8 }}>
+          <AttachChip file={attachment} theme={theme} onRemove={onRemoveFile} />
+        </div>
+      )}
+
       <form
         onSubmit={(e) => { e.preventDefault(); submit() }}
         style={{
@@ -715,6 +832,31 @@ function Composer({ theme, onSend, busy, onClear }) {
           background: theme.surfaceMuted, border: `1px solid ${theme.borderStrong}`,
         }}
       >
+        <input
+          ref={fileRef}
+          type="file"
+          style={{ display: 'none' }}
+          accept=".pdf,.docx,.csv,.txt,.md,.json,.tsv,.log,.rtf,.xml,.yaml,.yml"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) onPickFile(f)
+            e.target.value = '' // let the same file be picked again after a block
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy || uploadBusy}
+          title={t('upload.attach')}
+          style={{
+            width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+            border: `1px solid ${theme.border}`, background: 'transparent',
+            color: busy || uploadBusy ? theme.textFaint : theme.textMuted,
+            cursor: busy || uploadBusy ? 'default' : 'pointer', display: 'grid', placeItems: 'center',
+          }}
+        >
+          <Paperclip size={15} />
+        </button>
         <textarea
           ref={taRef}
           value={text}
@@ -1056,6 +1198,56 @@ function BriutAppInner({ embedded = false }) {
     [runScenario, model, lang, protectionOn]
   )
 
+  // ── File upload ──
+  // The document is scanned by AIRS before it can become chat context. Only a
+  // clean file keeps its text; a blocked one is returned without `text` by the
+  // server, so there is nothing to attach even if the UI were bypassed.
+  const [attachment, setAttachment] = useState(null)
+  const [uploadBusy, setUploadBusy] = useState(false)
+
+  const uploadFile = useCallback(
+    async (file) => {
+      setUploadBusy(true)
+      setAttachment({ name: file.name, status: 'scanning', detected: [] })
+      try {
+        const buf = await file.arrayBuffer()
+        // Chunked base64 — String.fromCharCode(...bytes) blows the argument
+        // limit and throws on anything more than a few hundred KB.
+        const bytes = new Uint8Array(buf)
+        let bin = ''
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+        }
+        const resp = await fetch('/api/moh/upload/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: file.name, dataBase64: btoa(bin),
+            airsEnabled: protectionOn, lang,
+          }),
+        })
+        const d = await resp.json()
+        setAttachment({
+          name: d.name || file.name,
+          status: d.blocked ? 'blocked' : d.error ? 'error' : 'clean',
+          detected: d.detected || [],
+          text: d.text || null,
+          error: d.error || null,
+          kind: d.kind, pages: d.pages, chars: d.chars, totalChars: d.totalChars,
+          truncated: !!d.truncated, scanIncomplete: !!d.scanIncomplete,
+          blockReason: d.blockReason || null, blockedChunk: d.blockedChunk || null,
+          scanId: d.scanId || null, scmUrl: d.scmUrl || null,
+          scans: d.scans || [], latencyMs: d.latencyMs,
+        })
+      } catch (e) {
+        setAttachment({ name: file.name, status: 'error', detected: [], error: String(e?.message || e) })
+      } finally {
+        setUploadBusy(false)
+      }
+    },
+    [protectionOn, lang]
+  )
+
   // Cross-window: the portal tab can drive this one.
   useEffect(() => {
     publish(MOH_EVENTS.HELLO, { embedded })
@@ -1145,9 +1337,22 @@ function BriutAppInner({ embedded = false }) {
         theme={theme}
         busy={busy}
         onClear={clear}
-        onSend={(text) => {
+        attachment={attachment}
+        uploadBusy={uploadBusy}
+        onPickFile={uploadFile}
+        onRemoveFile={() => setAttachment(null)}
+        onSend={(text, file) => {
           stickRef.current = true
-          send({ prompt: text, model, lang, airsEnabled: protectionOn, family: 'runtime' })
+          // The document travels as a separate field, not concatenated into the
+          // prompt. The citizen's bubble shows their question plus a file card;
+          // the model receives the full text as its own turn. The composed turn
+          // still passes the AI-GW guardrail, so the document gets a second
+          // look after the upload scan.
+          send({
+            prompt: text, model, lang, airsEnabled: protectionOn, family: 'runtime',
+            document: file ? { name: file.name, text: file.text, kind: file.kind, pages: file.pages, chars: file.chars } : null,
+          })
+          setAttachment(null)
         }}
       />
 

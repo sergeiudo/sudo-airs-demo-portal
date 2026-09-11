@@ -35,13 +35,13 @@ export function useMohChat() {
   const abort = useCallback(() => abortRef.current?.abort(), [])
 
   /** Append the user turn + a placeholder assistant turn; return the ids. */
-  const openTurn = useCallback((prompt, attackMeta, seed = {}) => {
+  const openTurn = useCallback((prompt, attackMeta, seed = {}, attachment = null) => {
     const at = Date.now()
     const userId = `u-${at}`
     const asstId = `a-${at}`
     setMessages((prev) => [
       ...prev,
-      { id: userId, role: 'user', content: prompt, attackMeta: attackMeta || null, at },
+      { id: userId, role: 'user', content: prompt, attackMeta: attackMeta || null, attachment, at },
       { id: asstId, role: 'assistant', content: '', status: 'streaming', at, metadata: { ...EMPTY_META, ...seed } },
     ])
     return { userId, asstId }
@@ -57,8 +57,19 @@ export function useMohChat() {
 
   // ── Streaming runtime chat ──────────────────────────────────────────────────
   const send = useCallback(
-    async ({ prompt, model, lang = 'he', airsEnabled = true, scenario, family = 'runtime', system, attackMeta }) => {
-      const { asstId } = openTurn(prompt, attackMeta, { model, scenario, family })
+    async ({ prompt, model, lang = 'he', airsEnabled = true, scenario, family = 'runtime', system, attackMeta, document = null }) => {
+      // The attachment rides on the user message as metadata so the transcript
+      // can render a file card; its text goes to the server separately and is
+      // never shown in the citizen's own bubble.
+      //
+      // Only the descriptive fields are kept on the message. The extracted text
+      // is deliberately dropped here — the card renders name/type/size, and
+      // holding a citizen's medical document in message state for the life of
+      // the conversation buys nothing.
+      const attachMeta2 = document
+        ? { name: document.name, kind: document.kind, pages: document.pages, chars: document.chars }
+        : null
+      const { asstId } = openTurn(prompt, attackMeta, { model, scenario, family }, attachMeta2)
       setBusy(true)
       const controller = new AbortController()
       abortRef.current = controller
@@ -97,6 +108,7 @@ export function useMohChat() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model, lang, airsEnabled, scenario, family, system,
+            document: document ? { name: document.name, text: document.text } : null,
             messages: [{ role: 'user', content: prompt }],
           }),
           signal: controller.signal,

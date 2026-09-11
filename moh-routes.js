@@ -37,6 +37,15 @@ import {
   resetMohMcpState,
   rugPullStatus,
 } from './moh-mcp.js'
+import {
+  extractText as extractUploadText,
+  chunkText,
+  isSupported,
+  supportedList,
+  extOf,
+  MAX_UPLOAD_BYTES,
+  MAX_SCAN_CHARS,
+} from './moh-upload.js'
 import { PAIRS } from './moh-probe-pairs.js'
 
 const router = express.Router()
@@ -117,6 +126,21 @@ function hookVerdictFailed(hookResults) {
     ...(hookResults?.after_request_hooks || []),
   ]
   return all.some((h) => h?.verdict === false)
+}
+
+// Deep link into the SCM AI Sessions log for this pillar.
+//
+// Deliberately NOT reusing buildScmUrl from useAttackSimulator.js: that one
+// hardcodes tsg_id 1986626000, the TEAM tenant. MOH scans go to the personal
+// tenant (AIGW_TSG_ID), so reusing it would deep-link into a tenant that has
+// never seen these scans. Only tsg_id is set — the sessions page's search
+// parameter is undocumented, so the UI shows a copyable scan_id instead of
+// guessing at a query string that might silently not filter.
+const SCM_SESSIONS_URL = 'https://stratacloudmanager.paloaltonetworks.com/ai-security/runtime/ai-sessions'
+
+function mohScmUrl() {
+  const tsg = process.env.AIGW_TSG_ID || ''
+  return tsg ? `${SCM_SESSIONS_URL}?tsg_id=${tsg}` : null
 }
 
 function gwMetadata({ lang, scenario, family }) {
@@ -497,7 +521,7 @@ router.post('/reset', (_req, res) => {
 // hooks / metadata / blocked / error.
 
 router.post('/chat', async (req, res) => {
-  const { model, messages, airsEnabled = true, lang = 'he', scenario, family = 'runtime', system } = req.body || {}
+  const { model, messages, airsEnabled = true, lang = 'he', scenario, family = 'runtime', system, document = null } = req.body || {}
 
   if (!ENV.apiKey) return res.status(503).json({ error: 'configure_aigw', missing: ['AIGW_API_KEY'] })
   if (!model || !Array.isArray(messages) || messages.length === 0) {
@@ -522,8 +546,35 @@ router.post('/chat', async (req, res) => {
 
   const startedAt = Date.now()
   const sys = system || CHAT_SYSTEM[lang] || CHAT_SYSTEM.he
-  const fullMessages = [{ role: 'system', content: sys }, ...messages]
-  const promptText = messages.map((m) => m.content).join('\n')
+
+  // An attached document is its own turn, not string-concatenated into the
+  // citizen's question. The chat transcript then shows a file card and the
+  // question the person actually typed, the way any real assistant behaves,
+  // instead of dumping several thousand characters of extracted text into
+  // their own message bubble. The model still receives the full text.
+  const docTurn = document?.text
+    ? [{
+        role: 'user',
+        content: (lang === 'he'
+          ? `המשתמש צירף מסמך בשם "${document.name}". תוכן המסמך:\n\n`
+          : `The user attached a document named "${document.name}". Document contents:\n\n`) + document.text,
+      }]
+    : []
+
+  const fullMessages = [{ role: 'system', content: sys }, ...docTurn, ...messages]
+
+  // The guardrail sees the whole turn including the document — that is the
+  // point. The TRACE deliberately does not.
+  //
+  // traces.db has no TTL and no size cap, so writing the extracted text there
+  // archives a citizen's medical document forever in exchange for nothing: the
+  // trace exists for observability, and a reference is enough to tell the story
+  // ("this turn carried a 582-char PDF"). The document was already scanned on
+  // upload, with its own scan_id in SCM if anyone needs the content.
+  const docNote = document?.text
+    ? `\n[attachment: ${document.name} · ${document.text.length} chars · scanned on upload]`
+    : ''
+  const promptText = messages.map((m) => m.content).join('\n') + docNote
   let assembled = ''
   let hookResults = null
   let tokensOut = 0
@@ -1007,6 +1058,150 @@ router.post('/agent', async (req, res) => {
   } catch (e) {
     const cached = loadReplay(replayKey)
     if (cached) return res.json({ ...cached, error: String(e?.message || e).slice(0, 200) })
+    result.error = String(e?.message || e).slice(0, 400)
+    result.latencyMs = Date.now() - startedAt
+    return res.status(502).json(result)
+  }
+})
+
+// ── Citizen file upload ───────────────────────────────────────────────────────
+// A referral letter or lab result is untrusted input the citizen has usually
+// not read in full, and its text reaches the model verbatim — the classic
+// indirect-injection vector. The file is scanned by AIRS before it is allowed
+// to become chat context, and a block here is reported as its own enforcement
+// point ("file upload") rather than being confused with the gateway's.
+//
+// Scanned chunk by chunk. One 40k-char blob is both less reliable to detect in
+// and useless to report on; per-chunk verdicts let the UI point at the offending
+// passage and quote it back.
+
+router.get('/upload/limits', (_req, res) => {
+  res.json({
+    maxBytes: MAX_UPLOAD_BYTES,
+    maxScanChars: MAX_SCAN_CHARS,
+    supported: supportedList(),
+    accept: supportedList().map((e) => `.${e}`).join(','),
+  })
+})
+
+router.post('/upload/scan', async (req, res) => {
+  const { name, dataBase64, airsEnabled = true, lang = 'he' } = req.body || {}
+
+  if (!name || !dataBase64) {
+    return res.status(400).json({ error: 'bad_request', message: 'name and dataBase64 are required' })
+  }
+  if (!isSupported(name)) {
+    return res.status(415).json({
+      error: 'unsupported_type',
+      message: `Unsupported file type '.${extOf(name)}'`,
+      supported: supportedList(),
+    })
+  }
+
+  const result = {
+    name, kind: extOf(name), lang, airsEnabled,
+    bytes: 0, chars: 0, totalChars: 0, pages: null, truncated: false,
+    chunks: 0, scans: [], scanIncomplete: false,
+    blocked: false, blockReason: null, blockedChunk: null,
+    detected: [], excerpt: null, text: null,
+    scanId: null, scmUrl: mohScmUrl(),
+    latencyMs: 0, error: null,
+  }
+  const startedAt = Date.now()
+
+  try {
+    const buffer = Buffer.from(dataBase64, 'base64')
+    result.bytes = buffer.length
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({
+        ...result,
+        error: 'too_large',
+        message: `File is ${(buffer.length / 1048576).toFixed(1)} MB; the limit is ${(MAX_UPLOAD_BYTES / 1048576).toFixed(0)} MB`,
+      })
+    }
+
+    let extracted
+    try {
+      extracted = await extractUploadText(buffer, name)
+    } catch (e) {
+      result.error = `Could not read this file: ${String(e?.message || e).slice(0, 200)}`
+      result.latencyMs = Date.now() - startedAt
+      return res.status(e?.status === 415 ? 415 : 422).json(result)
+    }
+
+    result.kind = extracted.kind
+    result.pages = extracted.pages
+    result.truncated = extracted.truncated
+    result.totalChars = extracted.totalChars
+    result.chars = extracted.text.length
+    result.excerpt = extracted.text.slice(0, 600)
+
+    if (!extracted.text.trim()) {
+      result.error = 'No readable text found in this file (it may be a scanned image).'
+      result.latencyMs = Date.now() - startedAt
+      return res.json(result)
+    }
+
+    const chunks = chunkText(extracted.text)
+    result.chunks = chunks.length
+
+    if (airsEnabled) {
+      for (const c of chunks) {
+        let s
+        try {
+          s = await airscanMoh({ prompt: c.text, model: 'moh-upload' })
+        } catch (e) {
+          if (e.code === 'airs_unconfigured') { result.error = e.message; break }
+          // One flaky chunk must not discard the whole upload. AIRS
+          // occasionally 5xx's mid-run — observed once on chunk 5 of 11 for a
+          // 46-page PDF, where the identical retry then scanned all 11. Record
+          // it, keep going, and mark the verdict incomplete so a partially
+          // scanned file is never presented as clean.
+          result.scans.push({
+            chunk: c.index, start: c.start, chars: c.text.length,
+            action: 'error', error: String(e?.message || e).slice(0, 200),
+            source: 'airs-direct-upload',
+          })
+          result.scanIncomplete = true
+          if (c.index < chunks.length - 1) await new Promise((r) => setTimeout(r, 2200))
+          continue
+        }
+        const detected = Object.entries(s.data.prompt_detected || {}).filter(([, v]) => v).map(([k]) => k)
+        result.scans.push({
+          chunk: c.index, start: c.start, chars: c.text.length,
+          action: s.data.action, category: s.data.category, scan_id: s.data.scan_id,
+          latencyMs: s.latencyMs, prompt_detected: s.data.prompt_detected || {},
+          requestBody: s.requestBody, source: 'airs-direct-upload',
+        })
+        for (const d of detected) if (!result.detected.includes(d)) result.detected.push(d)
+
+        if (s.data.action === 'block') {
+          result.blocked = true
+          result.blockReason = s.data.category || 'blocked by AIRS'
+          result.blockedChunk = { index: c.index, start: c.start, excerpt: c.text.slice(0, 400) }
+          // The scan that actually blocked is the one worth looking up in SCM.
+          result.scanId = s.data.scan_id || null
+          break // no point scanning the rest; the file is not going to the model
+        }
+        // Pacing. AIRS silently skips DLP when scans arrive faster than roughly
+        // one every two seconds, which on a multi-chunk file would mean a
+        // confident "clean" verdict that never actually ran DLP.
+        if (c.index < chunks.length - 1) await new Promise((r) => setTimeout(r, 2200))
+      }
+    }
+
+    // A clean multi-chunk file has no single decisive scan, but the operator
+    // still needs one id to find the session in SCM — the first is as good a
+    // handle as any, and they all share the run.
+    if (!result.scanId) result.scanId = result.scans.find((s) => s.scan_id)?.scan_id || null
+
+    // The extracted text only travels back to the client when it is allowed to
+    // be used. A blocked document must not become chat context by accident.
+    if (!result.blocked) result.text = extracted.text
+
+    result.latencyMs = Date.now() - startedAt
+    return res.json(result)
+  } catch (e) {
     result.error = String(e?.message || e).slice(0, 400)
     result.latencyMs = Date.now() - startedAt
     return res.status(502).json(result)
