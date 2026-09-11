@@ -845,6 +845,9 @@ function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemo
             e.target.value = '' // let the same file be picked again after a block
           }}
         />
+        {/* Tinted rather than a bare grey outline: the attach affordance is a
+            headline capability of this demo (AIRS scans the file before the
+            model sees it) and a muted paperclip read as decoration. */}
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
@@ -852,12 +855,24 @@ function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemo
           title={t('upload.attach')}
           style={{
             width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-            border: `1px solid ${theme.border}`, background: 'transparent',
-            color: busy || uploadBusy ? theme.textFaint : theme.textMuted,
+            border: `1px solid ${busy || uploadBusy ? theme.border : `${theme.accent}55`}`,
+            background: busy || uploadBusy ? 'transparent' : `${theme.accent}16`,
+            color: busy || uploadBusy ? theme.textFaint : theme.accent,
             cursor: busy || uploadBusy ? 'default' : 'pointer', display: 'grid', placeItems: 'center',
+            transition: 'background 120ms, border-color 120ms',
+          }}
+          onMouseEnter={(e) => {
+            if (busy || uploadBusy) return
+            e.currentTarget.style.background = `${theme.accent}2e`
+            e.currentTarget.style.borderColor = `${theme.accent}88`
+          }}
+          onMouseLeave={(e) => {
+            if (busy || uploadBusy) return
+            e.currentTarget.style.background = `${theme.accent}16`
+            e.currentTarget.style.borderColor = `${theme.accent}55`
           }}
         >
-          <Paperclip size={15} />
+          <Paperclip size={16} strokeWidth={2.4} />
         </button>
         <textarea
           ref={taRef}

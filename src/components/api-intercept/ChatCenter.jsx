@@ -581,9 +581,13 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
               onClick={() => fileRef.current?.click()}
               disabled={isLoading || uploadBusy}
               title="Attach a document — scanned by AIRS before it is sent"
-              className="flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors disabled:opacity-30"
+              className={`flex-shrink-0 p-2 rounded-lg border transition-colors disabled:opacity-30 ${
+                theme.isProtected
+                  ? 'text-emerald-300 border-emerald-500/45 bg-emerald-500/12 hover:bg-emerald-500/25'
+                  : 'text-sky-300 border-sky-400/45 bg-sky-400/12 hover:bg-sky-400/25'
+              }`}
             >
-              <Paperclip size={12} />
+              <Paperclip size={14} strokeWidth={2.4} />
             </button>
             <textarea
               ref={inputRef}

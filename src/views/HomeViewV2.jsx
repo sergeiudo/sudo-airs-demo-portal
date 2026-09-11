@@ -8,6 +8,13 @@ import { useAppContext } from '../context/AppContext'
 import airsLogo from '../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 // ─── Pillar data (full content matching original) ──────────────────────────────
+/**
+ * A highlight is either a plain string or { t, tag }. `tag` renders an accent
+ * chip next to the bullet — used to make a newly shipped capability legible on
+ * a card that otherwise reads as one undifferentiated feature list.
+ */
+const hl = (h) => (typeof h === 'string' ? { t: h, tag: null } : h)
+
 const PILLARS = [
   {
     id: 'apiIntercept',
@@ -15,8 +22,14 @@ const PILLARS = [
     title: 'API Intercept',
     tag: 'Runtime Protection',
     summary: 'Intercept & block malicious prompts before they reach your model.',
-    description: 'Simulate real-world prompt injection, jailbreak, and data exfiltration attacks against live LLM endpoints. Toggle AIRS protection on/off to see exactly how Prisma AIRS intercepts malicious payloads at the API layer — before they reach the model.',
-    highlights: ['Prompt injection detection', 'Jailbreak prevention', 'Input / output scanning', 'SCM deep-link telemetry'],
+    description: 'Fire a 142-payload attack library at live LLM endpoints across four backends — Vertex AI, Bedrock, Azure OpenAI, and the SCM AI Gateway. Toggle AIRS protection on/off to see exactly what is intercepted, and switch backends to compare two enforcement architectures on the identical payload.',
+    highlights: [
+      { t: 'SCM AI Gateway backend — 20 curated Bedrock models', tag: 'NEW' },
+      { t: 'File upload scanning — PDF, DOCX, CSV, TXT', tag: 'NEW' },
+      'Prompt injection, jailbreak & data exfiltration',
+      'API-layer scanning vs in-gateway guardrail',
+      'Input / output scanning & SCM deep-link telemetry',
+    ],
     accent: '#f43f5e',
     glow: 'rgba(244,63,94,0.32)',
     dim: 'rgba(244,63,94,0.08)',
@@ -34,18 +47,6 @@ const PILLARS = [
     dim: 'rgba(99,102,241,0.08)',
   },
   {
-    id: 'redTeaming',
-    icon: Swords,
-    title: 'Red Teaming',
-    tag: 'Adversarial Testing',
-    summary: 'Run automated adversarial campaigns and measure model robustness.',
-    description: 'Run automated adversarial campaigns across multiple attack categories — DAN variants, role-play escapes, multi-turn manipulation, and more. Track robustness scores in real time and compare protected vs unprotected model behaviour.',
-    highlights: ['Multi-category attack campaigns', 'Real-time robustness gauge', 'Attack log feed', 'Campaign state management'],
-    accent: '#fb923c',
-    glow: 'rgba(251,146,60,0.32)',
-    dim: 'rgba(251,146,60,0.08)',
-  },
-  {
     id: 'llmGateway',
     icon: Waypoints,
     title: 'AI/LLM Gateway',
@@ -56,6 +57,37 @@ const PILLARS = [
     accent: '#ec4899',
     glow: 'rgba(236,72,153,0.32)',
     dim: 'rgba(236,72,153,0.08)',
+  },
+  {
+    id: 'ministryHealth',
+    icon: HeartPulse,
+    title: 'Ministry of Health',
+    tag: 'Bilingual HE/EN',
+    summary: 'A Hebrew health assistant, and the four ways it can be turned against its citizens.',
+    description: 'בריאות.AI — a bilingual Ministry of Health assistant built for the RFI. Every model turn routes through the SCM AI Gateway with the Prisma AIRS guardrail; every tool call is additionally scanned directly by AIRS as a tool_event. Includes a live Hebrew-vs-English detection matrix measuring what the runtime detectors actually catch in Hebrew.',
+    highlights: [
+      { t: 'File upload scanning — Hebrew PDF, DOCX, CSV', tag: 'NEW' },
+      { t: 'MCP tool supply chain — poisoned tool definitions', tag: 'NEW' },
+      'Right-to-left Hebrew citizen chatbot',
+      'Poisoned clinical documents & forged circulars',
+      'Agentic PHI exfiltration & memory poisoning',
+      'Live Hebrew vs English detection matrix',
+    ],
+    accent: '#0ea5e9',
+    glow: 'rgba(14,165,233,0.32)',
+    dim: 'rgba(14,165,233,0.08)',
+  },
+  {
+    id: 'redTeaming',
+    icon: Swords,
+    title: 'Red Teaming',
+    tag: 'Adversarial Testing',
+    summary: 'Run automated adversarial campaigns and measure model robustness.',
+    description: 'Run automated adversarial campaigns across multiple attack categories — DAN variants, role-play escapes, multi-turn manipulation, and more. Track robustness scores in real time and compare protected vs unprotected model behaviour.',
+    highlights: ['Multi-category attack campaigns', 'Real-time robustness gauge', 'Attack log feed', 'Campaign state management'],
+    accent: '#fb923c',
+    glow: 'rgba(251,146,60,0.32)',
+    dim: 'rgba(251,146,60,0.08)',
   },
   {
     id: 'claudeHooks',
@@ -116,18 +148,6 @@ const PILLARS = [
     accent: '#f59e0b',
     glow: 'rgba(245,158,11,0.32)',
     dim: 'rgba(245,158,11,0.08)',
-  },
-  {
-    id: 'ministryHealth',
-    icon: HeartPulse,
-    title: 'Ministry of Health',
-    tag: 'Bilingual HE/EN',
-    summary: 'A Hebrew health assistant, and the four ways it can be turned against its citizens.',
-    description: 'בריאות.AI — a bilingual Ministry of Health assistant built for the RFI. Every model turn routes through the SCM AI Gateway with the Prisma AIRS guardrail; every tool call is additionally scanned directly by AIRS as a tool_event. Includes a live Hebrew-vs-English detection matrix measuring what the runtime detectors actually catch in Hebrew.',
-    highlights: ['Right-to-left Hebrew citizen chatbot', 'Poisoned clinical documents & forged circulars', 'Agentic PHI exfiltration & memory poisoning', 'Live Hebrew vs English detection matrix'],
-    accent: '#0ea5e9',
-    glow: 'rgba(14,165,233,0.32)',
-    dim: 'rgba(14,165,233,0.08)',
   },
 ]
 
@@ -220,10 +240,20 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
 
         {/* Highlight bullets */}
         <ul className="space-y-1.5 flex-1">
-          {pillar.highlights.map((h) => (
-            <li key={h} className="flex items-center gap-2 text-[11px]" style={{ color: bulletColor }}>
-              <ChevronRight size={10} style={{ color: pillar.accent, flexShrink: 0 }} />
-              {h}
+          {pillar.highlights.map(hl).map(({ t, tag }) => (
+            <li key={t} className="flex items-start gap-2 text-[11px]" style={{ color: bulletColor }}>
+              <ChevronRight size={10} style={{ color: pillar.accent, flexShrink: 0, marginTop: 3 }} />
+              <span className="leading-snug" style={tag ? { color: pillar.accent, fontWeight: 700 } : undefined}>
+                {t}
+                {tag && (
+                  <span
+                    className="ml-1.5 px-1.5 py-[1px] rounded-full text-[8px] font-black tracking-wider align-middle"
+                    style={{ background: `${pillar.accent}22`, color: pillar.accent, border: `1px solid ${pillar.accent}45` }}
+                  >
+                    {tag}
+                  </span>
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -343,20 +373,33 @@ function HeroCard({ pillar, onClose, onLaunch, isDark }) {
           transition={{ delay: 0.15 }}
           className="grid grid-cols-2 gap-2.5 mb-9"
         >
-          {pillar.highlights.map((h, i) => (
+          {pillar.highlights.map(hl).map(({ t, tag }, i) => (
             <motion.div
-              key={h}
+              key={t}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.18 + i * 0.05 }}
               className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
               style={{
-                background: highlightBg(pillar.accent),
-                border: `1px solid ${highlightBorder(pillar.accent)}`,
+                background: tag ? `${pillar.accent}1f` : highlightBg(pillar.accent),
+                border: `1px solid ${tag ? `${pillar.accent}55` : highlightBorder(pillar.accent)}`,
               }}
             >
               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: pillar.accent }} />
-              <span className="text-[12px] font-medium" style={{ color: highlightText }}>{h}</span>
+              <span
+                className="text-[12px] font-medium"
+                style={tag ? { color: pillar.accent, fontWeight: 700 } : { color: highlightText }}
+              >
+                {t}
+              </span>
+              {tag && (
+                <span
+                  className="ml-auto px-1.5 py-[2px] rounded-full text-[9px] font-black tracking-wider flex-shrink-0"
+                  style={{ background: pillar.accent, color: '#ffffff' }}
+                >
+                  {tag}
+                </span>
+              )}
             </motion.div>
           ))}
         </motion.div>
