@@ -27,8 +27,10 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_SCAN_CHARS,
 } from './file-extract.js'
+import { runMcpLoop, describeServers as describeMcpServers, MCP_SERVER_IDS } from './mcp-aigw.js'
 import mohRouter, {
   MOH_ENV as SCM_ENV,
+  airscanMoh as airscanScm,
   MOH_MODELS as SCM_MODELS,
   buildAigwClient,
   resolveAigwConfig,
@@ -506,7 +508,13 @@ export function persistTrace({ message, chatResponse, telemetry, backend, resolv
 
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
-  const { message, backend = 'vertex', modelId, airsEnabled = false, document = null } = req.body
+  const {
+    message, backend = 'vertex', modelId, airsEnabled = false, document = null,
+    // MCP tool-calling is opt-in and only meaningful on the AI-GW backend —
+    // handing the attack library a set of live tools by default would change
+    // what every other payload in the pillar does.
+    mcpEnabled = false, mcpServer = 'auto',
+  } = req.body
   if (!message) return res.status(400).json({ error: 'message is required' })
 
   // An attached document reaches the model and the guardrail, but NOT the
@@ -531,6 +539,68 @@ app.post('/api/chat', async (req, res) => {
   // use airscan() at all. One call carries both the model turn and the verdict.
   if (backend === 'aigw') {
     if (!SCM_ENV.apiKey) return res.status(503).json({ error: 'AIGW_API_KEY is not set — the SCM AI-GW backend is unavailable' })
+
+    // ── MCP tool-calling lane. Same gateway, same guardrail, but the model can
+    // reach live MCP servers and the response carries the whole step trace.
+    if (mcpEnabled) {
+      try {
+        const m = await runMcpLoop({
+          prompt: llmInput,
+          model: resolvedModelId,
+          forcedServer: mcpServer,
+          airsEnabled,
+          // AIRS off means no scanning anywhere, the same as every other
+          // backend in this pillar — not "scan but ignore the verdict".
+          scanTool: airsEnabled
+            ? (a) => airscanScm({ ...a, model: resolvedModelId })
+            : null,
+          detectBlock: (completion) => {
+            const hr = completion?.hook_results
+            if (!hookVerdictFailed(hr)) return null
+            return stageFromHook(hr?.before_request_hooks, 'prompt')?.category
+              ? `blocked by the AI-GW AIRS guardrail (${stageFromHook(hr.before_request_hooks, 'prompt').category})`
+              : 'blocked by the AI-GW AIRS guardrail'
+          },
+          createCompletion: async ({ messages, tools }) => {
+            const { configId } = resolveAigwConfig(airsEnabled)
+            const client = buildAigwClient(configId, {
+              metadata: { demo: 'api-intercept-mcp', _user: 'demo-user', lane: airsEnabled ? 'airs' : 'none' },
+            })
+            return client.chat.completions.create({ model: resolvedModelId, messages, tools, tool_choice: 'auto', max_tokens: 2048 })
+          },
+        })
+
+        const blockedSteps = m.steps.filter((st) => st.blocked || st.kind === 'blocked')
+        const isBlocked = m.blocked || blockedSteps.length > 0
+        const payload = {
+          summary: {
+            verdict: isBlocked ? 'BLOCKED' : airsEnabled ? 'ALLOWED' : 'DIRECT',
+            action: isBlocked ? 'block' : 'allow',
+            category: isBlocked ? 'malicious' : 'benign',
+            threats_detected: [...new Set(m.steps.flatMap((st) => [st.inputScan?.category, st.outputScan?.category, st.scan?.category].filter((c) => c && c !== 'benign')))],
+            model: modelLabel,
+            enforcement: airsEnabled ? 'ai-gateway-guardrail + tool_event' : 'none',
+          },
+          inputScan: null,
+          outputScan: null,
+          timing: { llm_ms: m.latencyMs, airs_input_scan_ms: null, airs_output_scan_ms: null, total_ms: m.latencyMs },
+          llm: { model: modelLabel, latency_ms: m.latencyMs, tokens_in: null, tokens_out: null, tokens_total: null, throughput_tps: null, finish_reason: null },
+          mcp: { steps: m.steps, servers: m.servers, rounds: m.rounds, toolCalls: m.toolCalls, enabled: true },
+          chatResponse: {
+            role: 'assistant',
+            content: m.blocked ? '' : (m.answer || m.error || ''),
+            blocked: !!m.blocked,
+            block_reason: m.blockReason ?? null,
+          },
+        }
+        const traceId = persistTrace({ message: traceMessage, chatResponse: payload.chatResponse, telemetry: payload, backend, resolvedModelId, airsEnabled, attackMeta: req.body.attackMeta ?? null })
+        return res.json({ ...payload, trace_id: traceId })
+      } catch (err) {
+        console.error('[SCM AI-GW · MCP] Error:', err.message)
+        return res.status(502).json({ error: `MCP run failed: ${err.message}` })
+      }
+    }
+
     try {
       const g = await callScmGateway(llmInput, resolvedModelId, airsEnabled)
       const payload = {
@@ -1001,6 +1071,10 @@ async function callScmGateway(prompt, modelId, airsEnabled) {
     finishReason: completion?.choices?.[0]?.finish_reason ?? null,
   }
 }
+
+app.get('/api/mcp/servers', (_req, res) => {
+  res.json({ configured: !!SCM_ENV.apiKey, servers: describeMcpServers(), ids: MCP_SERVER_IDS })
+})
 
 app.get('/api/models/aigw', (_req, res) => {
   res.json({

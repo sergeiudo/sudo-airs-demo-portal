@@ -1489,6 +1489,9 @@ export default router
 // pillars can never disagree about how a guardrail verdict is read.
 export {
   ENV as MOH_ENV,
+  // The API Intercept AI-GW backend scans MCP tool_events on this same personal
+  // tenant, because that is where its gateway traffic already lands.
+  airscanMoh,
   MOH_MODELS,
   buildAigwClient,
   resolveConfig as resolveAigwConfig,

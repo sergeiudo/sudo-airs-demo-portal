@@ -41,7 +41,7 @@ export function useAttackSimulator() {
   const [activeTelemetry, setActiveTelemetry] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const send = useCallback(async ({ payload, attackMeta = null, backend = 'vertex', modelId = null, document = null }) => {
+  const send = useCallback(async ({ payload, attackMeta = null, backend = 'vertex', modelId = null, document = null, mcpEnabled = false, mcpServer = 'auto' }) => {
     const userMsg = {
       id: `msg-${Date.now()}-user`,
       role: 'user',
@@ -67,6 +67,8 @@ export function useAttackSimulator() {
           modelId,
           airsEnabled: isProtected,
           attackMeta: attackMeta ?? null,
+          mcpEnabled,
+          mcpServer,
         }),
       })
 
@@ -96,6 +98,10 @@ export function useAttackSimulator() {
         tokensOut: data.llm?.tokens_out ?? null,
         timestamp: new Date().toISOString(),
         traceId: data.trace_id ?? null,
+        // The MCP step trace rides on the message rather than only on
+        // activeTelemetry, so scrolling back through a demo keeps each trace
+        // attached to the turn that produced it.
+        mcp: data.mcp ?? null,
         telemetry: { ...telemetry, chatResponse, prompt: payload, attackMeta },
       }])
       setActiveTelemetry({ ...telemetry, chatResponse })
@@ -205,14 +211,22 @@ export function useAttackSimulator() {
   }, [isProtected, dispatch])
 
   // Called from attack library — MCP attacks use real /api/mcp/invoke, others use /api/chat
-  const sendAttack = useCallback((attack, backend, modelId) => {
+  const sendAttack = useCallback((attack, backend, modelId, mcp = null) => {
     if (attack.mcpTool) return sendMcpAttack(attack, backend, modelId)
-    send({ payload: attack.payload, attackMeta: { label: attack.label, severity: attack.severity, technique: attack.technique }, backend, modelId })
+    send({
+      payload: attack.payload,
+      attackMeta: { label: attack.label, severity: attack.severity, technique: attack.technique },
+      backend, modelId,
+      mcpEnabled: !!mcp?.enabled, mcpServer: mcp?.server ?? 'auto',
+    })
   }, [send, sendMcpAttack])
 
   // Called from free chat input
-  const sendMessage = useCallback((text, backend, modelId, document = null) => {
-    send({ payload: text, attackMeta: null, backend, modelId, document })
+  const sendMessage = useCallback((text, backend, modelId, document = null, mcp = null) => {
+    send({
+      payload: text, attackMeta: null, backend, modelId, document,
+      mcpEnabled: !!mcp?.enabled, mcpServer: mcp?.server ?? 'auto',
+    })
   }, [send])
 
   const clearChat = useCallback(() => {

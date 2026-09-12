@@ -4,6 +4,7 @@ import { ShieldX, ShieldCheck, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 import { PipelineTraceV2 } from './PipelineTraceV2'
+import { McpChainOfThought } from './McpChainOfThought'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // Used by AssistantMessage for Hebrew RTL display — do not remove
@@ -337,6 +338,9 @@ const hebrew = isHebrewText(message.content || '')
           </p>
         )}
       </div>
+
+      {/* MCP chain of thought — only present on the AI-GW tool-calling lane. */}
+      <McpChainOfThought mcp={message.mcp} />
 
       {/* Pipeline Trace (v2 — animated stepper + tabbed details) */}
       <PipelineTraceV2 message={message} />

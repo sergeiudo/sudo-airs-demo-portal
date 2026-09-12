@@ -3,9 +3,10 @@ import { BookOpen, Zap } from 'lucide-react'
 import { ATTACK_CATEGORIES } from '../../data/mockData'
 import { AttackCategory } from './AttackCategory'
 import { ModelSelector } from './ModelSelector'
+import { McpServerPanel } from './McpServerPanel'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
-export function AttackLibrary({ onSelectAttack, backend, model, onBackendChange, onModelChange }) {
+export function AttackLibrary({ onSelectAttack, backend, model, onBackendChange, onModelChange, mcp, onMcpChange }) {
   const theme = useProtectionTheme()
   const totalAttacks = ATTACK_CATEGORIES.reduce(
     (a, c) => a + (c.attacks?.length ?? c.subCategories?.reduce((s, sc) => s + (sc.attacks?.length ?? 0), 0) ?? 0),
@@ -32,6 +33,14 @@ export function AttackLibrary({ onSelectAttack, backend, model, onBackendChange,
           onBackendChange={onBackendChange}
           onModelChange={onModelChange}
         />
+
+        {/* MCP is only wired on the AI-GW lane — the other three backends are
+            direct provider calls with no gateway to broker a tool server. */}
+        {backend === 'aigw' && (
+          <div className="mt-2">
+            <McpServerPanel enabled={mcp.enabled} server={mcp.server} onChange={onMcpChange} />
+          </div>
+        )}
       </div>
 
       {/* Quick fire hint */}

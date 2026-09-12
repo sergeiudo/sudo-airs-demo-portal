@@ -48,14 +48,25 @@ export function ApiInterceptView() {
 
   const { messages, activeTelemetry, isLoading, sendAttack, sendMessage, clearChat } = useAttackSimulator()
 
+  // MCP tool calling. Off by default and meaningful only on the AI-GW backend;
+  // switching away from it leaves the state alone so coming back restores the
+  // operator's choice mid-demo.
+  const [mcp, setMcp] = useState({ enabled: false, server: 'auto' })
+  const mcpActive = backend === 'aigw' && mcp.enabled ? mcp : null
+
   const handleBackendChange = (b) => {
     setBackend(b)
     setModel(DEFAULT_MODELS[b])
   }
 
   const handleSelectAttack = (attack) => {
-    sendAttack(attack, backend, model)
+    sendAttack(attack, backend, model, mcpActive)
   }
+
+  const handleSendMessage = useCallback(
+    (text, be, m, doc) => sendMessage(text, be, m, doc, backend === 'aigw' && mcp.enabled ? mcp : null),
+    [sendMessage, backend, mcp]
+  )
 
   // Right handle
   const onMouseDown = useCallback((e) => {
@@ -110,6 +121,8 @@ export function ApiInterceptView() {
           model={model}
           onBackendChange={handleBackendChange}
           onModelChange={setModel}
+          mcp={mcp}
+          onMcpChange={setMcp}
         />
       </div>
 
@@ -134,10 +147,11 @@ export function ApiInterceptView() {
         <ChatCenter
           messages={messages}
           isLoading={isLoading}
-          onSendMessage={sendMessage}
+          onSendMessage={handleSendMessage}
           onClear={clearChat}
           backend={backend}
           model={model}
+          mcp={mcp}
           onOpenTelemetry={setTelemetryDrawer}
         />
       </div>
