@@ -48,7 +48,12 @@ export function useAttackSimulator() {
       content: payload,
       attackMeta,
       // Card metadata only — the extracted text is never held on the message.
-      attachment: document ? { name: document.name, kind: document.kind, pages: document.pages, chars: document.chars } : null,
+      attachment: document
+        ? {
+            name: document.name, kind: document.kind, pages: document.pages,
+            chars: document.chars, scanned: !!document.scanned, scanId: document.scanId ?? null,
+          }
+        : null,
       timestamp: new Date().toISOString(),
     }
 

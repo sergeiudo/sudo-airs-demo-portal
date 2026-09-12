@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShieldX, ShieldCheck, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check, Activity, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ShieldX, ShieldCheck, Info, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Languages, Copy, Check, Activity, ChevronDown, AlertTriangle, CheckCircle2, FileText } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 import { PipelineTraceV2 } from './PipelineTraceV2'
@@ -116,6 +116,46 @@ function UserMessage({ message, onResend, onTranslate, isLoading, isTranslating 
             {message.attackMeta.severity.toUpperCase()}
           </span>
         </motion.div>
+      )}
+
+      {/* Attached file — shown as a file, the way any chat client shows one.
+          The extracted text is never rendered here: it goes to the model as its
+          own labelled block, and putting it in the user's own bubble would both
+          bury what they typed and misrepresent who said it. */}
+      {message.attachment && (
+        <div
+          className="flex items-center gap-2.5 px-3 py-2 mb-1.5 rounded-[16px] max-w-[78%]"
+          style={{
+            background: 'rgba(99, 155, 255, 0.13)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            border: '1px solid rgba(147, 197, 253, 0.18)',
+          }}
+        >
+          <FileText size={15} className="flex-shrink-0 text-blue-400" />
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold truncate max-w-[240px]" style={{ color: 'var(--user-bubble-text)' }}>
+              {message.attachment.name}
+            </div>
+            <div className="text-[9px] text-slate-500 font-mono">
+              {[
+                message.attachment.kind?.toUpperCase(),
+                message.attachment.pages ? `${message.attachment.pages} pages` : null,
+                message.attachment.chars ? `${message.attachment.chars.toLocaleString()} chars` : null,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          {message.attachment.scanned ? (
+            <span className="flex items-center gap-1 text-[8.5px] font-bold text-emerald-400 flex-shrink-0 ml-1"
+                  title={message.attachment.scanId ? `AIRS scan_id ${message.attachment.scanId}` : undefined}>
+              <ShieldCheck size={12} /> SCANNED
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[8.5px] font-bold text-amber-400 flex-shrink-0 ml-1">
+              <AlertTriangle size={12} /> NOT SCANNED
+            </span>
+          )}
+        </div>
       )}
 
       {/* Bubble */}

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, MessageSquare, Send, RotateCcw, Plus, ShieldCheck, Cpu, User, AlertTriangle, CheckCircle2, ShieldX, Zap, Lock, Paperclip, X, FileText } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
 import { AigwWelcome } from './AigwFlowDiagram'
+import { FileDropModal, DropOverlay, useDropTarget } from '../upload/FileDropZone'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 
@@ -348,7 +349,7 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
   // never gets its text back from the server, so it cannot become model input.
   const [attachment, setAttachment] = useState(null)
   const [uploadBusy, setUploadBusy] = useState(false)
-  const fileRef = useRef(null)
+  const [dropOpen, setDropOpen] = useState(false)
 
   const uploadFile = useCallback(async (file) => {
     setUploadBusy(true)
@@ -408,13 +409,29 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Dropping anywhere on the console attaches, without opening the dialog —
+  // the dialog is for people who want to read the limits first.
+  const { dragging, handlers: dropHandlers } = useDropTarget(uploadFile, { enabled: !isLoading && !uploadBusy })
+
+  // A file still being scanned must hold the send, not be dropped. Without
+  // this the message goes without the attachment and nothing says so — the
+  // model answers "what document?" and the attachment looks broken.
+  const attachmentPending = attachment?.status === 'scanning' || uploadBusy
+
   const handleSubmit = (e) => {
     e?.preventDefault()
     const text = input.trim()
-    if (!text || isLoading) return
+    if (!text || isLoading || attachmentPending) return
     // Only a cleared document travels with the message.
     const doc = (attachment?.status === 'clean' || attachment?.status === 'unscanned') && attachment.text
-      ? { name: attachment.name, text: attachment.text, kind: attachment.kind, pages: attachment.pages, chars: attachment.chars }
+      ? {
+          name: attachment.name, text: attachment.text, kind: attachment.kind,
+          pages: attachment.pages, chars: attachment.chars,
+          // Carried so the file card can state whether AIRS actually cleared
+          // it. A card with a green shield on an unscanned file is the exact
+          // failure mode the amber state exists to prevent.
+          scanned: attachment.status === 'clean', scanId: attachment.scanId ?? null,
+        }
       : null
     onSendMessage(text, backend, model, doc)
     setInput('')
@@ -429,7 +446,17 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="relative flex flex-col h-full overflow-hidden" {...dropHandlers}>
+      <DropOverlay visible={dragging} isProtected={theme.isProtected} />
+      <FileDropModal
+        open={dropOpen}
+        onClose={() => setDropOpen(false)}
+        onFile={uploadFile}
+        isProtected={theme.isProtected}
+        busy={uploadBusy}
+        limitsUrl="/api/upload/limits"
+      />
+
       {/* Header */}
       <div
         className="flex items-center gap-2 px-4 py-3 flex-shrink-0"
@@ -570,22 +597,11 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
               ? 'border-emerald-500/30 bg-emerald-500/5 focus-within:border-emerald-500/50'
               : 'border-white/10 bg-white/5 focus-within:border-white/20'
           }`}>
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              accept=".pdf,.docx,.csv,.txt,.md,.json,.tsv,.log,.rtf,.xml,.yaml,.yml"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) uploadFile(f)
-                e.target.value = '' // allow re-picking the same file after a block
-              }}
-            />
             <button
               type="button"
-              onClick={() => fileRef.current?.click()}
+              onClick={() => setDropOpen(true)}
               disabled={isLoading || uploadBusy}
-              title="Attach a document — scanned by AIRS before it is sent"
+              title="Attach a document — drag one in, or click for formats and limits"
               className={`flex-shrink-0 p-2 rounded-lg border transition-colors disabled:opacity-30 ${
                 theme.isProtected
                   ? 'text-emerald-300 border-emerald-500/45 bg-emerald-500/12 hover:bg-emerald-500/25'
@@ -611,7 +627,8 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
             />
             <button
               type="submit"
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || attachmentPending}
+              title={attachmentPending ? 'Waiting for the AIRS scan to finish' : undefined}
               className={`flex-shrink-0 p-2 rounded-lg transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed
                 ${theme.isProtected
                   ? 'bg-emerald-500 text-black hover:bg-emerald-400'

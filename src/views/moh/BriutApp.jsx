@@ -12,6 +12,7 @@ import { mohTheme, MOH_RISK_COLORS, mohPopover } from './theme'
 import { MOH_ATTACKS_BY_FAMILY, MOH_SEVERITY_COLORS, MOH_DETECTORS } from '../../data/moh/attacks'
 import { ScanStageCard, AirsPayloadViewer, VerdictPill, DetectionBadges, CopyButton } from './components/ScanPanels'
 import { subscribe, publish, MOH_EVENTS } from './bus'
+import { FileDropModal, DropOverlay, useDropTarget } from '../../components/upload/FileDropZone'
 
 /**
  * BriutApp — בריאות.AI, the citizen-facing Ministry of Health assistant.
@@ -773,11 +774,11 @@ function AttachChip({ file, theme, onRemove }) {
   )
 }
 
-function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemoveFile, uploadBusy }) {
+function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemoveFile, uploadBusy, protectionOn }) {
   const { t, dir } = useMohLang()
   const [text, setText] = useState('')
   const taRef = useRef(null)
-  const fileRef = useRef(null)
+  const [dropOpen, setDropOpen] = useState(false)
   const chips = t('chat.chips') || []
   // A blocked or still-scanning document must not ride along with the message.
   const canSendFile = attachment?.status === 'clean' || attachment?.status === 'unscanned'
@@ -834,15 +835,25 @@ function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemo
           background: theme.surfaceMuted, border: `1px solid ${theme.borderStrong}`,
         }}
       >
-        <input
-          ref={fileRef}
-          type="file"
-          style={{ display: 'none' }}
-          accept=".pdf,.docx,.csv,.txt,.md,.json,.tsv,.log,.rtf,.xml,.yaml,.yml"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) onPickFile(f)
-            e.target.value = '' // let the same file be picked again after a block
+        <FileDropModal
+          open={dropOpen}
+          onClose={() => setDropOpen(false)}
+          onFile={onPickFile}
+          isProtected={protectionOn}
+          busy={uploadBusy}
+          limitsUrl="/api/moh/upload/limits"
+          dir={dir}
+          t={{
+            title: t('upload.dropTitle'), subtitle: t('upload.dropSubtitle'),
+            drop: t('upload.drop'), or: t('upload.or'), browse: t('upload.browse'),
+            dropNow: t('upload.dropNow'), formats: t('upload.formats'),
+            maxSize: t('upload.maxSize'), scanned: t('upload.scannedLabel'),
+            // The value is a template, not a plain string — Hebrew puts the
+            // number before the noun, so it cannot be concatenated in the
+            // shared component.
+            scannedValue: (n) => String(t('upload.scannedValue')).replace('{n}', n.toLocaleString()),
+            protectedNote: t('upload.protectedNote'), unprotectedNote: t('upload.unprotectedNote'),
+            retention: t('upload.retention'), reading: t('upload.reading'),
           }}
         />
         {/* Tinted rather than a bare grey outline: the attach affordance is a
@@ -850,7 +861,7 @@ function Composer({ theme, onSend, busy, onClear, attachment, onPickFile, onRemo
             model sees it) and a muted paperclip read as decoration. */}
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => setDropOpen(true)}
           disabled={busy || uploadBusy}
           title={t('upload.attach')}
           style={{
@@ -1358,6 +1369,7 @@ function BriutAppInner({ embedded = false }) {
         onClear={clear}
         attachment={attachment}
         uploadBusy={uploadBusy}
+        protectionOn={protectionOn}
         onPickFile={uploadFile}
         onRemoveFile={() => setAttachment(null)}
         onSend={(text, file) => {
