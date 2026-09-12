@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu, ShieldCheck } from 'lucide-react'
+import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu, ShieldCheck, Building2 } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 
@@ -228,6 +228,32 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             />
           )}
         </button>
+
+        {/* ── Which SCM tenant this backend logs to ──
+            The AI-GW route is enforced by a guardrail on the personal tenant,
+            so its scans never appear in the team console the other three
+            backends use. Without this line the audience looks for the log in
+            the wrong place and concludes nothing was scanned. */}
+        {backend === 'aigw' && (
+          <div
+            className="flex items-start gap-2 px-2.5 py-2 rounded-lg border"
+            style={{
+              background: isLight ? 'rgba(236,72,153,0.07)' : 'rgba(236,72,153,0.10)',
+              borderColor: isLight ? 'rgba(236,72,153,0.28)' : 'rgba(236,72,153,0.30)',
+            }}
+          >
+            <Building2 size={11} style={{ color: '#EC4899', flexShrink: 0, marginTop: 1 }} />
+            <div className="leading-snug">
+              <p className="text-[10px] font-bold" style={{ color: '#EC4899' }}>
+                Logs go to the SUDO-Personal SCM tenant
+              </p>
+              <p className="text-[9.5px] mt-0.5" style={{ color: C.note }}>
+                TSG 1698236796 — same tenant as Ministry of Health. Vertex, Bedrock and Azure
+                log to the team tenant instead.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Dropdown panel ── */}
@@ -244,7 +270,9 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
           >
             {/* Search + refresh */}
             <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: C.divider }}>
-              <img src={activeTab?.logo} alt="" className="h-3.5 w-auto object-contain opacity-60 flex-shrink-0" />
+              {activeTab?.logo
+                ? <img src={activeTab.logo} alt="" className="h-3.5 w-auto object-contain opacity-60 flex-shrink-0" />
+                : <ShieldCheck size={13} className="flex-shrink-0" style={{ color: activeTab?.activeColor, opacity: 0.7 }} />}
               <input
                 autoFocus
                 value={filter}

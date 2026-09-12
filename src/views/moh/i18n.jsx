@@ -32,6 +32,10 @@ export const STRINGS = {
       workspaceHint: 'הגרדריל של Prisma AIRS מוחל על כל בקשה בסביבת העבודה, ולכן לא ניתן לכבות אותו לתנועת צ׳אט. המתג בלשונית הסוכן שולט בסריקות tool_event הישירות.',
       toolScanLabel: 'סריקת AIRS לכלים (tool_event)',
     },
+    tenant: {
+      label: 'יומני SCM',
+      note: 'כל הסריקות בפילר הזה נרשמות בטננט SUDO-Personal (TSG 1698236796) — ולא בטננט הצוותי שמשמש את שאר הפילרים בפורטל.',
+    },
     chat: {
       greeting: 'שלום! אני בריאות.AI, העוזר הדיגיטלי של משרד הבריאות. איך אוכל לעזור?',
       placeholder: 'כתבו כאן שאלה בנושא בריאות…',
@@ -253,6 +257,10 @@ export const STRINGS = {
       workspaceEnforced: 'enforced at workspace level',
       workspaceHint: 'The Prisma AIRS guardrail applies to every request in this workspace, so it cannot be switched off for chat traffic. The toggle on the Agent tab controls the direct tool_event scans.',
       toolScanLabel: 'AIRS tool scanning (tool_event)',
+    },
+    tenant: {
+      label: 'SCM logs',
+      note: 'Every scan in this pillar is logged to the SUDO-Personal tenant (TSG 1698236796) — not the team tenant the other portal pillars use.',
     },
     chat: {
       greeting: "Hello! I'm Briut.AI, the Ministry of Health digital assistant. How can I help?",

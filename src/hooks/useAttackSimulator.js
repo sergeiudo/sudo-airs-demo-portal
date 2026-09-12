@@ -3,10 +3,15 @@ import { useAppContext } from '../context/AppContext'
 
 const SCM_BASE = 'https://stratacloudmanager.paloaltonetworks.com/ai-security/runtime/ai-sessions'
 const SCM_TSG_ID = '1986626000'
+// The AI-GW route is enforced by a guardrail on the SUDO-Personal tenant, so
+// its scans are not in the team console — deep-linking there shows an empty
+// list and reads as "nothing was scanned".
+const SCM_TSG_ID_AIGW = '1698236796'
 
-function buildScmUrl(inputScan) {
+function buildScmUrl(inputScan, backend) {
   if (!inputScan?.scan_id) return null
-  return `${SCM_BASE}?tsg_id=${SCM_TSG_ID}`
+  const tsg = backend === 'aigw' ? SCM_TSG_ID_AIGW : SCM_TSG_ID
+  return `${SCM_BASE}?tsg_id=${tsg}`
 }
 
 function makeErrorMessage(blockReason) {
@@ -95,7 +100,7 @@ export function useAttackSimulator() {
       }])
       setActiveTelemetry({ ...telemetry, chatResponse })
 
-      const url = buildScmUrl(telemetry.inputScan)
+      const url = buildScmUrl(telemetry.inputScan, backend)
       if (url) dispatch({ type: 'SET_SCM_URL', payload: url })
     } catch (err) {
       setMessages(prev => [...prev, makeErrorMessage(`Connection error: ${err.message}. Is the proxy server running?`)])

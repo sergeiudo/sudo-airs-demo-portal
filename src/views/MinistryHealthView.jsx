@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   HeartPulse, MessageSquare, FileText, Wrench, Grid3x3, Scale, ExternalLink,
-  Play, RefreshCw, ShieldCheck, ShieldOff, AlertTriangle, CheckCircle2, XCircle, Server,
+  Play, RefreshCw, ShieldCheck, ShieldOff, AlertTriangle, CheckCircle2, XCircle, Server, Building2,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { MohLangProvider, useMohLang } from './moh/i18n'
@@ -1146,6 +1146,25 @@ function MinistryHealthInner() {
           <PillarLangToggle theme={theme} />
         </div>
       </nav>
+
+      {/* Which SCM tenant this pillar logs to. It is the one thing about this
+          demo that is not visible from the UI: the whole pillar runs against
+          SUDO-Personal while the other nine run against the team tenant, so
+          without this line someone opens the team console, sees nothing and
+          concludes the scans did not happen. */}
+      <div
+        dir={dir}
+        style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7,
+          padding: '6px 16px', fontSize: 11, lineHeight: 1.45,
+          background: `${ACCENT}0e`, borderBottom: `1px solid ${theme.border}`,
+          color: theme.textMuted,
+        }}
+      >
+        <Building2 size={12} style={{ color: ACCENT, flexShrink: 0 }} />
+        <span style={{ fontWeight: 800, color: ACCENT }}>{t('tenant.label')}</span>
+        <span dir="auto">{t('tenant.note')}</span>
+      </div>
 
       {/* All tabs stay mounted so an in-flight or completed run survives a tab switch. */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
