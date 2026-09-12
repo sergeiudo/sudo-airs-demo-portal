@@ -4,6 +4,7 @@ import { ChatCenter } from '../components/api-intercept/ChatCenter'
 import { TelemetrySidebar } from '../components/api-intercept/TelemetrySidebar'
 import { useAttackSimulator } from '../hooks/useAttackSimulator'
 import { useProtectionTheme } from '../hooks/useProtectionTheme'
+import { useAppContext } from '../context/AppContext'
 import { PromptTelemetryDrawer } from '../components/api-intercept/PromptTelemetryDrawer'
 
 // Starting selection per backend. These must exist in the curated list the
@@ -45,18 +46,25 @@ export function ApiInterceptView() {
   const libDragStartWidth = useRef(0)
 
   const theme = useProtectionTheme()
+  const { dispatch } = useAppContext()
 
   const { messages, activeTelemetry, isLoading, sendAttack, sendMessage, clearChat } = useAttackSimulator()
 
-  // MCP tool calling. Off by default and meaningful only on the AI-GW backend;
-  // switching away from it leaves the state alone so coming back restores the
-  // operator's choice mid-demo.
-  const [mcp, setMcp] = useState({ enabled: false, server: 'auto' })
+  // MCP tool calling. On by default — the AI-GW backend exists to show the
+  // gateway + tool story, so the interesting configuration should be the one
+  // you land on. It only takes effect on that backend either way.
+  const [mcp, setMcp] = useState({ enabled: true, server: 'auto' })
   const mcpActive = backend === 'aigw' && mcp.enabled ? mcp : null
 
   const handleBackendChange = (b) => {
     setBackend(b)
     setModel(DEFAULT_MODELS[b])
+    // Selecting AI-GW turns protection on. Unprotected is the meaningful
+    // default for the API-layer backends (watch an attack land, then switch
+    // AIRS on), but here the guardrail IS the architecture being shown — an
+    // unprotected AI-GW session is just a slower Bedrock call. Protection
+    // stays wherever it is when switching away; this only sets, never clears.
+    if (b === 'aigw') dispatch({ type: 'SET_PROTECTION', payload: true })
   }
 
   const handleSelectAttack = (attack) => {

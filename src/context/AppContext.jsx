@@ -14,6 +14,10 @@ function appReducer(state, action) {
   switch (action.type) {
     case 'TOGGLE_PROTECTION':
       return { ...state, isProtected: !state.isProtected }
+    // Explicit setter, not a conditional TOGGLE from a caller — two dispatches
+    // in the same render (e.g. a backend switch during mount) would cancel out.
+    case 'SET_PROTECTION':
+      return { ...state, isProtected: !!action.payload }
     case 'SET_VIEW':
       return { ...state, activeView: action.payload }
     case 'SET_SCM_URL':
