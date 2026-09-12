@@ -243,12 +243,12 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
           {pillar.highlights.map(hl).map(({ t, tag }) => (
             <li key={t} className="flex items-start gap-2 text-[11px]" style={{ color: bulletColor }}>
               <ChevronRight size={10} style={{ color: pillar.accent, flexShrink: 0, marginTop: 3 }} />
-              <span className="leading-snug" style={tag ? { color: pillar.accent, fontWeight: 700 } : undefined}>
+              <span className="leading-snug">
                 {t}
                 {tag && (
                   <span
                     className="ml-1.5 px-1.5 py-[1px] rounded-full text-[8px] font-black tracking-wider align-middle"
-                    style={{ background: `${pillar.accent}22`, color: pillar.accent, border: `1px solid ${pillar.accent}45` }}
+                    style={{ background: pillar.accent, color: '#ffffff' }}
                   >
                     {tag}
                   </span>
@@ -381,17 +381,12 @@ function HeroCard({ pillar, onClose, onLaunch, isDark }) {
               transition={{ delay: 0.18 + i * 0.05 }}
               className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
               style={{
-                background: tag ? `${pillar.accent}1f` : highlightBg(pillar.accent),
-                border: `1px solid ${tag ? `${pillar.accent}55` : highlightBorder(pillar.accent)}`,
+                background: highlightBg(pillar.accent),
+                border: `1px solid ${highlightBorder(pillar.accent)}`,
               }}
             >
               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: pillar.accent }} />
-              <span
-                className="text-[12px] font-medium"
-                style={tag ? { color: pillar.accent, fontWeight: 700 } : { color: highlightText }}
-              >
-                {t}
-              </span>
+              <span className="text-[12px] font-medium" style={{ color: highlightText }}>{t}</span>
               {tag && (
                 <span
                   className="ml-auto px-1.5 py-[2px] rounded-full text-[9px] font-black tracking-wider flex-shrink-0"
