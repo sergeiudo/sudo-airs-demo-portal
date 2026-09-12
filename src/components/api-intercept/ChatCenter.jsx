@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, MessageSquare, Send, RotateCcw, Plus, ShieldCheck, Cpu, User, AlertTriangle, CheckCircle2, ShieldX, Zap, Lock, Paperclip, X, FileText } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
+import { AigwWelcome } from './AigwFlowDiagram'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 
@@ -334,7 +335,7 @@ const staggerContainer = {
   animate: { transition: { staggerChildren: 0.06 } },
 }
 
-export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backend, model, onOpenTelemetry }) {
+export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backend, model, onOpenTelemetry, mcp }) {
   const theme = useProtectionTheme()
   const { state } = useAppContext()
   const isDark = state.isDark !== false
@@ -461,7 +462,11 @@ export function ChatCenter({ messages, isLoading, onSendMessage, onClear, backen
       {/* Messages or Welcome Diagram */}
       <div className="flex-1 overflow-y-auto py-4">
         {!hasConversation ? (
-          <WelcomeDiagram isProtected={theme.isProtected} theme={theme} />
+          backend === 'aigw' ? (
+            <AigwWelcome isProtected={theme.isProtected} mcpEnabled={!!mcp?.enabled} model={model} />
+          ) : (
+            <WelcomeDiagram isProtected={theme.isProtected} theme={theme} />
+          )
         ) : (
           <motion.div variants={staggerContainer} animate="animate">
             <AnimatePresence>
