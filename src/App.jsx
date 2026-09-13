@@ -2,6 +2,12 @@ import React, { useEffect } from 'react'
 import { AppProvider, useAppContext } from './context/AppContext'
 import { MainLayout } from './components/layout/MainLayout'
 import { ApiInterceptView } from './views/ApiInterceptView'
+import { ApiIntercept2027 } from './views/api-intercept-2027/ApiIntercept2027'
+
+// On the redesign branch the new console is the default; ?ui=legacy brings the
+// current one back so the two can be compared without a rebuild.
+const LEGACY_UI = new URLSearchParams(window.location.search).get('ui') === 'legacy'
+const Intercept = () => (LEGACY_UI ? <ApiInterceptView /> : <ApiIntercept2027 />)
 import { ModelScanningView } from './views/ModelScanningView'
 import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
@@ -38,7 +44,7 @@ function AppContent() {
 
   const renderView = () => {
     switch (state.activeView) {
-      case 'apiIntercept':   return <ApiInterceptView />
+      case 'apiIntercept':   return <Intercept />
       case 'modelScanning':  return <ModelScanningView />
       case 'redTeaming':     return <RedTeamingView />
       case 'claudeHooks':    return <ClaudeHooksView />
@@ -48,7 +54,7 @@ function AppContent() {
       case 'ragSecurity':      return <RagSecurityView />
       case 'llmGateway':       return <LlmGatewayView />
       case 'ministryHealth':   return <MinistryHealthView />
-      default:                 return <ApiInterceptView />
+      default:                 return <Intercept />
     }
   }
 

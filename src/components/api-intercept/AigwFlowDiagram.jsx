@@ -102,7 +102,7 @@ export function AigwFlowDiagram({ isProtected, mcpEnabled, model }) {
               fill={PINK} fillOpacity={0.04} stroke={PINK} strokeOpacity={0.3}
               strokeWidth={1.2} strokeDasharray="6 4" />
         <text x={248} y={44} fontFamily={SANS} fontSize={9.5} fontWeight={800} letterSpacing="1.3" fill={PINK}>
-          SCM AI GATEWAY · aigw.portkey.ai
+          SCM AI-GW · aigw.portkey.ai
         </text>
         <text x={880} y={44} textAnchor="end" fontFamily={MONO} fontSize={8.5} fill={SLATE} opacity={0.75}>
           {isProtected ? 'config: AIGW_CONFIG_PROTECTED' : 'config: AIGW_CONFIG_UNPROTECTED'}
@@ -238,7 +238,7 @@ export function AigwWelcome({ isProtected, mcpEnabled, model }) {
     >
       <div className="mb-3">
         <p className="text-[10px] font-black tracking-[0.14em] mb-1" style={{ color: PINK }}>
-          SCM AI GATEWAY · SESSION ARCHITECTURE
+          SCM AI-GW · SESSION ARCHITECTURE
         </p>
         <h3 className="text-[15px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
           One control point, five checkpoints

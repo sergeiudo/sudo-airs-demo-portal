@@ -1,0 +1,317 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { Plus } from 'lucide-react'
+import { useAttackSimulator } from '../../hooks/useAttackSimulator'
+import { useProtectionTheme } from '../../hooks/useProtectionTheme'
+import { useAppContext } from '../../context/AppContext'
+import { PromptTelemetryDrawer } from '../../components/api-intercept/PromptTelemetryDrawer'
+import { tokens, FONT, label as LBL, glass, bloom, verdictOf } from './tokens'
+import { InterceptLine } from './InterceptLine'
+import { AttackLibrary } from '../../components/api-intercept/AttackLibrary'
+import { RecordStream } from './RecordStream'
+import { EvidencePane } from './EvidencePane'
+import { Composer } from './Composer'
+import { SessionArchitecture } from './SessionArchitecture'
+import { useModelLabel } from './useModelLabel'
+
+/**
+ * ApiIntercept2027 — the console shell.
+ *
+ * Presentation only. Every data path is the existing one: useAttackSimulator,
+ * /api/chat, /api/models/*, /api/mcp/servers, /api/upload/*. Nothing on the
+ * server changed for this redesign, which is what makes it safe to run beside
+ * the current view rather than instead of it.
+ */
+
+const DEFAULT_MODELS = {
+  vertex:  'gemini-2.5-flash',
+  bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
+  azure:   'gpt-5.4-nano',
+  aigw:    '@sudo-bedrock/moonshotai.kimi-k2.5',
+}
+
+const LIMITS = { left: [264, 572], right: [286, 616] }
+
+/** Draggable pane edge. Wide invisible hit area, 1px visible track. */
+function Handle({ t, onDrag, dragging, side }) {
+  const startX = useRef(0)
+  const startW = useRef(0)
+
+  const down = (e) => {
+    e.preventDefault()
+    startX.current = e.clientX
+    startW.current = onDrag.width
+    onDrag.setDragging(true)
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+    const move = (e) => {
+      const delta = side === 'left' ? e.clientX - startX.current : startX.current - e.clientX
+      const [min, max] = LIMITS[side]
+      onDrag.setWidth(Math.min(max, Math.max(min, startW.current + delta)))
+    }
+    const up = () => onDrag.setDragging(false)
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+  }, [dragging, side, onDrag])
+
+  return (
+    <div onMouseDown={down} className="relative flex-shrink-0 group" style={{ width: 1, cursor: 'col-resize' }}>
+      <div className="absolute inset-y-0 -left-2 -right-2 z-10" />
+      <div className="h-full w-full transition-colors"
+           style={{ background: dragging ? t.block : t.hairline }} />
+      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col justify-center gap-1 pointer-events-none">
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="rounded-full" style={{ width: 2, height: 2, background: dragging ? t.block : t.inkFaint, opacity: dragging ? 1 : 0.5 }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function ApiIntercept2027() {
+  const { state, dispatch } = useAppContext()
+  const theme = useProtectionTheme()
+  const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
+  const isProtected = theme.isProtected
+
+  const [backend, setBackend] = useState('bedrock')
+  const [model, setModel] = useState(DEFAULT_MODELS.bedrock)
+  const [mcp, setMcp] = useState({ enabled: true, server: 'auto' })
+  const [selectedId, setSelectedId] = useState(null)
+  const [traceDrawer, setTraceDrawer] = useState(null)
+
+  const [leftW, setLeftW] = useState(330)
+  const [rightW, setRightW] = useState(352)
+  const [dragL, setDragL] = useState(false)
+  const [dragR, setDragR] = useState(false)
+
+  const { messages, isLoading, sendAttack, sendMessage, clearChat } = useAttackSimulator()
+
+  const mcpActive = backend === 'aigw' && mcp.enabled ? mcp : null
+  // The picker's label, not the routing id — see useModelLabel.
+  const modelLabel = useModelLabel(backend, model)
+
+  /**
+   * Every backend opens protected.
+   *
+   * This used to be AI-GW only, on the argument that the API-layer lanes are
+   * best demoed by watching an attack land first. In practice the console was
+   * opening on VULNERABLE and a payload that sailed through read as a broken
+   * demo rather than as the point. Protected is the honest default state of
+   * the product; turning AIRS off is now the deliberate move, in either
+   * direction, from the pill in the top bar or the sidebar toggle.
+   */
+  useEffect(() => { dispatch({ type: 'SET_PROTECTION', payload: true }) }, [dispatch])
+
+  /**
+   * Changing target starts a fresh session.
+   *
+   * A transcript belongs to the thing that produced it. Carrying records across
+   * a switch left the column holding answers from a target that is no longer
+   * selected, the SCM deep link pointing at the previous tenant's console, and
+   * the diagram describing a route none of the visible records took. Clearing
+   * also puts the architecture back on screen, which is the right moment to
+   * explain the new shape.
+   *
+   * Re-clicking the target already selected is not a switch and leaves the
+   * session alone.
+   */
+  const changeBackend = (b) => {
+    if (b === backend) return
+    clearChat()
+    setSelectedId(null)
+    setUploadScan(null)
+    dispatch({ type: 'SET_SCM_URL', payload: null })
+    setBackend(b)
+    setModel(DEFAULT_MODELS[b])
+    dispatch({ type: 'SET_PROTECTION', payload: true })
+  }
+
+  const [translating, setTranslating] = useState(null)
+  const [uploadScan, setUploadScan] = useState(null)
+
+  const fire = useCallback((attack) => sendAttack(attack, backend, model, mcpActive), [sendAttack, backend, model, mcpActive])
+  const send = useCallback((text, doc) => sendMessage(text, backend, model, doc, mcpActive), [sendMessage, backend, model, mcpActive])
+
+  const resend = useCallback((text) => sendMessage(text, backend, model, null, mcpActive), [sendMessage, backend, model, mcpActive])
+
+  /**
+   * Translate a payload for a non-English audience. Deliberately unprotected:
+   * the point is to read the payload, and scanning the translation request
+   * itself would just block it and teach the room nothing.
+   */
+  const translate = useCallback(async (text, language) => {
+    setTranslating(text)
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Translate the following text to ${language}. Return ONLY the translated text, nothing else:\n\n${text}`,
+          airsEnabled: false, backend, modelId: model,
+        }),
+      })
+      const d = await r.json()
+      // Fire the translation as a new payload, the way the original console
+      // did. The point of translating an attack is to see whether the
+      // detectors hold in that language — dropping the text into an alert box
+      // ends the demo one step early.
+      const translated = d.chatResponse?.content?.trim() || text
+      send(translated)
+    } catch {
+      // The translation hop is unprotected and off to the side; if it fails,
+      // fire the original rather than stalling on an error dialog.
+      send(text)
+    } finally {
+      setTranslating(null)
+    }
+  }, [backend, model, send])
+
+  // The rail follows the newest turn unless the operator has pinned an older
+  // one by clicking it.
+  const lastAssistant = useMemo(() => [...messages].reverse().find((m) => m.role === 'assistant'), [messages])
+  const selected = useMemo(
+    () => messages.find((m) => m.id === selectedId) ?? lastAssistant ?? null,
+    [messages, selectedId, lastAssistant]
+  )
+  useEffect(() => { setSelectedId(null) }, [messages.length])
+
+  // A file scan is shown in the telemetry pane as its own turn, using the same
+  // renderers as a chat turn, until the next message supersedes it.
+  const uploadTurn = useMemo(() => {
+    if (!uploadScan?.scanDetail) return null
+    const d = uploadScan.scanDetail
+    return {
+      id: 'upload-scan',
+      blocked: !!uploadScan.blocked,
+      verdict: uploadScan.blocked ? 'BLOCKED' : uploadScan.airsEnabled === false ? 'DIRECT' : 'ALLOWED',
+      content: uploadScan.blockReason ?? null,
+      upload: uploadScan,
+      telemetry: {
+        summary: { model: `upload · ${uploadScan.name}` },
+        inputScan: d,
+        outputScan: null,
+        timing: { airs_input_scan_ms: d.latency_ms ?? uploadScan.latencyMs, llm_ms: null, airs_output_scan_ms: null, total_ms: uploadScan.latencyMs },
+        llm: {},
+      },
+    }
+  }, [uploadScan])
+
+  useEffect(() => { setUploadScan(null) }, [messages.length])
+
+  const paneMessage = uploadTurn ?? selected
+  const phase = isLoading ? 'inflight' : selected ? 'resolved' : 'idle'
+  const verdict = verdictOf(selected)
+  const blockedStage = selected?.telemetry?.outputScan?.action === 'block' ? 'output' : 'input'
+  const hasRecords = messages.some((m) => m.role === 'user')
+
+  return (
+    <div className="relative flex h-full overflow-hidden"
+         style={{ background: t.ground, cursor: dragL || dragR ? 'col-resize' : 'default', userSelect: dragL || dragR ? 'none' : 'auto' }}>
+
+      {/* Ambient ground — grid + a slow sweep. Powered-on, not decorated. */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(${t.grid} 1px, transparent 1px), linear-gradient(90deg, ${t.grid} 1px, transparent 1px)`,
+        backgroundSize: '44px 44px',
+      }} />
+      {isProtected && (
+        <motion.div
+          className="absolute inset-y-0 pointer-events-none"
+          style={{ width: 260, background: `linear-gradient(90deg, transparent, ${t.pass}0a, transparent)` }}
+          animate={{ left: ['-20%', '110%'] }}
+          transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
+        />
+      )}
+
+      <div className="relative flex-shrink-0 overflow-hidden py-3 pl-3" style={{ width: leftW }}>
+        <div className="h-full overflow-hidden" style={glass(t, { radius: 18 })}>
+          <AttackLibrary
+            onSelectAttack={fire}
+            backend={backend} model={model}
+            onBackendChange={changeBackend} onModelChange={setModel}
+            mcp={mcp} onMcpChange={setMcp}
+          />
+        </div>
+      </div>
+      <Handle t={t} side="left" dragging={dragL} onDrag={{ width: leftW, setWidth: setLeftW, setDragging: setDragL }} />
+
+      <div className="relative flex-1 min-w-0 flex flex-col">
+        {/* The line describes a turn; with no turns yet it is an empty rail
+            taking the room's attention away from the architecture. */}
+        {hasRecords && (
+        <InterceptLine
+          t={t}
+          phase={phase}
+          verdict={verdict}
+          isProtected={isProtected}
+          backend={backend}
+          timing={selected?.telemetry?.timing}
+          blockedStage={blockedStage}
+          modelLabel={modelLabel}
+        />
+        )}
+
+        {/* Session strip */}
+        <div className="flex items-center gap-3 px-6 py-2 flex-shrink-0 mx-3 mt-2 rounded-xl"
+             style={{ background: t.sunken, border: `1px solid ${t.hairline}` }}>
+          <span style={{ ...LBL, fontSize: 8, color: t.inkFaint }}>
+            {hasRecords ? `${messages.filter((m) => m.role === 'user').length} records this session` : 'no records yet'}
+          </span>
+          {/* Carries the same blue as the outgoing bubble and the CLIENT node:
+              it is an action the operator takes, and at hairline-on-white it
+              was invisible against the strip. */}
+          <button
+            onClick={() => { clearChat(); setSelectedId(null); setUploadScan(null) }}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all"
+            style={{
+              ...LBL, fontSize: 9, color: t.live,
+              background: t.isLight ? 'rgba(74,118,240,0.10)' : 'rgba(74,118,240,0.18)',
+              border: `1px solid ${t.isLight ? 'rgba(74,118,240,0.32)' : 'rgba(74,118,240,0.40)'}`,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = t.isLight ? 'rgba(74,118,240,0.18)' : 'rgba(74,118,240,0.28)'
+              e.currentTarget.style.boxShadow = bloom(t.live, 0.5)
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = t.isLight ? 'rgba(74,118,240,0.10)' : 'rgba(74,118,240,0.18)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+            title="Clear the transcript and start a fresh session">
+            <Plus size={11} /> New session
+          </button>
+        </div>
+
+        <RecordStream
+          t={t}
+          messages={messages}
+          isLoading={isLoading}
+          onSelect={(m) => setSelectedId(m?.id ?? null)}
+          selectedId={selected?.id}
+          onOpenTrace={setTraceDrawer}
+          onResend={resend}
+          onTranslate={translate}
+          translating={translating}
+          backend={backend}
+          empty={<SessionArchitecture t={t} backend={backend} model={modelLabel}
+                                      isProtected={isProtected} mcpEnabled={mcp.enabled} />}
+        />
+
+        <Composer
+          t={t} isProtected={isProtected} isLoading={isLoading}
+          onSend={send} backend={backend} model={model} onScan={setUploadScan}
+        />
+      </div>
+
+      <Handle t={t} side="right" dragging={dragR} onDrag={{ width: rightW, setWidth: setRightW, setDragging: setDragR }} />
+      <div className="relative flex-shrink-0 overflow-hidden py-3 pr-3" style={{ width: rightW }}>
+        <EvidencePane t={t} message={paneMessage} scmUrl={state.scmUrl} />
+      </div>
+
+      {traceDrawer && (
+        <PromptTelemetryDrawer traceId={traceDrawer} onClose={() => setTraceDrawer(null)} />
+      )}
+    </div>
+  )
+}

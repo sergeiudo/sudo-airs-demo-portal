@@ -581,8 +581,11 @@ app.post('/api/chat', async (req, res) => {
             model: modelLabel,
             enforcement: airsEnabled ? 'ai-gateway-guardrail + tool_event' : 'none',
           },
-          inputScan: null,
-          outputScan: null,
+          // The loop's own guardrail verdict, so the telemetry pane has the
+          // same detail on this lane as on a plain AI-GW turn. It was null
+          // here, which is why an MCP run showed no detection at all.
+          inputScan: stageFromHook(m.hookResults?.before_request_hooks, 'prompt'),
+          outputScan: stageFromHook(m.hookResults?.after_request_hooks, 'response'),
           timing: { llm_ms: m.latencyMs, airs_input_scan_ms: null, airs_output_scan_ms: null, total_ms: m.latencyMs },
           llm: { model: modelLabel, latency_ms: m.latencyMs, tokens_in: null, tokens_out: null, tokens_total: null, throughput_tps: null, finish_reason: null },
           mcp: { steps: m.steps, servers: m.servers, rounds: m.rounds, toolCalls: m.toolCalls, enabled: true },
@@ -1118,7 +1121,7 @@ app.post('/api/upload/scan', async (req, res) => {
     bytes: 0, chars: 0, totalChars: 0, pages: null, truncated: false,
     chunks: 0, scans: [], scanIncomplete: false,
     blocked: false, blockReason: null, blockedChunk: null,
-    detected: [], excerpt: null, text: null, scanId: null,
+    detected: [], excerpt: null, text: null, scanId: null, scanDetail: null,
     latencyMs: 0, error: null,
   }
   const startedAt = Date.now()
@@ -1171,6 +1174,22 @@ app.post('/api/upload/scan', async (req, res) => {
         }
         const d = scan.data || scan
         const detected = Object.entries(d.prompt_detected || {}).filter(([, v]) => v).map(([k]) => k)
+        // The deciding scan's FULL payload, shaped exactly like a chat turn's
+        // inputScan so the telemetry pane can render an upload with the same
+        // code path — DLP patterns, masked data, per-service report and all.
+        const detail = {
+          action: d.action, category: d.category,
+          scan_id: d.scan_id, report_id: d.report_id, tr_id: d.tr_id,
+          profile_id: d.profile_id, profile_name: d.profile_name,
+          session_id: d.session_id,
+          prompt_detected: d.prompt_detected || {},
+          prompt_detection_details: d.prompt_detection_details ?? null,
+          prompt_masked_data: d.prompt_masked_data ?? null,
+          report: scan.report ?? null,
+          rawResponse: d,
+          latency_ms: scan.latencyMs ?? null,
+        }
+        if (!result.scanDetail) result.scanDetail = detail
         result.scans.push({
           chunk: c.index, start: c.start, chars: c.text.length,
           action: d.action, category: d.category, scan_id: d.scan_id,
@@ -1180,6 +1199,9 @@ app.post('/api/upload/scan', async (req, res) => {
 
         if (d.action === 'block') {
           result.blocked = true
+          // A blocking chunk always wins the detail slot — that is the scan the
+          // operator is going to be asked about.
+          result.scanDetail = detail
           result.blockReason = d.category || 'blocked by AIRS'
           result.blockedChunk = { index: c.index, start: c.start, excerpt: c.text.slice(0, 400) }
           result.scanId = d.scan_id || null

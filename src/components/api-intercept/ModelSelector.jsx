@@ -67,6 +67,7 @@ const STATUS_DOT = {
 }
 
 export function ModelSelector({ backend, model, onBackendChange, onModelChange }) {
+  const [tenantOpen, setTenantOpen] = useState(false)
   const theme = useProtectionTheme()
   // Reactive theme. Every colour below was hardcoded to dark-theme greys, which
   // rendered the model names near-invisible on the light background.
@@ -234,24 +235,44 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             so its scans never appear in the team console the other three
             backends use. Without this line the audience looks for the log in
             the wrong place and concludes nothing was scanned. */}
+        {/* Collapsed to one line by default. The fact has to be *available* —
+            an audience that looks in the team console sees nothing and
+            concludes nothing was scanned — but it is a footnote, and at full
+            height it was pushing the attack library off the panel. */}
         {backend === 'aigw' && (
           <div
-            className="flex items-start gap-2 px-2.5 py-2 rounded-lg border"
+            className="rounded-lg border overflow-hidden"
             style={{
               background: isLight ? 'rgba(236,72,153,0.07)' : 'rgba(236,72,153,0.10)',
               borderColor: isLight ? 'rgba(236,72,153,0.28)' : 'rgba(236,72,153,0.30)',
             }}
           >
-            <Building2 size={11} style={{ color: '#EC4899', flexShrink: 0, marginTop: 1 }} />
-            <div className="leading-snug">
-              <p className="text-[10px] font-bold" style={{ color: '#EC4899' }}>
-                Logs go to the SUDO-Personal SCM tenant
-              </p>
-              <p className="text-[9.5px] mt-0.5" style={{ color: C.note }}>
-                TSG 1698236796 — same tenant as Ministry of Health. Vertex, Bedrock and Azure
-                log to the team tenant instead.
-              </p>
-            </div>
+            <button
+              onClick={() => setTenantOpen((o) => !o)}
+              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left"
+              title="Which SCM tenant this backend logs to"
+            >
+              <Building2 size={10} style={{ color: '#EC4899', flexShrink: 0 }} />
+              <span className="text-[9.5px] font-bold flex-1 min-w-0 truncate" style={{ color: '#EC4899' }}>
+                Logs → SUDO-Personal · TSG 1698236796
+              </span>
+              <ChevronDown size={10} style={{
+                color: '#EC4899', flexShrink: 0,
+                transform: tenantOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms',
+              }} />
+            </button>
+            <AnimatePresence initial={false}>
+              {tenantOpen && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }}
+                            className="overflow-hidden">
+                  <p className="text-[9.5px] px-2.5 pb-2 leading-snug" style={{ color: C.note }}>
+                    Same tenant as Ministry of Health. Vertex, Bedrock and Azure log to the team
+                    tenant instead — an AI-GW scan will not appear in their console.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
@@ -266,7 +287,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             transition={{ duration: 0.15 }}
             className={`absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border overflow-hidden backdrop-blur-xl
               ${activeTab?.activeBorder ?? 'border-white/15'}`}
-            style={{ minWidth: '300px', background: C.panelBg, boxShadow: C.panelShadow }}
+            style={{ minWidth: '250px', maxWidth: '100%', background: C.panelBg, boxShadow: C.panelShadow }}
           >
             {/* Search + refresh */}
             <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: C.divider }}>
@@ -324,26 +345,26 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
                     >
                       <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${dot}`} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-[13px] font-semibold truncate"
-                            style={{ color: isSelected ? activeTab?.activeColor : C.name }}
-                          >
-                            {m.label ?? m.id}
-                          </span>
+                        <span
+                          className="block text-[13px] font-semibold truncate"
+                          style={{ color: isSelected ? activeTab?.activeColor : C.name }}
+                        >
+                          {m.label ?? m.id}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           {m.provider && (
-                            <span className="text-[10px] flex-shrink-0" style={{ color: C.meta }}>{m.provider}</span>
+                            <span className="text-[10px]" style={{ color: C.meta }}>{m.provider}</span>
                           )}
                           {/* Tier is the whole point of the curated list: which
                               models resist an injection and which comply. */}
                           {/* Never let an untested model look tested. */}
                           {m.verified === false && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 tracking-wide ${isLight ? 'bg-violet-100 text-violet-700' : 'bg-violet-500/25 text-violet-300'}`}>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${isLight ? 'bg-violet-100 text-violet-700' : 'bg-violet-500/25 text-violet-300'}`}>
                               UNVERIFIED
                             </span>
                           )}
                           {m.tier && TIER_BADGE[m.tier] && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 tracking-wide ${isLight ? TIER_BADGE[m.tier].light : TIER_BADGE[m.tier].dark}`}>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${isLight ? TIER_BADGE[m.tier].light : TIER_BADGE[m.tier].dark}`}>
                               {TIER_BADGE[m.tier].text}
                             </span>
                           )}

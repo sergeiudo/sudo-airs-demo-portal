@@ -146,7 +146,11 @@ async function rpc(server, method, params, id, { retryOnSession = true } = {}) {
     Accept: 'application/json, text/event-stream',
   }
   if (server.brokered) headers['x-portkey-api-key'] = process.env.AIGW_API_KEY || ''
-  const sid = sessions.get(server.id)
+  // `initialize` must NOT carry a session id — CoinGecko rejects it outright
+  // with "Initialization requests must not include a sessionId". Attaching the
+  // id cached from a previous handshake is why the first run of the process
+  // succeeded and every run after it failed discovery.
+  const sid = method === 'initialize' ? null : sessions.get(server.id)
   if (sid) headers['Mcp-Session-Id'] = sid
 
   const body = id == null
@@ -207,6 +211,9 @@ async function rpc(server, method, params, id, { retryOnSession = true } = {}) {
 }
 
 async function handshake(server) {
+  // Drop any stale session before re-initialising, so the new id returned by
+  // this handshake is the one used for the calls that follow it.
+  sessions.delete(server.id)
   await rpc(server, 'initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},

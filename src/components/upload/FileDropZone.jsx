@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, X, FileText, ShieldCheck, ShieldAlert, Loader2, HardDriveDownload } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
@@ -182,7 +183,12 @@ export function FileDropModal({
 
   if (!open) return null
 
-  return (
+  // Portalled to <body> on purpose. An ancestor with `backdrop-filter` — which
+  // every glass panel in the 2027 console has — becomes the containing block
+  // for `position: fixed`, so the dialog centres inside the composer instead of
+  // the viewport and gets clipped. Escaping to body is the fix; raising the
+  // z-index is not.
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -322,6 +328,7 @@ export function FileDropModal({
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
