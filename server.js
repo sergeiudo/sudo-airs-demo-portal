@@ -49,22 +49,58 @@ app.use('/api/moh', mohRouter)
 const PORT = process.env.PROXY_PORT || 3001
 
 // ─── Known Vertex AI publisher models ────────────────────────────────────────
-// `kind` selects the call path: 'gemini' → generateContent SDK,
-// 'maas' → OpenAI-compatible partner endpoint (DeepSeek/Qwen/gpt-oss).
-// `location` is per-model because partner models are region-locked
-// (Qwen is global-only, DeepSeek is us-central1-only). Verified live 2026-06-02.
+//
+// Curated the same way BEDROCK_CURATED is, and for the same reason: the project
+// exposes 132 Google publisher models plus ~80 partner ones, and a picker that
+// long is unusable on stage. **Every `available` entry below was proved with a
+// real call on 2026-09-14** — the catalogue advertises models this project
+// cannot invoke, so trusting it is how the old list ended up offering four
+// policy-denied models.
+//
+// `kind` selects the call path, and it is NOT cosmetic:
+//   'gemini'    → generateContent via the @google-cloud/vertexai SDK. us-central1
+//                 only; the SDK cannot reach `global` (returns HTML).
+//   'maas'      → OpenAI-compatible endpoint. This is also how Gemini 3.x is
+//                 reached, with a `google/` prefix — 3.x is global-ONLY and 404s
+//                 in us-central1.
+//   'anthropic' → :rawPredict. Claude on Vertex is global-only and speaks the
+//                 Anthropic wire format, not OpenAI's (the openapi endpoint 404s
+//                 on anthropic/*).
+//
+// The `denied` tier is kept visible on purpose, as on Bedrock: the org policy
+// `vertexai.allowedModels` (840 denied entries) blocks the same vendors AWS
+// denies by SCP, and showing that twice is the governance story.
 const VERTEX_MODELS = [
-  // Google Gemini — first-party (generateContent)
-  { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro',        provider: 'Google',   status: 'available', kind: 'gemini', location: 'us-central1' },
-  { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      provider: 'Google',   status: 'available', kind: 'gemini', location: 'us-central1' },
-  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', provider: 'Google',   status: 'available', kind: 'gemini', location: 'us-central1' },
-  // Partner Model-as-a-Service — OpenAI-compatible endpoint
-  { id: 'deepseek-ai/deepseek-r1-0528-maas',        label: 'DeepSeek R1 (0528)',  provider: 'DeepSeek', status: 'available', kind: 'maas', location: 'us-central1' },
-  { id: 'qwen/qwen3-235b-a22b-instruct-2507-maas',  label: 'Qwen3 235B Instruct', provider: 'Alibaba',  status: 'available', kind: 'maas', location: 'global' },
-  { id: 'qwen/qwen3-coder-480b-a35b-instruct-maas', label: 'Qwen3 Coder 480B',    provider: 'Alibaba',  status: 'available', kind: 'maas', location: 'global' },
-  { id: 'qwen/qwen3-next-80b-a3b-instruct-maas',    label: 'Qwen3 Next 80B',      provider: 'Alibaba',  status: 'available', kind: 'maas', location: 'global' },
-  { id: 'openai/gpt-oss-120b-maas',                 label: 'GPT-OSS 120B',        provider: 'OpenAI',   status: 'available', kind: 'maas', location: 'us-central1' },
-  { id: 'openai/gpt-oss-20b-maas',                  label: 'GPT-OSS 20B',         provider: 'OpenAI',   status: 'available', kind: 'maas', location: 'us-central1' },
+  // ── Gemini 3.x — global only, via the OpenAI-compatible endpoint ──
+  { id: 'google/gemini-3.1-pro-preview',  label: 'Gemini 3.1 Pro (preview)', provider: 'Google', status: 'available', kind: 'maas',   location: 'global',      tier: 'frontier', verified: true },
+  { id: 'google/gemini-3.8-flash',        label: 'Gemini 3.8 Flash',         provider: 'Google', status: 'available', kind: 'maas',   location: 'global',      tier: 'frontier', verified: true, note: 'Newest Gemini in this project.' },
+  { id: 'google/gemini-3.5-flash',        label: 'Gemini 3.5 Flash',         provider: 'Google', status: 'available', kind: 'maas',   location: 'global',      tier: 'fast',     verified: true },
+  { id: 'google/gemini-3.5-flash-lite',   label: 'Gemini 3.5 Flash Lite',    provider: 'Google', status: 'available', kind: 'maas',   location: 'global',      tier: 'weak',     verified: true },
+  { id: 'google/gemini-3.1-flash-lite',   label: 'Gemini 3.1 Flash Lite',    provider: 'Google', status: 'available', kind: 'maas',   location: 'global',      tier: 'weak',     verified: true },
+
+  // ── Gemini 2.5 — the only Gemini that works in us-central1, via the SDK ──
+  { id: 'gemini-2.5-pro',                 label: 'Gemini 2.5 Pro',           provider: 'Google', status: 'available', kind: 'gemini', location: 'us-central1', tier: 'mid',      verified: true },
+  { id: 'gemini-2.5-flash',               label: 'Gemini 2.5 Flash',         provider: 'Google', status: 'available', kind: 'gemini', location: 'us-central1', tier: 'fast',     verified: true },
+  { id: 'gemini-2.5-flash-lite',          label: 'Gemini 2.5 Flash Lite',    provider: 'Google', status: 'available', kind: 'gemini', location: 'us-central1', tier: 'weak',     verified: true },
+
+  // ── Claude ON VERTEX — global only, :rawPredict. Same models as the Bedrock
+  //    backend, reached through a different cloud: a one-click multi-cloud
+  //    comparison with the payload held constant. ──
+  { id: 'anthropic/claude-opus-5',        label: 'Claude Opus 5',            provider: 'Anthropic', status: 'available', kind: 'anthropic', location: 'global', tier: 'frontier', verified: true },
+  { id: 'anthropic/claude-sonnet-5',      label: 'Claude Sonnet 5',          provider: 'Anthropic', status: 'available', kind: 'anthropic', location: 'global', tier: 'frontier', verified: true },
+  { id: 'anthropic/claude-opus-4-8',      label: 'Claude Opus 4.8',          provider: 'Anthropic', status: 'available', kind: 'anthropic', location: 'global', tier: 'frontier', verified: true },
+  { id: 'anthropic/claude-sonnet-4-6',    label: 'Claude Sonnet 4.6',        provider: 'Anthropic', status: 'available', kind: 'anthropic', location: 'global', tier: 'mid',      verified: true },
+  { id: 'anthropic/claude-haiku-4-5',     label: 'Claude Haiku 4.5',         provider: 'Anthropic', status: 'available', kind: 'anthropic', location: 'global', tier: 'fast',     verified: true, note: 'Fastest Claude here — good default for a live run.' },
+
+  // ── Open-weight partner models ──
+  { id: 'openai/gpt-oss-120b-maas',       label: 'GPT-OSS 120B',             provider: 'OpenAI', status: 'available', kind: 'maas', location: 'us-central1', tier: 'mid', verified: true },
+  { id: 'google/gemma-4-26b-a4b-it-maas', label: 'Gemma 4 26B',              provider: 'Google', status: 'available', kind: 'maas', location: 'global',      tier: 'mid', verified: true },
+
+  // ── Denied by the GCP org policy `vertexai.allowedModels` — kept visible ──
+  { id: 'deepseek-ai/deepseek-v3.2-maas',            label: 'DeepSeek V3.2',     provider: 'DeepSeek',    status: 'unavailable', kind: 'maas', location: 'global', tier: 'denied', verified: true, note: 'Denied by the GCP org policy vertexai.allowedModels. The AWS SCP denies the same vendor — two clouds, one outcome. Reachable on the Azure backend.' },
+  { id: 'qwen/qwen3-next-80b-a3b-instruct-maas',     label: 'Qwen3 Next 80B',    provider: 'Qwen',        status: 'unavailable', kind: 'maas', location: 'global', tier: 'denied', verified: true, note: 'Denied by the same org policy. Every qwen/* entry is on the denylist.' },
+  { id: 'moonshotai/kimi-k2-thinking-maas',          label: 'Kimi K2 Thinking',  provider: 'Moonshot AI', status: 'unavailable', kind: 'maas', location: 'global', tier: 'denied', verified: true, note: 'Denied by the same org policy.' },
+  { id: 'xai/grok-4.6',                              label: 'Grok 4.6',          provider: 'xAI',         status: 'unavailable', kind: 'maas', location: 'global', tier: 'denied', verified: true, note: 'Denied on Vertex AND by the AWS SCP. Reachable on the Azure backend.' },
 ]
 const VERTEX_MODEL_MAP = Object.fromEntries(VERTEX_MODELS.map(m => [m.id, m]))
 
@@ -246,10 +282,55 @@ export async function callVertexMaaS(prompt, modelId, location = 'us-central1') 
   }
 }
 
+// ─── Claude-on-Vertex helper (:rawPredict) ────────────────────────────────────
+// Anthropic models on Vertex are global-only and do NOT answer on the
+// OpenAI-compatible endpoint — that 404s on anthropic/*. They take the Anthropic
+// wire format against :rawPredict instead, so this is a third call path rather
+// than a variation of the MaaS one. Same ADC credentials as the other two.
+export async function callVertexAnthropic(prompt, modelId, location = 'global') {
+  const project = process.env.GCP_PROJECT_ID
+  const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
+  const model = modelId.replace(/^anthropic\//, '')
+  const url = `https://${host}/v1/projects/${project}/locations/${location}/publishers/anthropic/models/${model}:rawPredict`
+  const client = await maasAuth.getClient()
+  const token = (await client.getAccessToken()).token
+  const t0 = Date.now()
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      anthropic_version: 'vertex-2023-10-16',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  const latencyMs = Date.now() - t0
+  if (!resp.ok) {
+    const errText = await resp.text()
+    throw new Error(`Vertex Anthropic ${resp.status}: ${errText.slice(0, 300)}`)
+  }
+  const data = await resp.json()
+  const usage = data.usage ?? {}
+  return {
+    // Concatenate ALL text blocks. A reasoning model returns thinking in block 0
+    // and the answer after it, so reading content[0] silently drops the answer —
+    // the same trap callBedrock had.
+    text: (data.content ?? []).filter(b => b.type === 'text').map(b => b.text).join(''),
+    latencyMs,
+    tokens: {
+      input:  usage.input_tokens  ?? null,
+      output: usage.output_tokens ?? null,
+      total:  (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0) || null,
+    },
+    finishReason: data.stop_reason ?? null,
+  }
+}
+
 // Route a Vertex model to the right call path based on its catalog metadata.
 // Unknown IDs default to the Gemini SDK (back-compat with ?modelId=… callers).
 function callVertexModel(prompt, modelId) {
   const meta = VERTEX_MODEL_MAP[modelId]
+  if (meta?.kind === 'anthropic') return callVertexAnthropic(prompt, modelId, meta.location)
   if (meta?.kind === 'maas') return callVertexMaaS(prompt, modelId, meta.location)
   return callVertexAI(prompt, modelId)
 }
@@ -743,11 +824,14 @@ app.post('/api/redteam/proxy', async (req, res) => {
 
 // ─── GET /api/models/vertex ───────────────────────────────────────────────────
 app.get('/api/models/vertex', (_req, res) => {
-  // Return the known publisher model list — no API call needed
+  // Curated + verified list, no API call needed. `region` is per-model (see the
+  // catalogue): Gemini 3.x and Claude are global-only, Gemini 2.5 is
+  // us-central1, so a single top-level region would be wrong for most entries.
   res.json({
     provider: 'Google Cloud Vertex AI',
     project: process.env.GCP_PROJECT_ID,
     region: process.env.GCP_REGION,
+    curated: true,
     models: VERTEX_MODELS,
   })
 })

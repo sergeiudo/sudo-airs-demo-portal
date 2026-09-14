@@ -1,6 +1,11 @@
 node_modules/
 dist/
-.env
+# `.env` alone did not cover the copies people actually make — .env.bak,
+# .env.save, .env.2026-09-14 — each a complete set of credentials sitting in the
+# tree of a PUBLIC repo. Match the whole family and re-admit the one file that
+# must stay tracked.
+.env*
+!.env.example
 *.local
 .DS_Store
 airs-docs-pdfs/
@@ -40,3 +45,16 @@ portkey-old-workspace-backup.json
 # Ministry of Health demo — generated at runtime
 moh-replay.json
 moh-probe-results.json
+
+# Cloud credentials. This repo is PUBLIC, and a downloaded GCP service-account
+# key lands in the working tree with a name nothing else matches — one
+# `git add -A` would publish a live private key permanently. The patterns are
+# specific rather than a blanket *.json so package.json and friends still track.
+sergei-playground-*.json
+*-service-account*.json
+*service_account*.json
+gcp-*-key.json
+# WIF credential configs hold no secret, but they name internal project/role
+# paths and belong on the host, not in git.
+*-wif-*.json
+vertex-wif*.json

@@ -48,7 +48,9 @@ const TABS = [
 
 // Curated-tier badges. `weak` and `denied` are the two that matter on stage:
 // weak models actually comply with an injection, and denied ones are blocked by
-// the org SCP rather than by anything in this app.
+// an org-level policy rather than by anything in this app — an AWS SCP on
+// Bedrock, `vertexai.allowedModels` on Vertex, which is why the badge says
+// POLICY rather than naming either mechanism.
 // Two palettes: the /15 alphas that read on a dark panel are invisible on
 // white, so light mode gets solid tints and darker text.
 const TIER_BADGE = {
@@ -56,7 +58,7 @@ const TIER_BADGE = {
   fast:     { text: 'FAST',       dark: 'bg-cyan-500/20 text-cyan-300',   light: 'bg-cyan-100 text-cyan-800' },
   mid:      { text: 'MID',        dark: 'bg-slate-500/25 text-slate-300', light: 'bg-slate-200 text-slate-700' },
   weak:     { text: 'WEAK',       dark: 'bg-amber-500/25 text-amber-300', light: 'bg-amber-100 text-amber-800' },
-  denied:   { text: 'SCP DENIED', dark: 'bg-red-500/25 text-red-300',     light: 'bg-red-100 text-red-800' },
+  denied:   { text: 'POLICY DENIED', dark: 'bg-red-500/25 text-red-300',  light: 'bg-red-100 text-red-800' },
 }
 
 const STATUS_DOT = {
