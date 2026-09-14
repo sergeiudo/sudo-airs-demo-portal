@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { AigwFlowDiagram } from '../../components/api-intercept/AigwFlowDiagram'
+import { SIGNAL } from './tokens'
 
 /**
  * SessionArchitecture — what an empty console shows.
@@ -25,6 +26,7 @@ import { AigwFlowDiagram } from '../../components/api-intercept/AigwFlowDiagram'
 const PINK  = '#EC4899' // AIRS
 const SLATE = '#94A3B8'
 const OFF   = '#64748B'
+const BLOCK = SIGNAL.block // vermilion — interception, the console's one loud colour
 const MONO  = 'ui-monospace, SFMono-Regular, Menlo, monospace'
 const SANS  = 'Inter, ui-sans-serif, system-ui, sans-serif'
 
@@ -81,7 +83,7 @@ function ApiLayerFlowDiagram({ isProtected, backend, model }) {
             <stop offset="0%" stopColor={p.accent} stopOpacity="0.4" />
             <stop offset="70%" stopColor={p.accent} stopOpacity="0" />
           </radialGradient>
-          {[['alf-slate', SLATE], ['alf-pink', PINK], ['alf-off', OFF], ['alf-prov', p.accent]].map(([id, c]) => (
+          {[['alf-slate', SLATE], ['alf-pink', PINK], ['alf-off', OFF], ['alf-prov', p.accent], ['alf-block', BLOCK]].map(([id, c]) => (
             <marker key={id} id={id} markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
               <path d="M0,0 L6,3.5 L0,7 Z" fill={c} />
             </marker>
@@ -133,6 +135,27 @@ function ApiLayerFlowDiagram({ isProtected, backend, model }) {
           {p.where} · direct SDK call, no proxy
         </text>
 
+        {/* ── The short circuit: on a block this app returns the verdict and
+               never reaches step 2. `server.js` returns before the provider
+               call, so the arc is the code, not an idealisation. ── */}
+        {isProtected && (
+          <g>
+            <text x={442} y={70} textAnchor="middle" fontFamily={MONO} fontSize={7.5} fontWeight={700} fill={SLATE} opacity={0.8}>
+              only if clean
+            </text>
+            <path d="M252,133 C248,186 136,186 132,133" fill="none" strokeLinecap="round"
+                  stroke={BLOCK} strokeOpacity={0.8} strokeWidth={2} strokeDasharray="5 3"
+                  markerEnd="url(#alf-block)" />
+            <Packet path="M252,133 C248,186 136,186 132,133" color={BLOCK} dur={5} delay={2.4} r={3} />
+            <text x={192} y={196} textAnchor="middle" fontFamily={MONO} fontSize={8.5} fontWeight={700} fill={BLOCK}>
+              BLOCKED → straight back
+            </text>
+            <text x={192} y={207} textAnchor="middle" fontFamily={SANS} fontSize={8} fill={SLATE} opacity={0.85}>
+              {p.short} is never called · no tokens spent
+            </text>
+          </g>
+        )}
+
         {/* ── both scans are the same service, called twice out of band ── */}
         <g fill="none" strokeLinecap="round" opacity={isProtected ? 1 : 0.22}>
           <path d="M320,131 C320,196 372,214 452,246" stroke={airs} strokeOpacity={0.5} strokeWidth={1.8}
@@ -176,30 +199,59 @@ function ApiLayerFlowDiagram({ isProtected, backend, model }) {
   )
 }
 
-const COPY = {
-  aigw: {
-    eyebrow: 'SCM AI-GW · SESSION ARCHITECTURE',
-    title: 'One control point, five checkpoints',
-    body: (
-      <>
-        On this backend the guardrail runs <strong>inside the gateway</strong> rather than as an API-layer scan,
-        and the model can call live MCP servers. Follow the path: the prompt is inspected on the way in, the model
-        may loop out to a tool, that tool&rsquo;s parameters and its result are each scanned before the model reads
-        them, and the answer is inspected on the way back.
-      </>
-    ),
-  },
-  api: {
-    title: 'Two scans around one provider call',
-    body: (provider) => (
-      <>
-        Prisma AIRS runs here as an <strong>API-layer scan</strong>: this app calls the AIRS Runtime API with the
-        prompt before {provider} ever sees it, and again with the answer before you do. The provider is called
-        directly — no proxy, no gateway in the path. Same payloads as the AI-GW lane, a different enforcement
-        point, which is the comparison the pillar is for.
-      </>
-    ),
-  },
+/**
+ * The heading and the explanatory paragraph that used to sit here are gone: the
+ * diagram is labelled well enough to carry itself, and four lines of prose above
+ * it pushed the architecture — the thing the room is meant to look at — down the
+ * panel. Only the section eyebrow survives. Anything that genuinely needs saying
+ * belongs on the diagram or in the short-circuit strip below it.
+ */
+const AIGW_EYEBROW = 'SCM AI-GW · SESSION ARCHITECTURE'
+
+/**
+ * Why short-circuiting matters, in the three terms an audience actually weighs.
+ * Stated once here rather than on both diagrams, because it is a property of
+ * the enforcement model, not of either topology.
+ */
+const SHORT_CIRCUIT = [
+  ['Performance', 'no round trip to a model that was never going to be allowed to answer'],
+  ['Security',    'the payload never reaches the model, so it cannot be manipulated by it'],
+  ['Cost',        'a blocked request consumes no provider tokens'],
+]
+
+function ShortCircuitNote({ t, isProtected }) {
+  return (
+    <div style={{
+      marginTop: 10, padding: '10px 13px', borderRadius: 14,
+      background: isProtected ? `${SIGNAL.block}0f` : t.sunken,
+      border: `1px solid ${isProtected ? `${SIGNAL.block}33` : t.hairline}`,
+    }}>
+      <p style={{
+        fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em',
+        color: isProtected ? SIGNAL.block : t.inkFaint, marginBottom: 6,
+      }}>
+        {isProtected
+          ? 'ON A BLOCK, THE REQUEST STOPS HERE'
+          : 'AIRS IS OFF — NOTHING IS INTERCEPTED. WITH PROTECTION ON:'}
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 22px' }}>
+        {SHORT_CIRCUIT.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 7, minWidth: 240, flex: '1 1 240px' }}>
+            <span style={{
+              fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, fontWeight: 800,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: isProtected ? t.ink : t.inkFaint, whiteSpace: 'nowrap',
+            }}>
+              {k}
+            </span>
+            <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10.5, lineHeight: 1.45, color: t.inkDim }}>
+              {v}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export function SessionArchitecture({ t, backend, model, isProtected, mcpEnabled }) {
@@ -214,24 +266,18 @@ export function SessionArchitecture({ t, backend, model, isProtected, mcpEnabled
       transition={{ duration: 0.35 }}
       className="w-full px-4 pt-1 pb-4"
     >
-      <div className="mb-3">
-        <p style={{
-          fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, fontWeight: 900,
-          letterSpacing: '0.14em', color: accent, marginBottom: 3,
-        }}>
-          {isAigw ? COPY.aigw.eyebrow : `${p.name.toUpperCase()} · SESSION ARCHITECTURE`}
-        </p>
-        <h3 style={{ fontFamily: '"Space Grotesk", Inter, sans-serif', fontSize: 16, fontWeight: 700, color: t.ink, lineHeight: 1.2 }}>
-          {isAigw ? COPY.aigw.title : COPY.api.title}
-        </h3>
-        <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11.5, lineHeight: 1.55, color: t.inkDim, marginTop: 5, maxWidth: 780 }}>
-          {isAigw ? COPY.aigw.body : COPY.api.body(p.name)}
-        </p>
-      </div>
+      <p style={{
+        fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, fontWeight: 900,
+        letterSpacing: '0.14em', color: accent, marginBottom: 6,
+      }}>
+        {isAigw ? AIGW_EYEBROW : `${p.name.toUpperCase()} · SESSION ARCHITECTURE`}
+      </p>
 
       {isAigw
         ? <AigwFlowDiagram isProtected={isProtected} mcpEnabled={mcpEnabled} model={model} />
         : <ApiLayerFlowDiagram isProtected={isProtected} backend={backend} model={model} />}
+
+      <ShortCircuitNote t={t} isProtected={isProtected} />
 
       <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10.5, color: t.inkFaint, marginTop: 8 }}>
         Fire a payload from the attack library, or type one below — this diagram collapses to the live

@@ -14,6 +14,12 @@ import { motion } from 'framer-motion'
  * them; turn MCP off and the whole lower loop dims out. What the room sees is
  * always what the next prompt will actually do.
  *
+ * The short-circuit return arc is the part people ask about: a block is not a
+ * scan that happens alongside the call, it *replaces* it. The guardrail answers
+ * the client itself and the model is never invoked — no tokens, no chance for
+ * the payload to manipulate anything downstream. Drawn only when protection is
+ * on, because with AIRS off there is nothing that could short-circuit.
+ *
  * Rendered on a forced-dark panel in both app themes, matching the hero
  * treatment of FlowArchitectureDiagram in the LLM Gateway overview.
  */
@@ -24,6 +30,7 @@ const SLATE  = '#94A3B8' // client + neutral
 const GREEN  = '#10B981' // MCP, brokered
 const AMBER  = '#F59E0B' // reached directly — outside the gateway
 const OFF    = '#64748B' // a bypassed control
+const BLOCK  = '#E0553A' // vermilion — interception, same as SIGNAL.block in the console
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace'
 const SANS = 'Inter, ui-sans-serif, system-ui, sans-serif'
@@ -89,7 +96,7 @@ export function AigwFlowDiagram({ isProtected, mcpEnabled, model }) {
             <stop offset="0%" stopColor={PURPLE} stopOpacity="0.45" />
             <stop offset="70%" stopColor={PURPLE} stopOpacity="0" />
           </radialGradient>
-          {[['afd-slate', SLATE], ['afd-pink', PINK], ['afd-purple', PURPLE], ['afd-green', GREEN], ['afd-off', OFF]].map(([id, c]) => (
+          {[['afd-slate', SLATE], ['afd-pink', PINK], ['afd-purple', PURPLE], ['afd-green', GREEN], ['afd-off', OFF], ['afd-block', BLOCK]].map(([id, c]) => (
             <marker key={id} id={id} markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
               <path d="M0,0 L6,3.5 L0,7 Z" fill={c} />
             </marker>
@@ -132,6 +139,27 @@ export function AigwFlowDiagram({ isProtected, mcpEnabled, model }) {
               sub={isProtected ? 'response scan' : 'BYPASSED — AIRS is off'}
               color={airs} dashed={!isProtected} titleSize={10.5} />
         <Node cx={1036} cy={110} w={132} h={44} title="ANSWER" sub="to the user" color={SLATE} />
+
+        {/* ── The short circuit. A block does not run beside the call, it takes
+               the call's place: the guardrail answers the client and the LLM is
+               never invoked. Only meaningful while protection is on. ── */}
+        {isProtected && (
+          <g>
+            <text x={434} y={82} textAnchor="middle" fontFamily={MONO} fontSize={7.5} fontWeight={700} fill={SLATE} opacity={0.8}>
+              only if clean
+            </text>
+            <path d="M300,136 C296,190 132,190 128,136" fill="none" strokeLinecap="round"
+                  stroke={BLOCK} strokeOpacity={0.8} strokeWidth={2} strokeDasharray="5 3"
+                  markerEnd="url(#afd-block)" />
+            <Packet path="M300,136 C296,190 132,190 128,136" color={BLOCK} dur={5} delay={2.4} r={3} />
+            <text x={206} y={196} textAnchor="middle" fontFamily={MONO} fontSize={8.5} fontWeight={700} fill={BLOCK}>
+              BLOCKED → back to the client
+            </text>
+            <text x={206} y={207} textAnchor="middle" fontFamily={SANS} fontSize={8} fill={SLATE} opacity={0.85}>
+              the LLM is never called · no tokens spent
+            </text>
+          </g>
+        )}
 
         {/* ── MCP tool loop ── */}
         <g opacity={mcpOpacity}>
@@ -247,7 +275,9 @@ export function AigwWelcome({ isProtected, mcpEnabled, model }) {
           On this backend the guardrail runs <strong>inside the gateway</strong> rather than as an API-layer scan, and
           the model can call live MCP servers. Follow the path: the prompt is inspected on the way in, the model may
           loop out to a tool, that tool&rsquo;s parameters and its result are each scanned before the model reads them,
-          and the answer is inspected on the way back.
+          and the answer is inspected on the way back. If a scan blocks, the gateway{' '}
+          <strong>short-circuits</strong> — it answers the client itself and the request is never forwarded, so the
+          model is never called, cannot be manipulated by the payload, and burns no tokens.
         </p>
       </div>
       <AigwFlowDiagram isProtected={isProtected} mcpEnabled={mcpEnabled} model={model} />
