@@ -699,7 +699,7 @@ function LiveDemoSection() {
 
       <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/5 flex items-center gap-3">
         <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse flex-shrink-0" />
-        <span className="text-[12px] text-purple-300 font-medium">This is the real integration — not a mock. Every chat message in the API Intercept view goes through this exact code path.</span>
+        <span className="text-[12px] text-purple-300 font-medium">This is the real integration — not a mock. Every chat message in the AIRS Runtime &amp; AI-GW view goes through this exact code path.</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

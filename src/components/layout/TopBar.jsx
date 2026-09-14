@@ -8,7 +8,7 @@ import { HelpDrawer } from './HelpDrawer'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 const VIEW_LABELS = {
-  apiIntercept:    { label: 'API Intercept',                sublabel: 'Real-time payload interception & telemetry', text: 'text-red-400',    color: '#EF4444' },
+  apiIntercept:    { label: 'AIRS Runtime & AI-GW',         sublabel: 'API-layer scanning vs in-gateway guardrail · four targets', text: 'text-red-400',    color: '#EF4444' },
   modelScanning:   { label: 'Model Scanning',               sublabel: 'AI model vulnerability assessment',          text: 'text-blue-400',   color: '#3B82F6' },
   redTeaming:      { label: 'Red Teaming',                  sublabel: 'Automated adversarial campaign runner',      text: 'text-orange-400', color: '#F97316' },
   claudeHooks:     { label: 'AI Code Assistant Protection', sublabel: 'Claude Code hooks integration guide',        text: 'text-purple-400', color: '#8B5CF6' },

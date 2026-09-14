@@ -214,19 +214,22 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
   const grouped = groups.length > 1
 
   /**
-   * Collapsible provider sections.
+   * Collapsible provider sections, **all shut by default**.
    *
-   * Default is derived, not stored: the group holding the current selection is
-   * open and the others are shut, so you land on where you already are with the
-   * other cloud one click away instead of ten rows of scrolling. A click
-   * records an override for that group only. While a filter is active every
-   * group opens — a search that hides its own matches is broken.
+   * Opening the picker should show the providers, not a wall of models: two
+   * headers is the whole list at a glance, and the cloud you want is one click
+   * away rather than ten rows of scrolling. The `IN USE` badge is what makes
+   * this safe — you can still see which provider holds the current selection
+   * without expanding anything.
+   *
+   * A click records an override for that group only. While a filter is typed
+   * every group opens, because a search that hides its own matches is broken.
    */
   const [openOverride, setOpenOverride] = useState({})
   const groupHasActive = (g) => g.models.some((m) => m.id === model)
-  const isGroupOpen = (g) => (filter ? true : (openOverride[g.key] ?? groupHasActive(g)))
+  const isGroupOpen = (g) => (filter ? true : (openOverride[g.key] ?? false))
   const toggleGroup = (g) =>
-    setOpenOverride((prev) => ({ ...prev, [g.key]: !(prev[g.key] ?? groupHasActive(g)) }))
+    setOpenOverride((prev) => ({ ...prev, [g.key]: !(prev[g.key] ?? false) }))
 
   return (
     <div className="relative" ref={panelRef}>

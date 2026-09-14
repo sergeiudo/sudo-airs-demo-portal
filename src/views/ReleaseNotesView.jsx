@@ -617,7 +617,7 @@ function SystemHealth() {
 
 // ─── Activity Log ─────────────────────────────────────────────────────────────
 const VIEW_NAMES = {
-  apiIntercept:    'API Intercept',
+  apiIntercept:    'AIRS Runtime & AI-GW',
   modelScanning:   'Model Scanning',
   redTeaming:      'Red Teaming',
   claudeHooks:     'AI Code Assistant',

@@ -10,7 +10,7 @@ import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 const NAV_ITEMS = [
   {
     id: 'apiIntercept',
-    label: 'API Intercept',
+    label: 'AIRS Runtime & AI-GW',
     sublabel: 'Live payload simulation',
     icon: Crosshair,
     color: { text: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/30',    bar: 'bg-red-400' },

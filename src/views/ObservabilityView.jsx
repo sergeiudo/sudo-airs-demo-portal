@@ -184,13 +184,13 @@ function EmptyState({ dispatch }) {
       </div>
       <div>
         <p className="text-base font-semibold text-slate-400">No traces yet</p>
-        <p className="text-sm text-slate-600 mt-1.5 leading-relaxed max-w-xs">Send your first prompt in API Intercept to start capturing live telemetry</p>
+        <p className="text-sm text-slate-600 mt-1.5 leading-relaxed max-w-xs">Send your first prompt in AIRS Runtime &amp; AI-GW to start capturing live telemetry</p>
       </div>
       <button
         onClick={() => dispatch({ type: 'SET_VIEW', payload: 'apiIntercept' })}
         className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-400 text-sm font-semibold hover:bg-teal-500/20 transition-colors"
       >
-        <Crosshair size={14} /> Go to API Intercept
+        <Crosshair size={14} /> Go to AIRS Runtime &amp; AI-GW
       </button>
     </div>
   )

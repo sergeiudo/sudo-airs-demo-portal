@@ -5,7 +5,7 @@ import { useAppContext } from '../../context/AppContext'
 
 
 const VIEWS = [
-  { id: 'apiIntercept',    icon: Crosshair,  label: 'API Intercept',                desc: 'Send real attack payloads and watch AIRS intercept them live.',        color: '#EF4444' },
+  { id: 'apiIntercept',    icon: Crosshair,  label: 'AIRS Runtime & AI-GW',         desc: 'Fire real attack payloads at four targets and watch AIRS intercept them live.', color: '#EF4444' },
   { id: 'modelScanning',   icon: ScanSearch, label: 'Model Scanning',               desc: 'Scan AI model files for embedded malware and vulnerabilities.',        color: '#3B82F6' },
   { id: 'redTeaming',      icon: Swords,     label: 'Red Teaming',                  desc: 'Run automated adversarial campaigns and measure robustness scores.',   color: '#F97316' },
   { id: 'claudeHooks',     icon: Terminal,   label: 'AI Code Assistant Protection', desc: 'See how AIRS protects Claude Code via pre/post-tool hook scripts.',    color: '#8B5CF6' },
@@ -19,7 +19,7 @@ const VIEWS = [
 
 const TIPS = [
   { icon: ShieldOff,     text: 'Toggle protection OFF to see what happens without AIRS — attacks reach the model unblocked.' },
-  { icon: Zap,           text: 'In API Intercept, click any attack payload from the library to auto-inject it into the chat.' },
+  { icon: Zap,           text: 'In AIRS Runtime & AI-GW, click any attack payload from the library to auto-inject it into the chat.' },
   { icon: Eye,           text: 'Click "Prompt Telemetry" on any response to see the full AIRS pipeline trace and scan details.' },
   { icon: Network,       text: 'In MCP Security, try attack scenarios with protection OFF first, then ON — to show the before/after story.' },
   { icon: Database,      text: 'In RAG Security, run the "Poisoned Doc" scenario to see indirect prompt injection caught upstream before the LLM ever sees it.' },

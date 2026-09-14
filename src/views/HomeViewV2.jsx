@@ -19,12 +19,12 @@ const PILLARS = [
   {
     id: 'apiIntercept',
     icon: Crosshair,
-    title: 'API Intercept',
+    title: 'AIRS Runtime & AI-GW',
     tag: 'Runtime Protection',
-    summary: 'Intercept & block malicious prompts before they reach your model.',
-    description: 'Fire a 142-payload attack library at live LLM endpoints across four backends — Vertex AI, Bedrock, Azure OpenAI, and the SCM AI Gateway. Toggle AIRS protection on/off to see exactly what is intercepted, and switch backends to compare two enforcement architectures on the identical payload.',
+    summary: 'The main demo: two enforcement architectures, four targets, one attack library.',
+    description: 'Fire a 142-payload attack library at live LLM endpoints across four targets — Vertex AI, Bedrock and Azure OpenAI scanned by the AIRS Runtime API at the API layer, and the SCM AI Gateway where the guardrail runs inside the gateway itself and fronts two clouds. Toggle AIRS on and off to see exactly what is intercepted, and switch targets to compare both architectures on the identical payload.',
     highlights: [
-      { t: 'SCM AI Gateway backend — 20 curated Bedrock models', tag: 'NEW' },
+      { t: 'SCM AI-GW — one guardrail across Bedrock AND Vertex', tag: 'NEW' },
       { t: 'File upload scanning — PDF, DOCX, CSV, TXT', tag: 'NEW' },
       'Prompt injection, jailbreak & data exfiltration',
       'API-layer scanning vs in-gateway guardrail',
@@ -51,9 +51,16 @@ const PILLARS = [
     icon: Waypoints,
     title: 'AI/LLM Gateway',
     tag: 'Gateway Layer',
-    summary: 'One gateway, three protection levels, MCP tool-calling.',
-    description: 'Route Vertex (Gemini) models through the Portkey gateway and compare three flows side by side — no gateway, Portkey native guardrails, and Prisma AIRS. See exactly what AIRS catches that native checks miss, then watch live MCP tool-calling routed through the Portkey MCP Registry.',
-    highlights: ['3 lanes: none · Portkey native · AIRS', 'Native: PII redaction, banned words, code', 'AIRS: prompt injection, jailbreak, DLP, URLs', 'MCP Registry tool-calling (CoinGecko)'],
+    legacy: true,
+    summary: 'Legacy Portkey gateway — the three-lane comparison, still live.',
+    description: 'The original gateway pillar, on the legacy Portkey workspace (api.portkey.ai). Route Vertex (Gemini) and Bedrock models through it and compare three lanes side by side — no gateway, Portkey native guardrails, and Prisma AIRS — then watch live MCP tool-calling through the Portkey MCP Registry. Superseded by the SCM AI Gateway in AIRS Runtime & AI-GW, which is where the current demo lives; kept because the native-vs-AIRS comparison exists nowhere else.',
+    highlights: [
+      { t: 'Superseded by SCM AI-GW — see AIRS Runtime & AI-GW', tag: 'LEGACY' },
+      '3 lanes: none · Portkey native · AIRS',
+      'Native: PII redaction, banned words, code',
+      'AIRS: prompt injection, jailbreak, DLP, URLs',
+      'MCP Registry tool-calling (CoinGecko)',
+    ],
     accent: '#ec4899',
     glow: 'rgba(236,72,153,0.32)',
     dim: 'rgba(236,72,153,0.08)',
@@ -219,13 +226,28 @@ function MiniCard({ pillar, index, anySelected, onClick, isDark }) {
           }}>
             <Icon size={17} style={{ color: pillar.accent }} />
           </div>
-          <span className="text-[9px] font-black tracking-[0.2em] uppercase px-2.5 py-1 rounded-full" style={{
-            color: pillar.accent,
-            background: `${pillar.accent}15`,
-            border: `1px solid ${pillar.accent}30`,
-          }}>
-            {pillar.tag}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {/* A superseded pillar still works and is still demoable — it is
+                marked, not hidden. Neutral grey on purpose: the accent means
+                "this is the live thing", which is exactly what LEGACY is not. */}
+            {pillar.legacy && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-black tracking-[0.16em] uppercase px-2 py-1 rounded-full" style={{
+                color: '#64748b',
+                background: 'rgba(100,116,139,0.12)',
+                border: '1px solid rgba(100,116,139,0.35)',
+              }}>
+                <X size={9} strokeWidth={3} />
+                Legacy
+              </span>
+            )}
+            <span className="text-[9px] font-black tracking-[0.2em] uppercase px-2.5 py-1 rounded-full" style={{
+              color: pillar.accent,
+              background: `${pillar.accent}15`,
+              border: `1px solid ${pillar.accent}30`,
+            }}>
+              {pillar.tag}
+            </span>
+          </div>
         </div>
 
         {/* Title */}
@@ -346,9 +368,21 @@ function HeroCard({ pillar, onClose, onLaunch, isDark }) {
             <Icon size={26} style={{ color: pillar.accent }} />
           </div>
           <div>
-            <span className="text-[9px] font-black tracking-[0.25em] uppercase block mb-2" style={{ color: pillar.accent, opacity: 0.8 }}>
-              {pillar.tag}
-            </span>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-black tracking-[0.25em] uppercase" style={{ color: pillar.accent, opacity: 0.8 }}>
+                {pillar.tag}
+              </span>
+              {pillar.legacy && (
+                <span className="inline-flex items-center gap-1 text-[9px] font-black tracking-[0.16em] uppercase px-2 py-0.5 rounded-full" style={{
+                  color: '#64748b',
+                  background: 'rgba(100,116,139,0.12)',
+                  border: '1px solid rgba(100,116,139,0.35)',
+                }}>
+                  <X size={9} strokeWidth={3} />
+                  Legacy
+                </span>
+              )}
+            </div>
             <h2 className="text-[32px] font-black tracking-tight leading-none" style={{ color: textColor }}>
               {pillar.title}
             </h2>
