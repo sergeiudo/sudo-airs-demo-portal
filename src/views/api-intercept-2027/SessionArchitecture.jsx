@@ -254,7 +254,9 @@ function ShortCircuitNote({ t, isProtected }) {
   )
 }
 
-export function SessionArchitecture({ t, backend, model, isProtected, mcpEnabled }) {
+// `model` is the picker's LABEL (for display); `modelId` is the routing id that
+// carries the `@integration/` prefix. Both are needed — see AigwFlowDiagram.
+export function SessionArchitecture({ t, backend, model, modelId, isProtected, mcpEnabled }) {
   const isAigw = backend === 'aigw'
   const p = PROVIDER[backend] ?? PROVIDER.bedrock
   const accent = isAigw ? PINK : p.accent
@@ -274,7 +276,7 @@ export function SessionArchitecture({ t, backend, model, isProtected, mcpEnabled
       </p>
 
       {isAigw
-        ? <AigwFlowDiagram isProtected={isProtected} mcpEnabled={mcpEnabled} model={model} />
+        ? <AigwFlowDiagram isProtected={isProtected} mcpEnabled={mcpEnabled} model={model} modelId={modelId} />
         : <ApiLayerFlowDiagram isProtected={isProtected} backend={backend} model={model} />}
 
       <ShortCircuitNote t={t} isProtected={isProtected} />

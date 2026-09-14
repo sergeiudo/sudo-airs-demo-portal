@@ -1163,21 +1163,62 @@ app.get('/api/mcp/servers', (_req, res) => {
   res.json({ configured: !!SCM_ENV.apiKey, servers: describeMcpServers(), ids: MCP_SERVER_IDS })
 })
 
+// ─── Vertex models on the SCM AI Gateway ─────────────────────────────────────
+//
+// The second provider behind the same gateway and the same guardrail. The point
+// is not more models — it is that ONE policy, configured once, enforces across
+// two clouds: fire a payload at Bedrock Kimi and at Vertex Gemini and the same
+// AIRS verdict comes back from the same enforcement point.
+//
+// These must be provisioned on the `@sudo-vertexai` integration in the SCM
+// console (Integrations → Model Provisioning). An unprovisioned model does not
+// 404 — Portkey rejects it with `Model … is not allowed for this integration`,
+// which reads like a model problem and is really a console checkbox. Ids are
+// bare Vertex names; the integration itself pins project + region (global).
+// All five verified with real calls through /api/chat on 2026-09-14, and the
+// guardrail verified firing on this provider: the same injection returns
+// BLOCKED with `prompt:agent, prompt:injection` on Vertex and on Bedrock, while
+// a benign prompt is ALLOWED on both. That symmetry IS the demo.
+const SCM_VERTEX_MODELS = [
+  { id: 'gemini-3.5-flash',      displayName: 'Gemini 3.5 Flash',      tier: 'frontier', verified: true, note: 'Same model the API-layer Vertex picker defaults to — fire one payload at both and the enforcement point is the only difference.' },
+  { id: 'gemini-3.5-flash-lite', displayName: 'Gemini 3.5 Flash Lite', tier: 'weak',     verified: true },
+  { id: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite', tier: 'weak',     verified: true, note: 'Smallest here — likeliest to comply with an injection, which is what makes the guardrail visible.' },
+  { id: 'gemini-2.5-flash',      displayName: 'Gemini 2.5 Flash',      tier: 'fast',     verified: true },
+  { id: 'gemini-2.5-pro',        displayName: 'Gemini 2.5 Pro',        tier: 'mid',      verified: true },
+]
+
 app.get('/api/models/aigw', (_req, res) => {
+  // Two providers, one gateway. `provider` carries the integration slug so the
+  // picker can say which cloud a row lands in — without it the list reads as
+  // one undifferentiated pile and the whole point is lost.
+  const bedrock = SCM_MODELS.map((m) => ({
+    id: `${SCM_ENV.bedrockSlug}/${m.id}`,
+    label: m.displayName,
+    provider: `via ${SCM_ENV.bedrockSlug}`,
+    status: m.status === 'verified' ? 'available' : m.status === 'unavailable' ? 'unavailable' : 'available',
+    tier: m.status === 'leaky' ? 'weak' : m.status === 'unavailable' ? 'denied' : 'frontier',
+    note: m.note,
+    verified: m.status === 'verified' || m.status === 'leaky',
+  }))
+  const vertex = SCM_VERTEX_MODELS.map((m) => ({
+    id: `${SCM_ENV.vertexSlug}/${m.id}`,
+    label: m.displayName,
+    provider: `via ${SCM_ENV.vertexSlug}`,
+    status: 'available',
+    tier: m.tier,
+    note: m.note,
+    // Provisioning happens in the SCM console, not here, so a new entry stays
+    // UNVERIFIED in the picker until a real call proves it. Claiming otherwise
+    // is how a picker starts lying about what it can serve.
+    verified: m.verified === true,
+  }))
   res.json({
     provider: 'SCM AI Gateway',
     baseUrl: SCM_ENV.baseUrl,
     configured: !!SCM_ENV.apiKey,
     curated: true,
-    models: SCM_MODELS.map((m) => ({
-      id: `${SCM_ENV.bedrockSlug}/${m.id}`,
-      label: m.displayName,
-      provider: 'via @sudo-bedrock',
-      status: m.status === 'verified' ? 'available' : m.status === 'unavailable' ? 'unavailable' : 'available',
-      tier: m.status === 'leaky' ? 'weak' : m.status === 'unavailable' ? 'denied' : 'frontier',
-      note: m.note,
-      verified: m.status === 'verified' || m.status === 'leaky',
-    })),
+    providers: [SCM_ENV.bedrockSlug, SCM_ENV.vertexSlug],
+    models: [...bedrock, ...vertex],
   })
 })
 

@@ -24,7 +24,10 @@ import { useModelLabel } from './useModelLabel'
  */
 
 const DEFAULT_MODELS = {
-  vertex:  'gemini-2.5-flash',
+  // Note the `google/` prefix and that this is a global-region model — it is
+  // reached through the OpenAI-compatible endpoint, not the Vertex SDK, so the
+  // catalogue id is not interchangeable with a bare `gemini-…` one.
+  vertex:  'google/gemini-3.5-flash',
   bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
   azure:   'gpt-5.4-nano',
   aigw:    '@sudo-bedrock/moonshotai.kimi-k2.5',
@@ -294,7 +297,7 @@ export function ApiIntercept2027() {
           onTranslate={translate}
           translating={translating}
           backend={backend}
-          empty={<SessionArchitecture t={t} backend={backend} model={modelLabel}
+          empty={<SessionArchitecture t={t} backend={backend} model={modelLabel} modelId={model}
                                       isProtected={isProtected} mcpEnabled={mcp.enabled} />}
         />
 

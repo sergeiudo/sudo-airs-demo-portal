@@ -56,6 +56,10 @@ const ENV = {
   configProtected:   process.env.AIGW_CONFIG_PROTECTED || '',
   configUnprotected: process.env.AIGW_CONFIG_UNPROTECTED || '',
   bedrockSlug:       process.env.AIGW_BEDROCK_SLUG || '@sudo-bedrock',
+  // Second provider on the same gateway. The MOH pillar does not use it — its
+  // model list stays Bedrock-only — but API Intercept's aigw backend offers
+  // both, so one guardrail can be shown enforcing across two clouds.
+  vertexSlug:        process.env.AIGW_VERTEX_SLUG || '@sudo-vertexai',
   // Direct-AIRS credentials, with MOH_* overrides taking precedence.
   //
   // The gateway half of this pillar is already isolated behind AIGW_*, but the

@@ -115,6 +115,110 @@ function Copyable({ t, text, children }) {
   )
 }
 
+/**
+ * FaultNotice — what a failed call shows.
+ *
+ * Until this existed, `verdict: 'ERROR'` rendered nothing at all: the error
+ * message carries `content: null`, so the transcript printed a bare FAULT chip
+ * and the actual reason sat unread in the record's telemetry. On stage that
+ * reads as the app being broken.
+ *
+ * The common cause by far is an expired credential, and both providers fail
+ * with a distinctive string, so the panel matches on those and prints the exact
+ * fix with a copy button — no hunting through CLAUDE.md mid-demo.
+ *
+ * The remedy is host-aware on purpose. A Vertex auth failure means a lapsed ADC
+ * login on a laptop, but on the EC2 host Vertex runs on Workload Identity
+ * Federation and there is no login to renew — telling someone to run
+ * `gcloud auth application-default login` there would send them the wrong way.
+ */
+const FAULT_REMEDIES = [
+  {
+    id: 'vertex-adc',
+    match: /GoogleAuthError|Unable to authenticate your request|invalid_grant|Reauthentication|application default credentials|could not (load|refresh) the default credentials/i,
+    title: 'Vertex credentials have expired',
+    local: {
+      why: 'The corp SSO session behind your Application Default Credentials has lapsed. There is no key file to replace — just sign in again.',
+      cmd: 'gcloud auth application-default login',
+      after: 'Then restart the Express server: GoogleAuth caches its client in-process, so a running server keeps using the dead credential.',
+    },
+    remote: {
+      why: 'This host authenticates to Vertex with Workload Identity Federation off its instance role, so there is no login to renew. Check that GOOGLE_APPLICATION_CREDENTIALS still points at the WIF config and that the instance role is attached.',
+      cmd: 'pm2 restart airs-server --update-env',
+      after: 'A plain `pm2 restart` reuses the environment pm2 captured at first start, and dotenv will not overwrite an env var that already exists.',
+    },
+  },
+  {
+    id: 'bedrock-sts',
+    match: /security token included in the request is invalid|ExpiredToken|InvalidClientTokenId|UnrecognizedClientException/i,
+    title: 'AWS credentials have expired',
+    local: {
+      why: 'The AWS keys in .env are ASIA… STS credentials, which are short-lived. All three values must be refreshed together.',
+      cmd: 'AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN',
+      after: 'Paste a fresh set into .env and restart the Express server.',
+    },
+    remote: {
+      why: 'This host uses its IAM instance role for Bedrock rather than keys, so an expired-token error points at the role or its trust policy, not at .env.',
+      cmd: 'aws sts get-caller-identity',
+      after: 'Run it on the host — if that fails too, the instance role itself is the problem.',
+    },
+  },
+]
+
+function FaultNotice({ t, reason }) {
+  const text = String(reason || '').trim()
+  // A browser pointed at localhost is the dev laptop; anything else is a
+  // deployed host, where the remedies genuinely differ.
+  const isLocal = typeof window !== 'undefined'
+    && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname)
+  const hit = FAULT_REMEDIES.find((r) => r.match.test(text))
+  const fix = hit && (isLocal ? hit.local : hit.remote)
+
+  return (
+    <div className="px-4 py-3 w-full" style={{
+      background: `${t.warn}0f`, border: `1px solid ${t.warn}44`,
+      borderRadius: 20, borderBottomLeftRadius: 6,
+    }}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <AlertTriangle size={13} style={{ color: t.warn }} />
+        <span style={{ ...LBL, fontSize: 9, color: t.warn }}>
+          {hit ? hit.title : 'The call did not complete'}
+        </span>
+      </div>
+
+      {text && (
+        <p style={{
+          fontFamily: FONT.mono, fontSize: 10.5, lineHeight: 1.5, color: t.inkDim,
+          wordBreak: 'break-word', overflowWrap: 'anywhere',
+        }}>
+          {text}
+        </p>
+      )}
+
+      {fix && (
+        <div className="mt-2.5">
+          <p style={{ fontFamily: FONT.prose, fontSize: 11, lineHeight: 1.55, color: t.inkDim }}>
+            {fix.why}
+          </p>
+          <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl"
+               style={{ background: t.codeBg, border: `1px solid ${t.hairline}` }}>
+            <span className="flex-1 min-w-0" style={{
+              fontFamily: FONT.mono, fontSize: 11.5, color: t.ink,
+              wordBreak: 'break-all', userSelect: 'all',
+            }}>
+              {fix.cmd}
+            </span>
+            <Copyable t={t} text={fix.cmd} />
+          </div>
+          <p className="mt-1.5" style={{ fontFamily: FONT.prose, fontSize: 10, lineHeight: 1.5, color: t.inkFaint }}>
+            {fix.after}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Reveal({ t, icon: Icon, title, count, accent, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen)
   const c = accent || t.inkDim
@@ -511,6 +615,8 @@ function Record({ t, user, assistant, onSelect, selected, onOpenTrace, onResend,
           <div className="flex flex-col items-start w-full" style={{ maxWidth: '82%' }}>
             {v === 'blocked' ? (
               <BlockedNotice t={t} backend={ranOn} stage={stage} telemetry={assistant.telemetry} he={heIn} />
+            ) : v === 'error' ? (
+              <FaultNotice t={t} reason={assistant.blockReason} />
             ) : assistant.content ? (
               /* Rendered markdown, not pre-wrapped text: a tool-calling answer
                  comes back as a table and used to land as a wall of pipes. */

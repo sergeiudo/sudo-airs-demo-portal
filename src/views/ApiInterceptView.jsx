@@ -14,7 +14,9 @@ import { PromptTelemetryDrawer } from '../components/api-intercept/PromptTelemet
 // the selection is missing from the fetched list, so this is a preference
 // rather than a single point of failure.
 const DEFAULT_MODELS = {
-  vertex:  'gemini-2.5-flash',
+  // `google/`-prefixed and global-region: served via the OpenAI-compatible
+  // endpoint rather than the Vertex SDK. Keep the prefix.
+  vertex:  'google/gemini-3.5-flash',
   bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
   azure:   'gpt-5.4-nano',
   aigw:    '@sudo-bedrock/moonshotai.kimi-k2.5',

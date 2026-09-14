@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu, ShieldCheck, Building2 } from 'lucide-react'
+import { ChevronDown, Loader2, CheckCircle2, AlertCircle, RefreshCw, Cpu, ShieldCheck, Building2, KeyRound, Copy, Check } from 'lucide-react'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 
@@ -61,6 +61,32 @@ const TIER_BADGE = {
   denied:   { text: 'POLICY DENIED', dark: 'bg-red-500/25 text-red-300',  light: 'bg-red-100 text-red-800' },
 }
 
+// The one command that brings Vertex back when the corp SSO session behind ADC
+// lapses. Kept as a constant so the rail note and the clipboard never drift.
+const ADC_LOGIN_CMD = 'gcloud auth application-default login'
+
+// A Portkey integration slug says which cloud a row lands in, but `@sudo-bedrock`
+// is jargon to a customer. The heading spells the cloud out and keeps the slug
+// beside it, because the slug is what appears in the model id and in SCM logs.
+const PROVIDER_TITLE = {
+  '@sudo-bedrock':  'AWS Bedrock',
+  '@sudo-vertexai': 'Google Vertex AI',
+}
+
+function providerHeading(p) {
+  const slug = /(@[\w-]+)/.exec(p || '')?.[1]
+  if (!slug) return p || 'Models'
+  return `${PROVIDER_TITLE[slug] ?? slug} · ${slug}`
+}
+
+// Cloud colours, not protection colours: orange is AWS, blue is Google. This
+// chip answers "where does this call actually land" at a glance, so it must not
+// be confused with the pink/green the guardrail owns.
+const SLUG_CHIP = {
+  '@sudo-bedrock':  { text: 'AWS',    fg: '#b45309', bg: 'rgba(245,158,11,0.16)' },
+  '@sudo-vertexai': { text: 'GCP',    fg: '#1d4ed8', bg: 'rgba(66,133,244,0.16)' },
+}
+
 const STATUS_DOT = {
   available:    'bg-emerald-400',
   experimental: 'bg-yellow-400',
@@ -70,6 +96,8 @@ const STATUS_DOT = {
 
 export function ModelSelector({ backend, model, onBackendChange, onModelChange }) {
   const [tenantOpen, setTenantOpen] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authCopied, setAuthCopied] = useState(false)
   const theme = useProtectionTheme()
   // Reactive theme. Every colour below was hardcoded to dark-theme greys, which
   // rendered the model names near-invisible on the light background.
@@ -154,6 +182,51 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
   )
 
   const activeModel = currentModels.find(m => m.id === model) ?? { id: model, label: model }
+  // Read off the id, not the picker's provider field — the id is what actually
+  // routes, and a stale/unknown selection should show nothing rather than lie.
+  const activeSlug = /^(@[\w-]+)\//.exec(String(model || ''))?.[1] ?? null
+
+  /**
+   * Grouped by provider, in the order the server returned them.
+   *
+   * On the AI-GW backend `provider` is the integration slug, and that is the
+   * one thing a viewer has to be able to see at a glance now that one gateway
+   * fronts two clouds — a flat list repeating "via @sudo-bedrock" on every row
+   * made the Vertex models impossible to find and the distinction easy to miss.
+   * The other backends group by vendor for free, which is also an improvement.
+   * A single group means no header: grouping one pile under its own name is
+   * just a wasted row.
+   */
+  const groups = useMemo(() => {
+    const out = []
+    const byKey = new Map()
+    for (const m of filtered) {
+      const key = m.provider || ''
+      if (!byKey.has(key)) {
+        const g = { key, models: [] }
+        byKey.set(key, g)
+        out.push(g)
+      }
+      byKey.get(key).models.push(m)
+    }
+    return out
+  }, [filtered])
+  const grouped = groups.length > 1
+
+  /**
+   * Collapsible provider sections.
+   *
+   * Default is derived, not stored: the group holding the current selection is
+   * open and the others are shut, so you land on where you already are with the
+   * other cloud one click away instead of ten rows of scrolling. A click
+   * records an override for that group only. While a filter is active every
+   * group opens — a search that hides its own matches is broken.
+   */
+  const [openOverride, setOpenOverride] = useState({})
+  const groupHasActive = (g) => g.models.some((m) => m.id === model)
+  const isGroupOpen = (g) => (filter ? true : (openOverride[g.key] ?? groupHasActive(g)))
+  const toggleGroup = (g) =>
+    setOpenOverride((prev) => ({ ...prev, [g.key]: !(prev[g.key] ?? groupHasActive(g)) }))
 
   return (
     <div className="relative" ref={panelRef}>
@@ -222,6 +295,21 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
           <span className="flex-1 text-[11px] font-mono text-slate-300 truncate">
             {activeModel.label || activeModel.id}
           </span>
+          {/* Which cloud the selected model routes to, on the closed control.
+              With one gateway fronting two providers, the model name alone does
+              not say where the call lands — and that is the entire point of the
+              backend. Only rendered when the id carries an integration slug. */}
+          {activeSlug && (
+            <span
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide flex-shrink-0"
+              style={{
+                color: SLUG_CHIP[activeSlug]?.fg ?? C.meta,
+                background: SLUG_CHIP[activeSlug]?.bg ?? 'transparent',
+              }}
+            >
+              {SLUG_CHIP[activeSlug]?.text ?? activeSlug}
+            </span>
+          )}
           {isLoading ? (
             <Loader2 size={10} className="animate-spin text-slate-500 flex-shrink-0" />
           ) : (
@@ -272,6 +360,78 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
                     Same tenant as Ministry of Health. Vertex, Bedrock and Azure log to the team
                     tenant instead — an AI-GW scan will not appear in their console.
                   </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* ── How Vertex authenticates, and the one command that renews it ──
+            There is no key file for this backend any more: local runs on an ADC
+            login that dies with the corp SSO session, EC2 on keyless Workload
+            Identity Federation. When it lapses the only symptom is a FAULT
+            chip, so the fix lives here, one click from copyable, rather than
+            being remembered mid-demo. Collapsed by default like the tenant
+            note — this is a footnote until the moment it is the whole problem. */}
+        {backend === 'vertex' && (
+          <div
+            className="rounded-lg border overflow-hidden"
+            style={{
+              background: isLight ? 'rgba(66,133,244,0.07)' : 'rgba(66,133,244,0.10)',
+              borderColor: isLight ? 'rgba(66,133,244,0.28)' : 'rgba(66,133,244,0.30)',
+            }}
+          >
+            <button
+              onClick={() => setAuthOpen((o) => !o)}
+              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left"
+              title="How this backend authenticates, and how to renew it"
+            >
+              <KeyRound size={10} style={{ color: '#4285F4', flexShrink: 0 }} />
+              <span className="text-[9.5px] font-bold flex-1 min-w-0 truncate" style={{ color: '#4285F4' }}>
+                Auth → keyless ADC · renew if FAULT
+              </span>
+              <ChevronDown size={10} style={{
+                color: '#4285F4', flexShrink: 0,
+                transform: authOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms',
+              }} />
+            </button>
+            <AnimatePresence initial={false}>
+              {authOpen && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }}
+                            className="overflow-hidden">
+                  <div className="px-2.5 pb-2">
+                    <p className="text-[9.5px] leading-snug mb-1.5" style={{ color: C.note }}>
+                      No service-account key: corp policy caps them at 30 days. Local uses an
+                      Application Default Credentials login; EC2 uses Workload Identity Federation
+                      off its instance role and never expires.
+                    </p>
+                    <div
+                      className="flex items-center gap-1.5 rounded px-2 py-1.5"
+                      style={{
+                        background: isLight ? 'rgba(15,23,42,0.05)' : 'rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <code className="text-[9.5px] flex-1 min-w-0 break-all" style={{ color: C.name, userSelect: 'all' }}>
+                        {ADC_LOGIN_CMD}
+                      </code>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigator.clipboard?.writeText(ADC_LOGIN_CMD)
+                          setAuthCopied(true)
+                          setTimeout(() => setAuthCopied(false), 1200)
+                        }}
+                        title="Copy"
+                        style={{ color: authCopied ? '#16a34a' : C.note, flexShrink: 0 }}
+                      >
+                        {authCopied ? <Check size={11} /> : <Copy size={11} />}
+                      </button>
+                    </div>
+                    <p className="text-[9px] leading-snug mt-1.5" style={{ color: C.note }}>
+                      Then restart the Express server — GoogleAuth caches its client.
+                    </p>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -331,57 +491,119 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
               ) : filtered.length === 0 ? (
                 <div className="py-6 text-center text-xs" style={{ color: C.meta }}>No models match</div>
               ) : (
-                filtered.map((m, i) => {
-                  const isSelected = m.id === model
-                  const dot = STATUS_DOT[m.status] ?? STATUS_DOT.unknown
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => { onModelChange(m.id); setOpen(false); setFilter('') }}
-                      className={`w-full flex items-start gap-2.5 px-3 py-3 text-left transition-colors duration-100 border-l-2
-                        ${isSelected
-                          ? `${activeTab?.activeBg} border-l-[${activeTab?.activeColor}]`
-                          : 'border-l-transparent hover:bg-white/5'
-                        }`}
-                      style={isSelected ? { borderLeftColor: activeTab?.activeColor } : {}}
-                    >
-                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${dot}`} />
-                      <div className="flex-1 min-w-0">
+                groups.map((g) => (
+                  <div key={g.key || 'all'}>
+                    {grouped && (
+                      // Sticky: with two clouds in one list, the heading has to
+                      // stay on screen while you scroll or you lose track of
+                      // which provider you are looking at halfway down.
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(g)}
+                        className="sticky top-0 z-10 w-full flex items-center gap-2 px-3 py-2 text-left transition-colors"
+                        style={{ background: C.panelBg, borderBottom: `1px solid ${C.divider}` }}
+                        title={isGroupOpen(g) ? 'Collapse this provider' : 'Expand this provider'}
+                      >
+                        <ChevronDown
+                          size={10}
+                          className="flex-shrink-0"
+                          style={{
+                            color: C.meta,
+                            transform: isGroupOpen(g) ? 'none' : 'rotate(-90deg)',
+                            transition: 'transform 160ms',
+                          }}
+                        />
+                        {/* Cloud dot: the same orange/blue as the chip on the
+                            closed control, so the eye links the two. */}
                         <span
-                          className="block text-[13px] font-semibold truncate"
-                          style={{ color: isSelected ? activeTab?.activeColor : C.name }}
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={{ background: SLUG_CHIP[/(@[\w-]+)/.exec(g.key || '')?.[1]]?.fg ?? C.meta }}
+                        />
+                        <span
+                          className="text-[9px] font-bold tracking-[0.1em] uppercase truncate"
+                          style={{ color: isLight ? '#334155' : '#cbd5e1' }}
                         >
-                          {m.label ?? m.id}
+                          {providerHeading(g.key)}
                         </span>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          {m.provider && (
-                            <span className="text-[10px]" style={{ color: C.meta }}>{m.provider}</span>
-                          )}
-                          {/* Tier is the whole point of the curated list: which
-                              models resist an injection and which comply. */}
-                          {/* Never let an untested model look tested. */}
-                          {m.verified === false && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${isLight ? 'bg-violet-100 text-violet-700' : 'bg-violet-500/25 text-violet-300'}`}>
-                              UNVERIFIED
-                            </span>
-                          )}
-                          {m.tier && TIER_BADGE[m.tier] && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${isLight ? TIER_BADGE[m.tier].light : TIER_BADGE[m.tier].dark}`}>
-                              {TIER_BADGE[m.tier].text}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] font-mono truncate block mt-0.5" style={{ color: C.mono }}>{m.id}</span>
-                        {m.note && (
-                          <span className="text-[10.5px] block leading-snug mt-1" style={{ color: C.note }}>{m.note}</span>
+                        <span className="flex-1 h-px" style={{ background: C.divider }} />
+                        {groupHasActive(g) && (
+                          <span
+                            className="text-[8.5px] font-bold px-1.5 py-0.5 rounded tracking-wide flex-shrink-0"
+                            style={{ color: activeTab?.activeColor, background: `${activeTab?.activeColor}1f` }}
+                          >
+                            IN USE
+                          </span>
                         )}
-                      </div>
-                      {isSelected && (
-                        <CheckCircle2 size={11} className="flex-shrink-0 mt-0.5" style={{ color: activeTab?.activeColor }} />
-                      )}
-                    </button>
-                  )
-                })
+                        <span className="text-[9px] font-mono flex-shrink-0" style={{ color: C.meta }}>
+                          {g.models.length}
+                        </span>
+                      </button>
+                    )}
+                    {grouped && !isGroupOpen(g) ? null : g.models.map((m) => {
+                      const isSelected = m.id === model
+                      const dot = STATUS_DOT[m.status] ?? STATUS_DOT.unknown
+                      const denied = m.tier === 'denied'
+                      // Inside a provider group the slug prefix is repeated on
+                      // every id and adds nothing — show the bare model name.
+                      const shownId = grouped ? m.id.replace(/^@[\w-]+\//, '') : m.id
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => { onModelChange(m.id); setOpen(false); setFilter('') }}
+                          className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left transition-colors duration-100 border-l-2
+                            ${isSelected
+                              ? `${activeTab?.activeBg} border-l-[${activeTab?.activeColor}]`
+                              : 'border-l-transparent hover:bg-white/5'
+                            }`}
+                          style={{
+                            ...(isSelected ? { borderLeftColor: activeTab?.activeColor } : {}),
+                            // A denied model is selectable-looking but useless;
+                            // dimming it says so before the click does.
+                            opacity: denied ? 0.6 : 1,
+                          }}
+                        >
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${dot}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className="text-[13px] font-semibold truncate"
+                                style={{ color: isSelected ? activeTab?.activeColor : C.name }}
+                              >
+                                {m.label ?? m.id}
+                              </span>
+                              {/* Tier is the whole point of the curated list:
+                                  which models resist an injection and which
+                                  comply. On the title line so it is scannable. */}
+                              {m.tier && TIER_BADGE[m.tier] && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide flex-shrink-0 ${isLight ? TIER_BADGE[m.tier].light : TIER_BADGE[m.tier].dark}`}>
+                                  {TIER_BADGE[m.tier].text}
+                                </span>
+                              )}
+                              {/* Never let an untested model look tested — but a
+                                  denied one is not "untested", it is blocked, and
+                                  two badges saying so is noise. */}
+                              {m.verified === false && !denied && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide flex-shrink-0 ${isLight ? 'bg-violet-100 text-violet-700' : 'bg-violet-500/25 text-violet-300'}`}>
+                                  UNVERIFIED
+                                </span>
+                              )}
+                            </div>
+                            {!grouped && m.provider && (
+                              <span className="text-[10px] block mt-0.5" style={{ color: C.meta }}>{m.provider}</span>
+                            )}
+                            <span className="text-[10px] font-mono truncate block mt-0.5" style={{ color: C.mono }}>{shownId}</span>
+                            {m.note && (
+                              <span className="text-[10.5px] block leading-snug mt-1" style={{ color: C.note }}>{m.note}</span>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 size={11} className="flex-shrink-0 mt-0.5" style={{ color: activeTab?.activeColor }} />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))
               )}
             </div>
 

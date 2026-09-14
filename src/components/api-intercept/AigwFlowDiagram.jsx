@@ -45,9 +45,29 @@ const SERVERS = [
   { name: 'CoinGecko',    meta: 'live market data',      color: '#8DC647', route: 'DIRECT',    routeColor: AMBER },
 ]
 
-export function AigwFlowDiagram({ isProtected, mcpEnabled, model }) {
+/**
+ * The gateway fronts two clouds. Which one a turn lands in is decided by the
+ * integration slug on the model id, so the diagram reads it from there — an
+ * earlier version printed `@sudo-bedrock` as a constant and went on printing it
+ * while a Gemini model was selected, which is a picture contradicting the
+ * switches, the one thing this diagram is not allowed to do.
+ */
+const INTEGRATIONS = [
+  { slug: '@sudo-bedrock',  cloud: 'AWS · us-west-2', color: '#F59E0B' },
+  { slug: '@sudo-vertexai', cloud: 'GCP · global',    color: '#4285F4' },
+]
+
+export function AigwFlowDiagram({ isProtected, mcpEnabled, model, modelId }) {
   const airs = isProtected ? PINK : OFF
-  const modelShort = String(model || '').split('/').pop() || 'bedrock model'
+  const modelShort = String(model || '').split('/').pop() || 'model'
+  // Routing comes off the ID, never the label. The 2027 console deliberately
+  // passes a human label for display ("Gemini 3.5 Flash Lite"), which carries no
+  // `@slug/` — reading routing from it silently pinned the picture to the first
+  // integration while a Vertex model was selected. `modelId` is the raw id; the
+  // legacy view passes only `model`, and that is already the raw id there.
+  const routingId = String(modelId || model || '')
+  const activeSlug = /^(@[\w-]+)\//.exec(routingId)?.[1] ?? INTEGRATIONS[0].slug
+  const active = INTEGRATIONS.find((i) => i.slug === activeSlug) ?? INTEGRATIONS[0]
 
   /** Rounded node with a title and an optional sub-label. */
   const Node = ({ cx, cy, w, h, title, sub, color, dashed, titleSize = 11.5 }) => (
@@ -132,7 +152,36 @@ export function AigwFlowDiagram({ isProtected, mcpEnabled, model }) {
 
         <circle cx={562} cy={110} r={62} fill="url(#afd-glow)" />
         <Node cx={562} cy={110} w={172} h={52} title="LLM" sub={modelShort} color={PURPLE} titleSize={13} />
-        <text x={562} y={152} textAnchor="middle" fontFamily={MONO} fontSize={8} fill={SLATE} opacity={0.7}>@sudo-bedrock</text>
+
+        {/* ── Two integrations, one gateway. Both are drawn; the one the current
+               model routes to is lit. This is the two-cloud story in a glance:
+               the SAME guardrail above sits in front of both. ── */}
+        <g>
+          {INTEGRATIONS.map((ig, i) => {
+            const w = 88
+            const x = 562 + (i === 0 ? -w - 4 : 4)
+            const on = ig.slug === active.slug
+            return (
+              <g key={ig.slug} opacity={on ? 1 : 0.34}>
+                <rect x={x} y={62} width={w} height={15} rx={7.5}
+                      fill={ig.color} fillOpacity={on ? 0.2 : 0.07}
+                      stroke={ig.color} strokeOpacity={on ? 0.75 : 0.3}
+                      strokeWidth={on ? 1.1 : 0.8}
+                      strokeDasharray={on ? undefined : '3 2'} />
+                <text x={x + w / 2} y={73} textAnchor="middle" fontFamily={MONO}
+                      fontSize={7.5} fontWeight={on ? 800 : 600} fill={ig.color}>
+                  {ig.slug}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+        {/* Cloud + region only. The slug is already on the lit chip above, and
+            the full string ran into the tool-result arrowhead — the clear gap
+            between the two MCP curves here is about 74px wide. */}
+        <text x={561} y={152} textAnchor="middle" fontFamily={MONO} fontSize={8} fill={active.color} opacity={0.95}>
+          {active.cloud}
+        </text>
 
         <Node cx={804} cy={110} w={152} h={46}
               title={isProtected ? 'AIRS GUARDRAIL' : 'NO GUARDRAIL'}
@@ -243,7 +292,7 @@ export function AigwFlowDiagram({ isProtected, mcpEnabled, model }) {
         <g opacity={0.9}>
           <text x={26} y={451} fontFamily={SANS} fontSize={9} fill={SLATE}>
             {isProtected
-              ? 'Every hop above is inspected — prompt, response, tool parameters, tool results, and the tool manifest itself.'
+              ? 'Every hop above is inspected — prompt, response, tool parameters, tool results, and the tool manifest itself. One guardrail covers both clouds.'
               : 'AIRS is off: nothing on this diagram is inspected. Turn protection on to see the controls engage.'}
           </text>
           <text x={1094} y={451} textAnchor="end" fontFamily={MONO} fontSize={8.5} fill={PINK} opacity={0.85}>
