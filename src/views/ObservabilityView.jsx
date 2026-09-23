@@ -13,7 +13,7 @@ import { P95Gauge } from '../components/observability/P95Gauge'
 import { BlockedStageBar } from '../components/observability/BlockedStageBar'
 import { FilterBar } from '../components/observability/FilterBar'
 import { TraceTable } from '../components/observability/TraceTable'
-import { TraceDrawer } from '../components/observability/TraceDrawer'
+import { PromptTelemetryDrawer } from '../components/api-intercept/PromptTelemetryDrawer'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart2 },
@@ -357,7 +357,7 @@ export function ObservabilityView() {
       )}
 
       {/* Slide-out drawer */}
-      <TraceDrawer traceId={selectedTraceId} onClose={() => setSelectedTraceId(null)} />
+      <PromptTelemetryDrawer traceId={selectedTraceId} onClose={() => setSelectedTraceId(null)} />
     </div>
   )
 }

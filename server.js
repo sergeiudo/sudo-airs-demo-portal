@@ -28,7 +28,7 @@ import {
   MAX_SCAN_CHARS,
 } from './file-extract.js'
 import { runMcpLoop, describeServers as describeMcpServers, MCP_SERVER_IDS } from './mcp-aigw.js'
-import { Timeline, captureHttp, perfNow, gatewayBreakdown, summarizeHooks, truncateDeep, redactDocument } from './telemetry.js'
+import { Timeline, captureHttp, perfNow, gatewayBreakdown, summarizeHooks, truncateDeep, redactDocument, airsFetch, SCAN_RETRY_MS, REPORT_RETRY_MS } from './telemetry.js'
 import os from 'os'
 import mohRouter, {
   MOH_ENV as SCM_ENV,
@@ -120,40 +120,6 @@ function awsCredentials() {
 // ─── AIRS scan helper ─────────────────────────────────────────────────────────
 // Fetch detailed threat scan report for one or more report_ids.
 // GET /v1/scan/reports?report_ids=R1,R2  (max 5 per call).
-/**
- * fetch() that rides out AIRS's per-second rate limit.
- *
- * AIRS answers HTTP 429 "Requests per second exceeded limit" when calls from one
- * key overlap. Deferring the report fetch made that reachable — a background
- * report can now coincide with the next request's scan — and a 429 on the scan
- * used to surface to the audience as a server error. Every attempt still shows
- * in the trace's network phases, so a retry is visible, not hidden.
- */
-async function airsFetch(url, init, delays) {
-  for (let i = 0; ; i++) {
-    const res = await fetch(url, init)
-    if (res.status !== 429) return res
-    const text = await res.text().catch(() => '')
-    // Two different 429s, measured: "Requests per second exceeded limit" (no
-    // retry_after — clears in well under a second) and the reports endpoint's
-    // per-minute quota, `retry_after: {interval: 1, unit: "minute"}`. Retrying
-    // the second in seconds only burns more of the quota, so stop and report it.
-    let waitMs = 0
-    try {
-      const ra = JSON.parse(text)?.error?.retry_after
-      if (ra?.interval) waitMs = ra.interval * ({ second: 1e3, minute: 6e4, hour: 36e5 }[ra.unit] ?? 1e3)
-    } catch { /* not JSON */ }
-    const path = new URL(url).pathname
-    if (i >= delays.length || waitMs > 5000) {
-      if (waitMs > 5000) console.warn(`[AIRS] 429 on ${path} — quota says retry in ${Math.round(waitMs / 1000)}s; not retrying`)
-      return new Response(text, { status: 429, headers: res.headers })
-    }
-    console.warn(`[AIRS] 429 rate limit on ${path} — retry ${i + 1}/${delays.length} in ${delays[i]}ms`)
-    await new Promise((r) => setTimeout(r, Math.max(delays[i], waitMs)))
-  }
-}
-const SCAN_RETRY_MS = [250, 600]          // enforcement path: short
-const REPORT_RETRY_MS = [500, 1200, 2500] // background: patient
 
 async function airsFetchReports(reportIds, { base = process.env.AIRS_BASE_URL, key = process.env.AIRS_API_KEY } = {}) {
   if (!reportIds || (Array.isArray(reportIds) && reportIds.length === 0)) return null
@@ -197,7 +163,10 @@ function startReportFetch(reportId, opts) {
   return promise
 }
 
-export async function airscan(prompt, response = null, model = 'unknown', { deferReport = false } = {}) {
+// deferReport — answer now, fetch the report in the background (chat).
+// skipReport  — no report at all: RAG never read it, and an upload needs only
+//               the deciding chunk's, fetched once after the loop.
+export async function airscan(prompt, response = null, model = 'unknown', { deferReport = false, skipReport = false } = {}) {
   const body = {
     tr_id: `citadel-${Date.now()}`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
@@ -229,10 +198,11 @@ export async function airscan(prompt, response = null, model = 'unknown', { defe
   const latencyMs = Math.round(scan.end - scan.start)
 
   // Deferred: hand back the in-flight fetch and let the caller answer first.
-  if (deferReport) {
+  // Skipped: no fetch at all.
+  if (deferReport || skipReport) {
     return {
       data, latencyMs, requestBody: body, requestUrl: url, report: null,
-      reportPromise: data?.report_id ? startReportFetch(data.report_id) : null,
+      reportPromise: deferReport && data?.report_id ? startReportFetch(data.report_id) : null,
       requestId: res.headers.get('x-request-id'),
       phases: { scan: { start: scan.start, end: scan.end, http: scan.http }, report: null },
     }
@@ -473,17 +443,26 @@ function makeBedrockRuntime() {
   })
 }
 
+// Bedrock ids that only answer as a cross-region inference profile. The bare id
+// is refused ("on-demand throughput isn't supported"), and trying it first cost
+// a full extra round trip on EVERY call — measured: Bedrock spent 0.5–1.1s on
+// the model while the call took 1.8–2.4s. Seeded from BEDROCK_CURATED's
+// `profile: true` flags and learned at runtime for any other id, so an id pays
+// the refusal at most once per process. The ids themselves stay bare, because
+// that is what the Bedrock catalogue lists and what the picker matches on.
+const NEEDS_PROFILE = new Set()
+
 export async function callBedrock(prompt, modelId) {
   const client = makeBedrockRuntime()
   const t0 = Date.now()
 
   // ConverseCommand is the universal Bedrock API — works across all model families
   // and is required for cross-region inference profiles.
-  // For newer models needing inference profiles, auto-retry with us. prefix.
-  const candidateIds = [modelId]
-  if (!modelId.startsWith('us.') && !modelId.startsWith('eu.')) {
-    candidateIds.push(`us.${modelId}`)
-  }
+  const bare = !modelId.startsWith('us.') && !modelId.startsWith('eu.') && !modelId.startsWith('global.')
+  const knownProfile = bare && NEEDS_PROFILE.has(modelId)
+  const candidateIds = !bare ? [modelId]
+    : knownProfile ? [`us.${modelId}`, modelId]
+    : [modelId, `us.${modelId}`]
 
   // Transient capacity errors are real and common on newer models. Measured on
   // us.anthropic.claude-opus-5: three consecutive ServiceUnavailableException
@@ -516,7 +495,12 @@ export async function callBedrock(prompt, modelId) {
       const blocks = response.output?.message?.content ?? []
       const text = blocks.map((b) => b?.text).filter(Boolean).join('') || ''
       const usage = response.usage ?? {}
-      if (id !== modelId) console.log(`[Bedrock] Auto-retried with inference profile: ${id}`)
+      // A refusal happened only if we tried the bare id first and it failed.
+      const refusedFirst = id !== modelId && !knownProfile
+      if (refusedFirst) {
+        NEEDS_PROFILE.add(modelId)
+        console.log(`[Bedrock] ${modelId} needs an inference profile — using ${id} from now on`)
+      }
       return {
         text,
         latencyMs,
@@ -530,7 +514,8 @@ export async function callBedrock(prompt, modelId) {
           path: 'AWS Bedrock · Converse',
           region: process.env.AWS_REGION || 'us-east-1',
           invokedId: id,
-          profileRetry: id !== modelId, // bare id refused → retried as a us. inference profile
+          profileRetry: refusedFirst,              // bare id refused on THIS call, then retried
+          profileKnown: knownProfile && id !== modelId, // went straight to the profile — no refusal
           transientRetries: attempt - 1,
           requestId: response.$metadata?.requestId ?? null,
           sdkAttempts: response.$metadata?.attempts ?? null,
@@ -1405,6 +1390,19 @@ const BEDROCK_CURATED = [
   { id: 'moonshotai.kimi-k2.5',                     label: 'Kimi K2.5',          provider: 'Moonshot AI', tier: 'denied',   status: 'unavailable', verified: true, note: 'Added to the same org SCP in Sep 2026 — worked until then.' },
 ]
 
+// Measured in the Sep 2026 us-west-2 sweep: every one of these refuses its bare
+// id and answers only as a `us.` inference profile. Seeding them means
+// callBedrock() goes straight to the profile instead of paying a refusal first.
+for (const id of [
+  'anthropic.claude-opus-5', 'anthropic.claude-opus-5-5', 'anthropic.claude-sonnet-5', 'anthropic.claude-opus-4-8',
+  'anthropic.claude-opus-4-7', 'anthropic.claude-opus-4-6-v1', 'anthropic.claude-sonnet-4-6',
+  'anthropic.claude-opus-4-5-20251101-v1:0', 'anthropic.claude-sonnet-4-5-20250929-v1:0', 'anthropic.claude-haiku-4-5-20251001-v1:0',
+  'openai.gpt-6-astra', 'openai.gpt-6-sol', 'openai.gpt-6-luna', 'openai.gpt-5.6-terra', 'openai.gpt-5.6-sol', 'openai.gpt-5.6-luna',
+  'amazon.nova-pro-v1:0', 'amazon.nova-2-lite-v1:0', 'amazon.nova-micro-v1:0',
+  'meta.llama3-3-70b-instruct-v1:0', 'meta.llama4-scout-17b-instruct-v1:0', 'meta.llama4-maverick-17b-instruct-v1:0',
+  'mistral.pixtral-large-2502-v1:0', 'writer.palmyra-x4-v1:0', 'writer.palmyra-x5-v1:0',
+]) NEEDS_PROFILE.add(id)
+
 app.get('/api/models/bedrock', async (req, res) => {
   const wantAll = req.query.all === '1'
   try {
@@ -1805,7 +1803,7 @@ app.post('/api/upload/scan', async (req, res) => {
       for (const c of chunks) {
         let scan
         try {
-          scan = await airscan(c.text, null, 'file-upload')
+          scan = await airscan(c.text, null, 'file-upload', { skipReport: true })
         } catch (e) {
           // One flaky chunk must not discard the whole upload, and a partially
           // scanned file must never be reported as clean.
@@ -1855,6 +1853,14 @@ app.post('/api/upload/scan', async (req, res) => {
     }
 
     if (!result.scanId) result.scanId = result.scans.find((s) => s.scan_id)?.scan_id || null
+    // Only the deciding chunk's report is ever shown, so fetch that one — once,
+    // deferred — instead of one per chunk. A 40k-char file used to make ten
+    // report calls and throw nine away, and the reports endpoint has a
+    // per-minute quota. The console hydrates it via GET /api/airs/report.
+    if (result.scanDetail?.report_id) {
+      startReportFetch(result.scanDetail.report_id)
+      result.scanDetail.reportPending = true
+    }
     // A blocked document never travels back to the browser, so it cannot become
     // chat context even if the UI were bypassed.
     if (!result.blocked) result.text = extracted.text
@@ -2156,7 +2162,7 @@ app.post('/api/rag/query', async (req, res) => {
 
     // Step 3: AIRS Upstream Scan (pre-LLM)
     if (airsEnabled) {
-      const upstreamResult = await airscan(result.augmentedPrompt, null, 'rag-demo')
+      const upstreamResult = await airscan(result.augmentedPrompt, null, 'rag-demo', { skipReport: true })
       result.upstreamScan = {
         action: upstreamResult.data.action,
         category: upstreamResult.data.category,
@@ -2178,7 +2184,7 @@ app.post('/api/rag/query', async (req, res) => {
 
     // Step 5: AIRS Downstream Scan (post-LLM)
     if (airsEnabled) {
-      const downstreamResult = await airscan(result.augmentedPrompt, result.llmResponse, 'rag-demo')
+      const downstreamResult = await airscan(result.augmentedPrompt, result.llmResponse, 'rag-demo', { skipReport: true })
       result.downstreamScan = {
         action: downstreamResult.data.action,
         category: downstreamResult.data.category,

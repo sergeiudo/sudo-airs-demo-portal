@@ -47,6 +47,7 @@ import {
   MAX_SCAN_CHARS,
 } from './file-extract.js'
 import { PAIRS } from './moh-probe-pairs.js'
+import { Timeline, captureHttp, perfNow, gatewayTraceDetail, airsFetch, SCAN_RETRY_MS } from './telemetry.js'
 
 const router = express.Router()
 
@@ -270,11 +271,13 @@ async function airscanMoh({
   }
 
   const t0 = Date.now()
-  const res = await fetch(`${ENV.airsBase}/v1/scan/sync/request`, {
+  // Rides out AIRS's per-second 429 — the MCP loop and the agent fire tool
+  // scans in quick succession through here.
+  const res = await airsFetch(`${ENV.airsBase}/v1/scan/sync/request`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-pan-token': ENV.airsKey },
     body: JSON.stringify(body),
-  })
+  }, SCAN_RETRY_MS)
   if (!res.ok) {
     throw new Error(`AIRS scan failed (${res.status}): ${(await res.text()).slice(0, 300)}`)
   }
@@ -309,7 +312,33 @@ function loadReplay(key) {
   return { ...hit.payload, replayed: true, replayedFrom: hit.savedAt }
 }
 
-async function persistMohTrace({ prompt, response, verdict, model, latencyMs, hookResults, tokensIn, tokensOut, scenario, family }) {
+/**
+ * Measured detail for a MOH trace — same shape as /api/chat's, so the Prompt
+ * Telemetry drawer (Observability pillar) renders it. `calls` are the gateway
+ * round trips with their stamps; direct tool scans are already spans on `tl`.
+ */
+function mohDetail({ tl, model, verdict, airsEnabled, calls, headers, tokens, tools = null, document = null }) {
+  const { configId, mode } = resolveConfig(airsEnabled)
+  return gatewayTraceDetail({
+    tl,
+    backend: 'moh-aigw',
+    modelId: model,
+    verdict,
+    airsEnabled,
+    enforcement: airsEnabled ? (tools ? 'ai-gateway-guardrail + tool_event' : 'ai-gateway-guardrail') : 'none',
+    calls,
+    headers,
+    gateway: { baseUrl: ENV.baseUrl, configId: configId ?? null, lane: airsEnabled ? `protected (${mode})` : 'unprotected' },
+    tokens,
+    path: 'MOH · SCM AI-GW → provider',
+    profile: ENV.airsProfile || null,
+    tsg: process.env.AIGW_TSG_ID || null,
+    tools,
+    document,
+  })
+}
+
+async function persistMohTrace({ prompt, response, verdict, model, latencyMs, hookResults, tokensIn, tokensOut, scenario, family, detail = null }) {
   try {
     const { persistTrace } = await import('./server.js')
     const inputScan = extractAirsScan(hookResults?.before_request_hooks)
@@ -345,6 +374,7 @@ async function persistMohTrace({ prompt, response, verdict, model, latencyMs, ho
       resolvedModelId: model,
       airsEnabled: !!(inputScan || outputScan),
       attackMeta: { label: scenario || 'moh', extras: { family, hookResults } },
+      detail,
     })
   } catch (e) {
     console.warn('[moh] persistMohTrace failed:', e?.message)
@@ -588,12 +618,25 @@ router.post('/chat', async (req, res) => {
   let blocked = false
   let cacheState = 'disabled'
   let portkeyTraceId = null
+  // Measured stamps for the trace: the call, the first and last token, and the
+  // HTTP exchange. Time-to-first-token is the number a chat user feels.
+  const tl = new Timeline()
+  let callStart = null
+  let firstToken = null
+  let lastToken = null
+  let callHttp = []
+  let gwHeaders = null
+  const callOf = (hr, end = perfNow()) => [{
+    label: 'MOH chat · streamed through the AI-GW',
+    start: callStart ?? tl.t0, end, http: callHttp, hookResults: hr, firstToken, lastToken,
+  }]
 
   async function emitBlocked(blockedHook, hr) {
     const latencyMs = Date.now() - startedAt
     const traceId = await persistMohTrace({
       prompt: promptText, response: null, verdict: 'BLOCKED',
       model, latencyMs, hookResults: hr, scenario, family,
+      detail: mohDetail({ tl, model, verdict: 'BLOCKED', airsEnabled, calls: callOf(hr), headers: gwHeaders, tokens: {}, document }),
     })
     sendEvent('blocked', {
       reason: blockedHook,
@@ -606,7 +649,8 @@ router.post('/chat', async (req, res) => {
 
   try {
     const client = buildAigwClient(configId, { metadata: gwMetadata({ lang, scenario, family }) })
-    const stream = await client.chat.completions.create({
+    callStart = perfNow()
+    const cap = await captureHttp(() => client.chat.completions.create({
       model,
       messages: fullMessages,
       stream: true,
@@ -615,11 +659,14 @@ router.post('/chat', async (req, res) => {
       // stream, which reads as sluggish on a projector. Capping bounds the
       // worst case and the cost; the system prompt already asks for brevity.
       max_tokens: Number(process.env.MOH_MAX_TOKENS) || 700,
-    })
+    }))
+    const stream = cap.value
+    callHttp = cap.http // the exchange keeps updating as the stream is read
 
     try {
       const h = stream?.response?.headers
       if (h) {
+        gwHeaders = h
         cacheState = String(h.get('x-portkey-cache-status') || cacheState).toUpperCase()
         portkeyTraceId = h.get('x-portkey-trace-id') || null
       }
@@ -653,6 +700,9 @@ router.post('/chat', async (req, res) => {
 
       const token = chunk?.choices?.[0]?.delta?.content || ''
       if (token) {
+        const at = perfNow()
+        if (firstToken == null) firstToken = at
+        lastToken = at
         chunkCount += 1
         assembled += token
         sendEvent(null, { type: 'token', text: token })
@@ -665,10 +715,12 @@ router.post('/chat', async (req, res) => {
       // AIRS may have flagged this and the gateway served it anyway (flag-only
       // guardrail). That is not the same as clean.
       const flagged = hookVerdictFailed(hookResults)
+      const verdict = flagged ? 'FLAGGED' : airsEnabled ? 'ALLOWED' : 'DIRECT'
       const traceId = await persistMohTrace({
         prompt: promptText, response: assembled,
-        verdict: flagged ? 'FLAGGED' : airsEnabled ? 'ALLOWED' : 'DIRECT',
+        verdict,
         model, latencyMs, hookResults, tokensIn, tokensOut, scenario, family,
+        detail: mohDetail({ tl, model, verdict, airsEnabled, calls: callOf(hookResults), headers: gwHeaders, tokens: { input: tokensIn, output: tokensOut }, document }),
       })
       sendEvent('metadata', {
         hook_results: hookResults,
@@ -761,11 +813,17 @@ router.post('/rag', async (req, res) => {
   }
 
   const startedAt = Date.now()
+  const tl = new Timeline()
+  let call = null // { start, end, http, hookResults } — the gateway round trip
+  let gwHeaders = null
   try {
     const { configId, mode: laneMode } = resolveConfig(airsEnabled)
     result.laneMode = laneMode
 
+    const r0 = perfNow()
     const docs = mohRetrieve(query, forceDocIds, topK)
+    tl.add('rag_retrieval', `Retrieval · ${docs.length} document${docs.length === 1 ? '' : 's'}`, r0, perfNow(),
+      { docs: docs.map((d) => d.id).join(', ') })
     result.retrievedDocs = docs.map((d) => ({
       id: d.id, title_he: d.title_he, title_en: d.title_en,
       gloss_en: d.gloss_en, risk: d.risk, tags: d.tags,
@@ -782,14 +840,18 @@ router.post('/rag', async (req, res) => {
     const client = buildAigwClient(configId, {
       metadata: gwMetadata({ lang, scenario, family: 'rag' }),
     })
-    const completion = await client.chat.completions.create({
+    call = { label: 'MOH RAG · answer through the AI-GW', start: perfNow(), end: null, http: [], hookResults: null }
+    const cap = await captureHttp(() => client.chat.completions.create({
       model,
       messages: [
         { role: 'system', content: RAG_SYSTEM[lang] || RAG_SYSTEM.he },
         { role: 'user', content: result.augmentedPrompt },
       ],
       max_tokens: 900,
-    })
+    })).catch((e) => { call.end = perfNow(); throw e })
+    const completion = cap.value
+    Object.assign(call, { end: cap.end, http: cap.http, hookResults: completion?.hook_results || null })
+    try { gwHeaders = completion?.getHeaders?.() ?? null } catch { /* absent */ }
 
     result.hookResults = completion?.hook_results || null
     result.upstreamScan = stageFromHook(result.hookResults?.before_request_hooks, 'prompt')
@@ -824,13 +886,16 @@ router.post('/rag', async (req, res) => {
     }
 
     result.latencyMs = Date.now() - startedAt
+    const verdict = result.blocked ? 'BLOCKED' : result.flagged ? 'FLAGGED' : airsEnabled ? 'ALLOWED' : 'DIRECT'
+    const tokens = { input: completion?.usage?.prompt_tokens ?? null, output: completion?.usage?.completion_tokens ?? null }
     result.traceId = await persistMohTrace({
       prompt: result.augmentedPrompt, response: result.answer,
-      verdict: result.blocked ? 'BLOCKED' : result.flagged ? 'FLAGGED' : airsEnabled ? 'ALLOWED' : 'DIRECT',
+      verdict,
       model, latencyMs: result.latencyMs, hookResults: result.hookResults,
-      tokensIn: completion?.usage?.prompt_tokens ?? null,
-      tokensOut: completion?.usage?.completion_tokens ?? null,
+      tokensIn: tokens.input,
+      tokensOut: tokens.output,
       scenario, family: 'rag',
+      detail: mohDetail({ tl, model, verdict, airsEnabled, calls: [call], headers: gwHeaders, tokens }),
     })
 
     saveReplay(replayKey, result)
@@ -849,6 +914,7 @@ router.post('/rag', async (req, res) => {
       result.traceId = await persistMohTrace({
         prompt: result.augmentedPrompt, response: null, verdict: 'BLOCKED',
         model, latencyMs: result.latencyMs, hookResults: hr, scenario, family: 'rag',
+        detail: call ? mohDetail({ tl, model, verdict: 'BLOCKED', airsEnabled, calls: [{ ...call, end: call.end ?? perfNow(), hookResults: hr }], headers: gwHeaders, tokens: {} }) : null,
       })
       saveReplay(replayKey, result)
       return res.json(result)
@@ -890,6 +956,47 @@ router.post('/agent', async (req, res) => {
   const startedAt = Date.now()
   const toolInput = JSON.stringify(params)
 
+  // ── Measured trace ─────────────────────────────────────────────────────────
+  // Every exit records a trace now. The three blocks (prompt, parameters,
+  // output) used to return before the only persist call, so the runs most worth
+  // inspecting never reached the Observability pillar.
+  const tl = new Timeline()
+  const calls = []
+  let gwHeaders = null
+  let tokensIn = 0
+  let tokensOut = 0
+  const toolStep = { kind: 'tool', title: `moh-health-services · ${tool}`, server: 'moh-health-services', tool, args: params, round: 1, inputScan: null, outputScan: null, blocked: false, error: null }
+  const traceIt = async () => {
+    const verdict = result.blocked ? 'BLOCKED' : airsEnabled ? 'ALLOWED' : 'DIRECT'
+    toolStep.blocked = typeof result.blockStage === 'number'
+    const tools = { kind: 'agent', route: `MOH agent · ${tool}`, servers: ['moh-health-services'], rounds: 1, toolCalls: 1, turns: [], steps: [toolStep] }
+    result.latencyMs = Date.now() - startedAt
+    result.traceId = await persistMohTrace({
+      prompt: prompt || toolInput,
+      response: result.answer ?? (result.toolResult ? JSON.stringify(result.toolResult) : null),
+      verdict, model, latencyMs: result.latencyMs, hookResults: result.hookResults,
+      tokensIn: tokensIn || null, tokensOut: tokensOut || null,
+      scenario, family: 'agent',
+      detail: mohDetail({ tl, model, verdict, airsEnabled, calls, headers: gwHeaders, tokens: { input: tokensIn || null, output: tokensOut || null }, tools }),
+    })
+  }
+  const gatewayTurn = async (label, client, body) => {
+    const c = { label, start: perfNow(), end: null, http: [], hookResults: null }
+    calls.push(c)
+    try {
+      const cap = await captureHttp(() => client.chat.completions.create(body))
+      Object.assign(c, { end: cap.end, http: cap.http, hookResults: cap.value?.hook_results || null })
+      try { gwHeaders = cap.value?.getHeaders?.() ?? gwHeaders } catch { /* absent */ }
+      tokensIn += cap.value?.usage?.prompt_tokens ?? 0
+      tokensOut += cap.value?.usage?.completion_tokens ?? 0
+      return cap.value
+    } catch (e) {
+      c.end = perfNow()
+      c.hookResults = parseBlockError(e).hookResults
+      throw e
+    }
+  }
+
   try {
     // ── Step 0: the user prompt goes through the AI-GW guardrail ──
     //
@@ -915,7 +1022,7 @@ router.post('/agent', async (req, res) => {
         const decideSys = lang === 'he'
           ? 'אתה עוזר בריאות דיגיטלי. ציין במשפט קצר באיזה שירות בריאות תשתמש כדי לענות. אל תמציא מידע.'
           : 'You are a health assistant. State in one short sentence which health service you would use to answer. Do not invent information.'
-        const decide = await client.chat.completions.create({
+        const decide = await gatewayTurn('AI-GW · prompt check (decide turn)', client, {
           model,
           messages: [{ role: 'system', content: decideSys }, { role: 'user', content: prompt }],
           max_tokens: 48,
@@ -929,7 +1036,7 @@ router.post('/agent', async (req, res) => {
           result.blocked = true
           result.blockStage = 'prompt'
           result.blockReason = result.inputScan?.category || 'blocked by the AI-GW AIRS guardrail'
-          result.latencyMs = Date.now() - startedAt
+          await traceIt()
           saveReplay(replayKey, result)
           return res.json(result)
         }
@@ -941,7 +1048,7 @@ router.post('/agent', async (req, res) => {
           result.blockReason = blockedHook
           result.hookResults = hr
           result.inputScan = stageFromHook(hr?.before_request_hooks, 'prompt')
-          result.latencyMs = Date.now() - startedAt
+          await traceIt()
           saveReplay(replayKey, result)
           return res.json(result)
         }
@@ -954,9 +1061,14 @@ router.post('/agent', async (req, res) => {
     // here is what made every scenario look like a tool-parameter catch.
     if (airsEnabled) {
       try {
-        const s1 = await airscanMoh({
+        const cap = await captureHttp(() => airscanMoh({
           toolName: tool, toolInput, model,
-        })
+        }))
+        const s1 = cap.value
+        tl.add('mcp_tool_params_scan', `AIRS tool_event · ${tool} parameters`, cap.start, cap.end,
+          { action: s1.data.action, category: s1.data.category, scan_id: s1.data.scan_id },
+          { http: cap.http, status: s1.data.action === 'block' ? 'blocked' : 'ok' })
+        toolStep.inputScan = { action: s1.data.action, category: s1.data.category, scanId: s1.data.scan_id }
         result.stage1 = {
           action: s1.data.action, category: s1.data.category, scan_id: s1.data.scan_id,
           latencyMs: s1.latencyMs, prompt_detected: s1.data.prompt_detected || {},
@@ -966,7 +1078,7 @@ router.post('/agent', async (req, res) => {
           result.blocked = true
           result.blockStage = 1
           result.blockReason = s1.data.category || 'blocked by AIRS'
-          result.latencyMs = Date.now() - startedAt
+          await traceIt()
           saveReplay(replayKey, result)
           return res.json(result)
         }
@@ -977,11 +1089,16 @@ router.post('/agent', async (req, res) => {
     }
 
     // ── Execute the tool ──
+    const e0 = perfNow()
     try {
       result.toolResult = runMohTool(tool, params)
+      tl.add('mcp_tool_exec', `${tool} · execute (in-process)`, e0, perfNow(),
+        { resultChars: JSON.stringify(result.toolResult ?? null).length })
     } catch (e) {
+      tl.add('mcp_tool_exec', `${tool} · execute (in-process)`, e0, perfNow(), { error: e.message }, { status: 'error' })
+      toolStep.error = e.message
       result.error = e.message
-      result.latencyMs = Date.now() - startedAt
+      await traceIt()
       return res.json(result) // tool-level refusal, not an AIRS verdict
     }
     result.memory = getMohMemory()
@@ -990,9 +1107,14 @@ router.post('/agent', async (req, res) => {
     if (airsEnabled && !result.error) {
       const toolOutput = JSON.stringify(result.toolResult).slice(0, 20000)
       try {
-        const s2 = await airscanMoh({
+        const cap = await captureHttp(() => airscanMoh({
           response: toolOutput, toolName: tool, toolInput, toolOutput, model,
-        })
+        }))
+        const s2 = cap.value
+        tl.add('mcp_tool_result_scan', `AIRS tool_event · ${tool} output`, cap.start, cap.end,
+          { action: s2.data.action, category: s2.data.category, scan_id: s2.data.scan_id, scannedChars: toolOutput.length },
+          { http: cap.http, status: s2.data.action === 'block' ? 'blocked' : 'ok' })
+        toolStep.outputScan = { action: s2.data.action, category: s2.data.category, scanId: s2.data.scan_id }
         result.stage2 = {
           action: s2.data.action, category: s2.data.category, scan_id: s2.data.scan_id,
           latencyMs: s2.latencyMs, response_detected: s2.data.response_detected || {},
@@ -1003,7 +1125,7 @@ router.post('/agent', async (req, res) => {
           result.blockStage = 2
           result.blockReason = s2.data.category || 'blocked by AIRS'
           result.toolResult = null // suppress the payload — this is the whole point
-          result.latencyMs = Date.now() - startedAt
+          await traceIt()
           saveReplay(replayKey, result)
           return res.json(result)
         }
@@ -1023,7 +1145,7 @@ router.post('/agent', async (req, res) => {
         const sys = lang === 'he'
           ? 'אתה עוזר בריאות דיגיטלי. נסח בעברית, במשפט או שניים, את תוצאת הפעולה שבוצעה. אל תמציא מידע.'
           : 'You are a health assistant. Phrase the result of the executed action in one or two sentences. Do not invent information.'
-        const completion = await client.chat.completions.create({
+        const completion = await gatewayTurn('AI-GW · narration turn', client, {
           model,
           messages: [
             { role: 'system', content: sys },
@@ -1049,14 +1171,7 @@ router.post('/agent', async (req, res) => {
       }
     }
 
-    result.latencyMs = Date.now() - startedAt
-    result.traceId = await persistMohTrace({
-      prompt: prompt || toolInput,
-      response: result.answer ?? JSON.stringify(result.toolResult),
-      verdict: result.blocked ? 'BLOCKED' : airsEnabled ? 'ALLOWED' : 'DIRECT',
-      model, latencyMs: result.latencyMs, hookResults: result.hookResults,
-      scenario, family: 'agent',
-    })
+    await traceIt()
     saveReplay(replayKey, result)
     return res.json(result)
   } catch (e) {

@@ -5,6 +5,7 @@ import express from 'express'
 import { Portkey } from 'portkey-ai'
 import { mcpChatHandler, mcpHealth } from './portkey-mcp.js'
 import { registerFinopsRoutes } from './portkey-finops.js'
+import { Timeline, captureHttp, perfNow, gatewayTraceDetail } from './telemetry.js'
 
 const router = express.Router()
 
@@ -90,7 +91,7 @@ function detectedThreats(data) {
 // Persist a gateway request (allowed, blocked, or direct-bypass) into the
 // same trace store /api/chat uses, so the Observability pillar shows ALL
 // gateway traffic — security events included.
-async function persistGatewayTrace({ configId, slug, model, promptText, responseText, verdict, hookResults, latencyMs, tokensIn, tokensOut, cacheState, fallbackUsed, portkeyTraceId }) {
+async function persistGatewayTrace({ configId, slug, model, promptText, responseText, verdict, hookResults, latencyMs, tokensIn, tokensOut, cacheState, fallbackUsed, portkeyTraceId, detail = null }) {
   try {
     const { persistTrace } = await import('./server.js')
     const inputScan  = extractAirsScan(hookResults?.before_request_hooks)
@@ -127,6 +128,7 @@ async function persistGatewayTrace({ configId, slug, model, promptText, response
         label: configId,
         extras: { portkeyConfigId: configId, portkeyConfigSlug: slug, cache: cacheState, fallbackUsed, hookResults, portkeyTraceId },
       },
+      detail,
     })
   } catch (e) {
     console.warn('persistGatewayTrace failed:', e?.message)
@@ -318,6 +320,24 @@ router.post('/chat', async (req, res) => {
   let blocked = false
   let blockReason = null
   const promptText = messages.map(m => m.content).join('\n')
+  // Measured stamps for the trace (Observability shows them in the Prompt
+  // Telemetry drawer): the gateway call, first and last token, HTTP phases.
+  const tl = new Timeline()
+  let callStart = null
+  let firstToken = null
+  let lastToken = null
+  let callHttp = []
+  let gwHeaders = null
+  const laneName = configId === 'defaults' ? 'Portkey native guardrail' : configId === 'airs' || configId == null ? 'Prisma AIRS guardrail' : String(configId)
+  const detailFor = (verdict, hr, tokens = {}) => gatewayTraceDetail({
+    tl, backend: 'portkey', modelId: model, verdict,
+    airsEnabled: laneName === 'Prisma AIRS guardrail',
+    enforcement: laneName === 'Prisma AIRS guardrail' ? 'legacy-gateway-airs-guardrail' : laneName === 'Portkey native guardrail' ? 'portkey-native-guardrail' : 'none',
+    calls: [{ label: `Legacy LLM Gateway · ${laneName}`, start: callStart ?? tl.t0, end: perfNow(), http: callHttp, hookResults: hr, firstToken, lastToken }],
+    headers: gwHeaders,
+    gateway: { baseUrl: 'https://api.portkey.ai/v1', configId: slug ?? null, lane: laneName, name: 'Legacy gateway', guard: laneName === 'Portkey native guardrail' ? 'Portkey native' : 'Prisma AIRS' },
+    tokens, path: 'Legacy LLM Gateway · api.portkey.ai → provider',
+  })
 
   // ── no-guardrail lane: bypass Portkey entirely, call Vertex directly ──
   // The user's Portkey workspace has the AIRS guardrail applied as a default,
@@ -326,7 +346,8 @@ router.post('/chat', async (req, res) => {
   if (configId === 'no-guardrail') {
     try {
       // callDirectProvider routes by the @integration prefix (bedrock vs vertex)
-      const r = await callDirectProvider(promptText, model)
+      const cap = await captureHttp(() => callDirectProvider(promptText, model))
+      const r = cap.value
       const text = r?.text || ''
       // Fake a token stream by chunking the response so the UI feels alive
       const chunkSize = 24
@@ -341,6 +362,17 @@ router.post('/chat', async (req, res) => {
         responseText: assembledText, verdict: 'DIRECT', hookResults: null,
         latencyMs, tokensIn: r?.tokens?.input ?? null, tokensOut: r?.tokens?.output ?? null,
         cacheState: 'disabled', fallbackUsed: false, portkeyTraceId: null,
+        detail: (() => {
+          // No gateway on this lane — one measured model call, nothing scanned.
+          tl.add('llm_inference', 'Direct provider call · no gateway', cap.start, cap.end, {}, { http: cap.http })
+          const d = gatewayTraceDetail({ tl, backend: 'portkey', modelId: model, verdict: 'DIRECT', airsEnabled: false, enforcement: 'none' })
+          d.llm = {
+            backend: 'portkey', modelId: model, latencyMs: r?.latencyMs ?? Math.round(cap.end - cap.start), finishReason: r?.finishReason ?? null,
+            tokens: { input: r?.tokens?.input ?? null, output: r?.tokens?.output ?? null, total: r?.tokens?.total ?? null },
+            meta: { ...(r?.meta || {}), path: r?.meta?.path ?? 'Direct provider call (no gateway)' },
+          }
+          return d
+        })(),
       })
       sendEvent('metadata', {
         hook_results: null,
@@ -365,6 +397,7 @@ router.post('/chat', async (req, res) => {
       responseText: null, verdict: 'BLOCKED', hookResults: hr,
       latencyMs, tokensIn: null, tokensOut: null,
       cacheState, fallbackUsed, portkeyTraceId,
+      detail: detailFor('BLOCKED', hr),
     })
     sendEvent('blocked', {
       reason: blockedHook, hook_results: hr,
@@ -380,15 +413,19 @@ router.post('/chat', async (req, res) => {
       cacheForceRefresh: !cacheEnabled,
       metadata: { app: 'gateway-livedemo', _user: 'demo', team: 'Platform', env: 'demo' },
     })
-    const stream = await client.chat.completions.create({
+    callStart = perfNow()
+    const cap = await captureHttp(() => client.chat.completions.create({
       model, messages, stream: true,
       stream_options: { include_usage: true },
-    })
+    }))
+    const stream = cap.value
+    callHttp = cap.http // keeps updating while the stream is read
 
     // Real gateway telemetry lives in response headers (available immediately).
     try {
       const h = stream?.response?.headers
       if (h) {
+        gwHeaders = h
         cacheState = String(h.get('x-portkey-cache-status') || cacheState).toUpperCase()
         portkeyTraceId = h.get('x-portkey-trace-id') || null
         if (h.get('x-portkey-last-used-option-index')?.includes('fallback')) fallbackUsed = true
@@ -422,6 +459,9 @@ router.post('/chat', async (req, res) => {
 
       const token = chunk?.choices?.[0]?.delta?.content || ''
       if (token) {
+        const at = perfNow()
+        if (firstToken == null) firstToken = at
+        lastToken = at
         chunkCount += 1
         assembledText += token
         sendEvent(null, { type: 'token', text: token })
@@ -436,6 +476,7 @@ router.post('/chat', async (req, res) => {
         responseText: assembledText, verdict: 'ALLOWED', hookResults,
         latencyMs, tokensIn, tokensOut,
         cacheState, fallbackUsed, portkeyTraceId,
+        detail: detailFor('ALLOWED', hookResults, { input: tokensIn, output: tokensOut }),
       })
       sendEvent('metadata', {
         hook_results: hookResults,

@@ -23,6 +23,7 @@
 import dc from 'node:diagnostics_channel'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { performance } from 'node:perf_hooks'
+import os from 'node:os'
 
 const als = new AsyncLocalStorage()
 const byRequest = new WeakMap()
@@ -186,7 +187,7 @@ export class Timeline {
  * Measured on a real call: 2,465ms client-side = 410 input guardrail + 1,390
  * provider + 497 output guardrail + 168 outside the gateway.
  */
-export function gatewayBreakdown(hookResults, callStart, callEnd) {
+export function gatewayBreakdown(hookResults, callStart, callEnd, { alignEnd = false, gw = 'AI-GW', guard = 'Prisma AIRS' } = {}) {
   const before = (hookResults?.before_request_hooks || []).filter((h) => h?.created_at)
   const after = (hookResults?.after_request_hooks || []).filter((h) => h?.created_at)
   if (!before.length && !after.length) return null
@@ -203,7 +204,12 @@ export function gatewayBreakdown(hookResults, callStart, callEnd) {
   const gatewayMs = gwEnd - gwStart
   const clientMs = callEnd - callStart
   const outsideMs = Math.max(0, clientMs - gatewayMs)
-  const base = callStart + outsideMs / 2 - gwStart // map gateway clock → our clock
+  // Map the gateway clock onto ours. A streamed call is anchored at its END:
+  // the output guardrail runs after the last token and its result is the
+  // stream's final chunk, so it finishes when the call does (measured: centring
+  // instead put it ~300ms early, overlapping the streamed tokens). Otherwise
+  // the unseen network time is split evenly either side.
+  const base = alignEnd && gwEnd != null ? callEnd - gwEnd : callStart + outsideMs / 2 - gwStart
 
   return {
     inputGuardrailMs: inStart != null ? inEnd - inStart : null,
@@ -214,9 +220,9 @@ export function gatewayBreakdown(hookResults, callStart, callEnd) {
     blockedAtInput,
     // absolute perf stamps for Timeline.add
     segments: [
-      inStart != null && { name: 'gateway_guardrail_input', label: 'AI-GW input guardrail · Prisma AIRS', start: base + inStart, end: base + inEnd },
+      inStart != null && { name: 'gateway_guardrail_input', label: `${gw} input guardrail · ${guard}`, start: base + inStart, end: base + inEnd },
       !blockedAtInput && inEnd != null && outStart != null && { name: 'gateway_provider', label: 'Provider call (via gateway)', start: base + inEnd, end: base + outStart },
-      outStart != null && { name: 'gateway_guardrail_output', label: 'AI-GW output guardrail · Prisma AIRS', start: base + outStart, end: base + outEnd },
+      outStart != null && { name: 'gateway_guardrail_output', label: `${gw} output guardrail · ${guard}`, start: base + outStart, end: base + outEnd },
     ].filter(Boolean),
   }
 }
@@ -291,4 +297,151 @@ export function redactDocument(value, marker = '[attachment text not stored]') {
     return out
   }
   return value
+}
+
+// ─── AIRS rate limits ─────────────────────────────────────────────────────────
+
+/**
+ * fetch() that rides out AIRS's rate limits. Shared by the portal's airscan()
+ * and the MOH pillar's airscanMoh().
+ *
+ * Two different 429s, measured: "Requests per second exceeded limit" (no
+ * retry_after — clears in well under a second, so retry) and the reports
+ * endpoint's per-minute quota, `retry_after: {interval: 1, unit: "minute"}`
+ * (retrying in seconds only burns more of the quota, so stop and report it).
+ * Every attempt still shows in the trace's network phases.
+ */
+export async function airsFetch(url, init, delays) {
+  for (let i = 0; ; i++) {
+    const res = await fetch(url, init)
+    if (res.status !== 429) return res
+    const text = await res.text().catch(() => '')
+    let waitMs = 0
+    try {
+      const ra = JSON.parse(text)?.error?.retry_after
+      if (ra?.interval) waitMs = ra.interval * ({ second: 1e3, minute: 6e4, hour: 36e5 }[ra.unit] ?? 1e3)
+    } catch { /* not JSON */ }
+    const path = new URL(url).pathname
+    if (i >= delays.length || waitMs > 5000) {
+      if (waitMs > 5000) console.warn(`[AIRS] 429 on ${path} — quota says retry in ${Math.round(waitMs / 1000)}s; not retrying`)
+      return new Response(text, { status: 429, headers: res.headers })
+    }
+    console.warn(`[AIRS] 429 rate limit on ${path} — retry ${i + 1}/${delays.length} in ${delays[i]}ms`)
+    await new Promise((r) => setTimeout(r, Math.max(delays[i], waitMs)))
+  }
+}
+export const SCAN_RETRY_MS = [250, 600]          // enforcement path: short
+export const REPORT_RETRY_MS = [500, 1200, 2500] // background: patient
+
+// ─── Gateway pillars (MOH on the SCM AI-GW, the legacy LLM Gateway) ──────────
+
+/**
+ * Portkey headers in one shape. A stream exposes a Headers object with
+ * `x-portkey-*` names; a non-streamed completion's getHeaders() returns a plain
+ * object without the prefix. The drawer reads the unprefixed names.
+ */
+export function normalizeGatewayHeaders(h) {
+  if (!h) return null
+  const get = typeof h.get === 'function' ? (k) => h.get(`x-portkey-${k}`) ?? h.get(k) : (k) => h[k] ?? h[`x-portkey-${k}`]
+  const out = {}
+  for (const k of ['trace-id', 'provider', 'cache-status', 'retry-attempt-count', 'last-used-option-index']) {
+    const v = get(k)
+    if (v != null) out[k] = String(v)
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/** The first input / last output guardrail scan, in the drawer's scan shape. */
+function scanFromHooks(hooks, phase) {
+  const list = hooks.filter((h) => h.phase === phase && h.checks?.some((c) => c.scan))
+  const h = phase === 'input' ? list[0] : list[list.length - 1]
+  const c = h?.checks?.find((x) => x.scan)
+  return c ? { via: 'ai-gateway-guardrail', ...c.scan, latencyMs: c.execMs ?? h.execMs, guardrailId: h.id, checkId: c.id, report: null } : null
+}
+
+/**
+ * Trace detail for a pillar that goes through a Portkey gateway, in the same
+ * shape /api/chat produces — so the Prompt Telemetry drawer (now also the
+ * Observability drawer) renders it unchanged.
+ *
+ * `calls` are gateway round trips with absolute performance.now() stamps. Each
+ * becomes a span; its guardrail/provider breakdown is rebuilt from that call's
+ * own hook timestamps; a streamed call also gets measured time-to-first-token
+ * and streaming spans. Other steps (direct tool scans, tool execution) are
+ * added to `tl` by the caller before this runs.
+ */
+export function gatewayTraceDetail({
+  tl, backend, modelId, verdict, airsEnabled, enforcement,
+  calls = [], headers = null, gateway = {}, tokens = {}, finishReason = null, path = null,
+  profile = null, tsg = null, tools = null, document = null,
+}) {
+  let mainBreakdown = null
+  let ttftMs = null
+  let streamMs = null
+  const allHooks = []
+  for (const call of calls) {
+    tl.add('gateway_call', call.label || 'Gateway call', call.start, call.end, { lane: gateway.lane ?? null }, { http: call.http || [] })
+    const b = gatewayBreakdown(call.hookResults, call.start, call.end, { alignEnd: !!call.lastToken, gw: gateway.name ?? 'AI-GW', guard: gateway.guard ?? 'Prisma AIRS' })
+    if (b) {
+      for (const seg of b.segments) tl.add(seg.name, seg.label, seg.start, seg.end, {}, { parent: 'gateway_call', derived: 'gateway-clock' })
+      mainBreakdown = { ...b, segments: undefined }
+    }
+    if (call.firstToken) {
+      ttftMs = Math.round(call.firstToken - call.start)
+      tl.add('stream_first_token', 'Waiting for the first token', call.start, call.firstToken, {}, { parent: 'gateway_call' })
+      if (call.lastToken && call.lastToken > call.firstToken) {
+        streamMs = Math.round(call.lastToken - call.firstToken)
+        tl.add('stream_tokens', 'Streaming tokens', call.firstToken, call.lastToken, { tokensOut: tokens.output ?? null }, { parent: 'gateway_call' })
+      }
+    }
+    allHooks.push(...summarizeHooks(call.hookResults))
+  }
+
+  const gwHeaders = normalizeGatewayHeaders(headers)
+  const modelMs = calls.reduce((n, c) => n + (c.end - c.start), 0)
+  let detail = {
+    v: 2,
+    backend,
+    modelId,
+    enforcement: enforcement ?? (airsEnabled ? 'ai-gateway-guardrail' : 'none'),
+    verdict,
+    airsEnabled,
+    host: { server: os.hostname(), via: null, node: process.version },
+    airs: {
+      profile: profile ?? scanFromHooks(allHooks, 'input')?.profile_name ?? null,
+      host: 'inside the gateway',
+      tsg,
+      // Only an AIRS guardrail produces an AIRS scan; the legacy gateway's
+      // native lane has hooks too, and the drawer shows those separately.
+      input: airsEnabled ? scanFromHooks(allHooks, 'input') : null,
+      output: airsEnabled ? scanFromHooks(allHooks, 'output') : null,
+    },
+    llm: calls.length ? {
+      backend,
+      modelId,
+      latencyMs: Math.round(modelMs),
+      finishReason,
+      tokens: { input: tokens.input ?? null, output: tokens.output ?? null, total: (tokens.input ?? 0) + (tokens.output ?? 0) || null },
+      meta: {
+        path,
+        provider: gwHeaders?.provider ?? null,
+        providerMs: calls.length === 1 ? mainBreakdown?.providerMs ?? null : null,
+        ttftMs,
+        streamMs,
+      },
+    } : null,
+    gateway: calls.length ? {
+      baseUrl: gateway.baseUrl ?? null,
+      configId: gateway.configId ?? null,
+      lane: gateway.lane ?? null,
+      headers: gwHeaders,
+      hooks: allHooks,
+      breakdown: calls.length === 1 ? mainBreakdown : null,
+    } : null,
+    mcp: tools,
+    attachment: document?.text ? { name: document.name, chars: document.text.length } : null,
+    timeline: tl.toJSON(),
+  }
+  if (document?.text) detail = redactDocument(detail)
+  return truncateDeep(detail, 4000)
 }

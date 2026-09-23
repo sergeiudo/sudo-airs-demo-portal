@@ -204,6 +204,25 @@ export function ApiIntercept2027() {
 
   useEffect(() => { setUploadScan(null) }, [messages.length])
 
+  // The upload route answers before the deciding chunk's AIRS report is
+  // fetched; pull it in when it lands so the pane gets its per-service detail.
+  // The server joins its own in-flight fetch — AIRS is not called twice.
+  useEffect(() => {
+    const d = uploadScan?.scanDetail
+    if (!d?.reportPending || !d.report_id) return
+    let live = true
+    fetch(`/api/airs/report?id=${encodeURIComponent(d.report_id)}`)
+      .then((r) => r.json())
+      .catch((err) => ({ data: null, error: err.message }))
+      .then((report) => {
+        if (!live) return
+        setUploadScan((cur) => (cur?.scanDetail?.report_id === d.report_id
+          ? { ...cur, scanDetail: { ...cur.scanDetail, report, reportPending: false } }
+          : cur))
+      })
+    return () => { live = false }
+  }, [uploadScan?.scanDetail?.report_id, uploadScan?.scanDetail?.reportPending])
+
   const paneMessage = uploadTurn ?? selected
   const phase = isLoading ? 'inflight' : selected ? 'resolved' : 'idle'
   const verdict = verdictOf(selected)

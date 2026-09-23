@@ -11,22 +11,40 @@ import { McpChainOfThought } from '../McpChainOfThought'
 
 const SCM_BASE = 'https://stratacloudmanager.paloaltonetworks.com/ai-security/runtime/ai-sessions'
 
-const BACKEND = { vertex: 'Google Vertex AI', bedrock: 'AWS Bedrock', azure: 'Azure OpenAI', aigw: 'SCM AI Gateway' }
+const BACKEND = {
+  vertex: 'Google Vertex AI', bedrock: 'AWS Bedrock', azure: 'Azure OpenAI', aigw: 'SCM AI Gateway',
+  'moh-aigw': 'SCM AI Gateway · Ministry of Health', portkey: 'Legacy LLM Gateway · api.portkey.ai',
+}
 
 const ENFORCEMENT = {
   'api-layer': 'Scanned by this app through the Prisma AIRS API — the prompt before the model is called, the response before it is returned.',
   'ai-gateway-guardrail': 'Enforced inside the SCM AI Gateway by its Prisma AIRS guardrail. This app never calls AIRS itself on this lane.',
   'ai-gateway-guardrail + tool_event': 'The gateway guardrail scans every model turn; this app scans every MCP event directly — the manifest, each call’s parameters and each result.',
+  'legacy-gateway-airs-guardrail': 'Enforced inside the legacy LLM Gateway (api.portkey.ai) by its Prisma AIRS guardrail. This app never calls AIRS itself on this lane.',
+  'portkey-native-guardrail': 'Enforced by Portkey\u2019s own native guardrail inside the legacy gateway (PII, code and word checks) \u2014 not by Prisma AIRS.',
   none: 'Prisma AIRS was off. Nothing was inspected in either direction.',
 }
 
 export const allHttp = (spans) => spans.flatMap((s) => (s.http || []).map((h) => ({ ...h, span: s.label })))
 
+/**
+ * Guardrail checks that ERRORED. A fail-open guardrail reports the hook as
+ * passed even when its check could not run — measured on the legacy gateway,
+ * whose AIRS check gets HTTP 403 and lets every prompt through unscanned. An
+ * "ALLOWED" verdict there is not a clean scan, and must not read like one.
+ */
+export function guardrailErrors(detail) {
+  return (detail.gateway?.hooks || []).flatMap((h) => (h.checks || [])
+    .filter((c) => c.error)
+    .map((c) => ({ phase: h.phase, hook: h.id, check: c.id, message: c.error?.message || JSON.stringify(c.error), hookVerdict: h.verdict })))
+}
+
 /** Which stage decided a block. */
 function decidingStage(d) {
   if (d.verdict !== 'BLOCKED') return null
-  if (d.airs?.input?.action === 'block') return d.backend === 'aigw' ? 'AI-GW input guardrail (prompt)' : 'AIRS prompt scan — the model was never called'
-  if (d.airs?.output?.action === 'block') return d.backend === 'aigw' ? 'AI-GW output guardrail (response)' : 'AIRS response scan — the answer was withheld'
+  const gw = d.airs?.input?.via === 'ai-gateway-guardrail' || d.airs?.output?.via === 'ai-gateway-guardrail'
+  if (d.airs?.input?.action === 'block') return gw ? 'Gateway input guardrail (prompt) — the model was never called' : 'AIRS prompt scan — the model was never called'
+  if (d.airs?.output?.action === 'block') return gw ? 'Gateway output guardrail (response)' : 'AIRS response scan — the answer was withheld'
   const st = (d.mcp?.steps || []).find((s) => s.blocked || s.kind === 'blocked')
   return st ? st.title : 'a guardrail stage'
 }
@@ -84,6 +102,13 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
               {ENFORCEMENT[detail.enforcement] ?? detail.enforcement}
             </p>
             {blockedBy && <p style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.block, marginTop: 4 }}>Stopped at: <b>{blockedBy}</b></p>}
+            {guardrailErrors(detail).length > 0 && (
+              <div className="mt-2 px-3 py-2" style={{ background: `${t.warn}18`, border: `1px solid ${t.warn}55`, borderRadius: 12, fontFamily: FONT.prose, fontSize: 11.5, color: t.ink }}>
+                <b style={{ color: t.warn }}>Not actually scanned.</b> The guardrail check errored
+                ({[...new Set(guardrailErrors(detail).map((e) => e.message))].join('; ')})
+                {guardrailErrors(detail).some((e) => e.hookVerdict !== false) ? ' and the guardrail failed open — the request went through without an AIRS verdict.' : '.'}
+              </div>
+            )}
             {trace.threats_detected?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {trace.threats_detected.map((x) => <Chip key={x} t={t} tone={t.block}>{String(x).replace(/_/g, ' ')}</Chip>)}
@@ -96,18 +121,18 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
       <div className="grid grid-cols-2 gap-2">
         <Stat t={t} label="Server total · wall clock" value={fmtMs(total)} sub={`request in → response ready · ${spans.filter((s) => !s.parent).length} measured steps`} />
         <Stat t={t} label="Prisma AIRS" value={detail.airsEnabled ? fmtMs(airsMs) : 'off'}
-          tone={!detail.airsEnabled ? t.warn : trace.verdict === 'BLOCKED' ? t.block : t.pass}
-          sub={detail.airsEnabled
+          tone={!detail.airsEnabled || guardrailErrors(detail).length ? t.warn : trace.verdict === 'BLOCKED' ? t.block : t.pass}
+          sub={guardrailErrors(detail).length ? 'check errored — no verdict returned' : detail.airsEnabled
             ? `${pct(airsMs, total)} of total${reportMs ? ` · +${fmtMs(reportMs)} report fetch` : ''}${reportBgMs ? ` · report fetched off the critical path` : ''}`
             : 'nothing scanned'} />
         {detail.llm ? (
-          <Stat t={t} label={detail.backend === 'aigw' ? 'Provider (inside gateway)' : 'Model call'} value={fmtMs(modelMs)} tone={modelColor(t)}
+          <Stat t={t} label={detail.llm?.meta?.providerMs != null ? 'Provider (inside gateway)' : 'Model call'} value={fmtMs(modelMs)} tone={modelColor(t)}
             sub={serverMs != null ? `provider-reported ${fmtMs(serverMs)} · ${fmtMs(Math.max(0, (detail.llm?.latencyMs ?? 0) - serverMs))} outside the model` : `${pct(modelMs, total)} of total`} />
         ) : (
           <Stat t={t} label="Model call" value="not called" tone={t.inkDim} sub="stopped before the model — no tokens spent" />
         )}
         <Stat t={t} label="Tokens" value={tk.input != null || tk.output != null ? `${fmtNum(tk.input)} → ${fmtNum(tk.output)}` : '—'}
-          sub={[tk.cached ? `${fmtNum(tk.cached)} cached` : null, tk.reasoning ? `${fmtNum(tk.reasoning)} reasoning` : null, detail.mcp ? `${detail.mcp.turns?.length ?? 0} model turns` : null].filter(Boolean).join(' · ') || 'input → output'} />
+          sub={[tk.cached ? `${fmtNum(tk.cached)} cached` : null, tk.reasoning ? `${fmtNum(tk.reasoning)} reasoning` : null, detail.mcp?.turns?.length ? `${detail.mcp.turns.length} model turns` : null, detail.llm?.meta?.ttftMs != null ? `first token ${fmtMs(detail.llm.meta.ttftMs)}` : null].filter(Boolean).join(' · ') || 'input → output'} />
       </div>
 
       <Card t={t} title="Timeline">
@@ -268,7 +293,8 @@ export function ModelTab({ t, detail }) {
           {m.invokedId && m.invokedId !== l.modelId && (
             <KV t={t} k="Invoked as" top>
               <IdValue t={t} value={m.invokedId} />
-              {m.profileRetry && <div style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.warn, marginTop: 2 }}>The bare id was refused ("on-demand throughput not supported") and retried as a cross-region inference profile — an extra round trip on every call.</div>}
+              {m.profileRetry && <div style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.warn, marginTop: 2 }}>The bare id was refused ("on-demand throughput not supported") and retried as a cross-region inference profile. The server now remembers this id and goes straight to the profile on later calls.</div>}
+              {m.profileKnown && <div style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.inkFaint, marginTop: 2 }}>Sent straight to the cross-region inference profile — this model refuses its bare id, so the server skips it.</div>}
             </KV>
           )}
           {m.servedModel && m.servedModel !== l.modelId && <KV t={t} k="Served model"><IdValue t={t} value={m.servedModel} /></KV>}
@@ -279,6 +305,8 @@ export function ModelTab({ t, detail }) {
             <KV t={t} k="Provider-reported">{fmtMs(m.serverLatencyMs)} <span style={{ color: t.inkFaint }}>· Bedrock's own metrics.latencyMs — {fmtMs(Math.max(0, l.latencyMs - m.serverLatencyMs))} of the call was outside the model</span></KV>
           )}
           {m.providerMs != null && <KV t={t} k="Provider share">{fmtMs(m.providerMs)} <span style={{ color: t.inkFaint }}>· inside the gateway, between the two guardrails</span></KV>}
+          {m.ttftMs != null && <KV t={t} k="First token">{fmtMs(m.ttftMs)} <span style={{ color: t.inkFaint }}>· from sending the request — what a chat user waits before anything appears</span></KV>}
+          {m.streamMs != null && <KV t={t} k="Streaming">{fmtMs(m.streamMs)} <span style={{ color: t.inkFaint }}>· first token to last{tk.output ? ` · ${Math.round(tk.output / (m.streamMs / 1000))} tok/s while streaming` : ''}</span></KV>}
           {m.authMs != null && <KV t={t} k="Credential fetch">{fmtMs(m.authMs)} <span style={{ color: t.inkFaint }}>· Google ADC access token, before the call</span></KV>}
           <KV t={t} k="Finish reason">{l.finishReason ?? '—'}</KV>
           <KV t={t} k="Tokens">
@@ -317,8 +345,8 @@ export function ModelTab({ t, detail }) {
                 <span style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkDim }}>{fmtMs(h.execMs)}</span>
               </span>
               {(h.checks || []).map((c, j) => (
-                <div key={j} style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkFaint, marginTop: 2 }}>
-                  {c.id} · {c.scan?.action ?? (c.verdict ? 'pass' : 'fail')} · {c.scan?.category ?? '—'} · {fmtMs(c.execMs)}
+                <div key={j} style={{ fontFamily: FONT.mono, fontSize: 10, color: c.error ? t.warn : t.inkFaint, marginTop: 2 }}>
+                  {c.id} · {c.error ? `ERROR ${c.error?.message || ''}` : `${c.scan?.action ?? (c.verdict ? 'pass' : 'fail')} · ${c.scan?.category ?? '—'}`} · {fmtMs(c.execMs)}
                 </div>
               ))}
             </KV>
@@ -327,7 +355,7 @@ export function ModelTab({ t, detail }) {
       )}
 
       {detail.mcp && (
-        <Card t={t} title={`MCP loop · ${detail.mcp.rounds} round${detail.mcp.rounds === 1 ? '' : 's'} · ${detail.mcp.toolCalls} tool call${detail.mcp.toolCalls === 1 ? '' : 's'}`}>
+        <Card t={t} title={detail.mcp.kind === 'agent' ? 'Agent · in-process tool call' : `MCP loop · ${detail.mcp.rounds} round${detail.mcp.rounds === 1 ? '' : 's'} · ${detail.mcp.toolCalls} tool call${detail.mcp.toolCalls === 1 ? '' : 's'}`}>
           <KV t={t} k="Routing">{detail.mcp.route ?? '—'}</KV>
           {(detail.mcp.turns || []).length > 0 && (
             <div className="mt-1 overflow-x-auto">

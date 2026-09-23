@@ -14,7 +14,8 @@ import { FONT, LBL, fmtMs, modelColor } from './primitives'
 export function spanKind(name = '') {
   if (/^airs_.*_report$/.test(name)) return 'report'
   if (name.startsWith('airs_') || name.includes('guardrail') || name.endsWith('_scan')) return 'airs'
-  if (name === 'llm_inference' || name === 'gateway_provider' || name === 'mcp_model_turn') return 'model'
+  if (name === 'llm_inference' || name === 'gateway_provider' || name === 'mcp_model_turn' || name.startsWith('stream_')) return 'model'
+  if (name === 'rag_retrieval') return 'retrieval'
   if (name === 'gateway_call') return 'gateway'
   if (name === 'mcp_tool_exec') return 'tool'
   if (name === 'mcp_discovery') return 'discovery'
@@ -30,6 +31,7 @@ export const KIND_LABEL = {
   tool: 'MCP tool execution',
   discovery: 'MCP discovery',
   auth: 'Credential fetch',
+  retrieval: 'RAG retrieval',
 }
 
 export function kindColor(t, kind) {
@@ -41,6 +43,7 @@ export function kindColor(t, kind) {
     case 'tool': return '#8C7BEA'
     case 'discovery': return '#9A9AA2'
     case 'auth': return t.warn
+    case 'retrieval': return '#B08A5A'
     default: return t.inkFaint
   }
 }

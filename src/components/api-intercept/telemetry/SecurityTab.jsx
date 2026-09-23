@@ -311,6 +311,29 @@ function ToolScanRow({ t, item }) {
 
 export function SecurityTab({ t, detail }) {
   if (!detail.airsEnabled) {
+    // The legacy gateway's native lane still enforces — with Portkey's own
+    // checks, not AIRS — so show what those hooks decided.
+    const hooks = detail.gateway?.hooks || []
+    if (hooks.length) {
+      return (
+        <Card t={t} title="Portkey native guardrail · not Prisma AIRS">
+          {hooks.map((h, i) => (
+            <KV key={i} t={t} k={`${h.phase} hook`} top>
+              <span className="inline-flex items-center gap-2 flex-wrap">
+                <IdValue t={t} value={h.id} />
+                <Chip t={t} tone={h.verdict === false ? t.block : t.pass}>{h.verdict === false ? 'failed' : 'passed'}</Chip>
+                <span style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkDim }}>{fmtMs(h.execMs)}</span>
+              </span>
+              {(h.checks || []).map((c, j) => (
+                <div key={j} style={{ fontFamily: FONT.mono, fontSize: 10, color: c.verdict === false ? t.block : t.inkFaint, marginTop: 2 }}>
+                  {c.id} · {c.verdict === false ? 'failed' : 'passed'} · {fmtMs(c.execMs)}
+                </div>
+              ))}
+            </KV>
+          ))}
+        </Card>
+      )
+    }
     return <Card t={t} title="Security"><Empty t={t}>Prisma AIRS was off for this request — nothing was scanned, in either direction. This is the unprotected baseline.</Empty></Card>
   }
   const a = detail.airs || {}
@@ -332,10 +355,28 @@ export function SecurityTab({ t, detail }) {
     }
   }
 
+  const errored = (detail.gateway?.hooks || []).flatMap((h) => (h.checks || []).filter((c) => c.error).map((c) => ({ h, c })))
+
   return (
     <div className="space-y-3">
+      {errored.length > 0 && (
+        <Card t={t} tone={t.warn} title="Guardrail check errored — not scanned">
+          {errored.map(({ h, c }, i) => (
+            <KV key={i} t={t} k={`${h.phase} guardrail`} top>
+              <span className="inline-flex items-center gap-2 flex-wrap">
+                <IdValue t={t} value={h.id} /> <span style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkDim }}>{c.id}</span>
+              </span>
+              <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: t.warn, marginTop: 2 }}>{c.error?.message || JSON.stringify(c.error)}</div>
+              <div style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.inkDim, marginTop: 2 }}>
+                {h.verdict === false ? 'The guardrail treated the failure as a block.' : 'The guardrail failed OPEN: its hook reported a pass, so the request went through with no AIRS verdict at all.'}
+              </div>
+            </KV>
+          ))}
+          <Note t={t}>An HTTP 401/403 here usually means the AIRS API key or profile configured inside the gateway guardrail is no longer valid.</Note>
+        </Card>
+      )}
       {stages.map((s) => <StageCard key={s.title} t={t} stage={s} />)}
-      {!stages.length && !toolScans.length && <Card t={t} title="Security"><Empty t={t}>No scan result was recorded for this request.</Empty></Card>}
+      {!stages.length && !toolScans.length && !errored.length && <Card t={t} title="Security"><Empty t={t}>No scan result was recorded for this request.</Empty></Card>}
       {toolScans.length > 0 && (
         <Card t={t} title={`MCP · ${toolScans.length} AIRS tool_event scans`}>
           {toolScans.map((x, i) => <ToolScanRow key={i} t={t} item={x} />)}

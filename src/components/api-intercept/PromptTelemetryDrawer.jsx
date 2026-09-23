@@ -13,7 +13,7 @@ import { X, RefreshCw, Loader2 } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, VERDICT_META } from '../../views/api-intercept-2027/tokens'
 import { FONT, LBL, CopyButton, Chip } from './telemetry/primitives'
-import { OverviewTab, TimelineTab, ModelTab, NetworkTab, RawTab, LegacyView, allHttp } from './telemetry/sections'
+import { OverviewTab, TimelineTab, ModelTab, NetworkTab, RawTab, LegacyView, allHttp, guardrailErrors } from './telemetry/sections'
 import { SecurityTab } from './telemetry/SecurityTab'
 
 const MIN_W = 520
@@ -23,6 +23,11 @@ const WIDTH_KEY = 'airs.telemetryDrawer.width'
 function verdictMetaOf(trace) {
   if (trace.verdict === 'BLOCKED') return VERDICT_META.blocked
   if (trace.verdict === 'DIRECT' || !trace.airs_enabled) return VERDICT_META.unscanned
+  // A fail-open guardrail whose check errored reports ALLOWED without having
+  // scanned anything — that is not a pass, and the header must not say it is.
+  if (trace.detail && guardrailErrors(trace.detail).some((e) => e.hookVerdict !== false)) {
+    return { ...VERDICT_META.unscanned, label: 'NOT SCANNED', note: 'the guardrail check errored and failed open' }
+  }
   return VERDICT_META.passed
 }
 
