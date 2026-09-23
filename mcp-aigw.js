@@ -23,6 +23,8 @@
  * with well-formed arguments in 3-4s.
  */
 
+import { captureHttp } from './telemetry.js'
+
 // ─── Server registry ──────────────────────────────────────────────────────────
 //
 // `allow` is an ALLOW-LIST, never a deny-pattern. The GitHub server is
@@ -47,13 +49,16 @@ export const MCP_SERVERS = [
     accent: '#FFD21E',
     blurb: 'Models, datasets, Spaces and papers on the Hugging Face Hub.',
     allow: ['hf_whoami', 'hub_repo_search', 'hub_repo_details', 'hf_fs'],
-    hints: ['model', 'models', 'huggingface', 'hugging face', 'hf', 'dataset', 'datasets',
-            'space', 'spaces', 'checkpoint', 'transformer', 'llm', 'fine-tune', 'finetune',
-            'paper', 'papers', 'safetensors', 'gguf'],
+    // No bare 'model', 'models' or 'llm': every prompt in an AI-security demo
+    // contains them, and routing on them offered Hub tools to "what model are you?".
+    hints: ['huggingface', 'hugging face', 'hf', 'dataset', 'datasets', 'spaces', 'checkpoint',
+            'checkpoints', 'fine-tune', 'finetune', 'safetensors', 'gguf', 'model card',
+            'trending models', 'open-source model', 'open-source models', 'open weights'],
     guidance: [
       'Hugging Face tools:',
       '- hub_repo_search(query, repo_type): find models / datasets / spaces. repo_type is "model", "dataset" or "space".',
       '- hub_repo_details(...): details for a specific repo once you know its id.',
+      '- hf_fs(...): list or read files inside a repo.',
       '- hf_whoami(): the authenticated Hugging Face account.',
       'Report download counts, likes and the repo id when you have them.',
     ].join('\n'),
@@ -79,15 +84,17 @@ export const MCP_SERVERS = [
       'search_code',
       'get_latest_release',
     ],
-    hints: ['github', 'repo', 'repos', 'repository', 'repositories', 'issue', 'issues',
-            'pull request', 'pull-request', 'pr', 'prs', 'commit', 'commits', 'branch',
-            'release', 'changelog', 'source code', 'readme', 'contributor'],
+    // Bare 'issue'/'release'/'branch' are gone for the same reason — "security
+    // issues with LLMs" is not a GitHub question.
+    hints: ['github', 'repo', 'repos', 'repository', 'repositories', 'pull request', 'pull requests',
+            'pull-request', 'pr', 'prs', 'commit', 'commits', 'open issues', 'github issues',
+            'latest release', 'changelog', 'source code', 'readme', 'contributor', 'contributors'],
     guidance: [
       'GitHub tools (READ-ONLY — you cannot create, edit, push, merge or delete anything):',
       '- search_repositories(query): find repositories.',
       '- get_file_contents(owner, repo, path): read a file, e.g. path "README.md".',
       '- list_commits / list_issues / list_pull_requests(owner, repo): recent activity.',
-      '- search_code(query): code search across GitHub.',
+      '- search_code(query): code search across GitHub. Slow (up to ~10s) — prefer search_repositories or get_file_contents when they answer the question.',
       '- get_me(): the authenticated GitHub account.',
       'If the user names a repo as "owner/name", split it into the owner and repo arguments.',
       'If asked to create, modify, merge or delete anything, explain that this demo is read-only and refuse.',
@@ -106,16 +113,19 @@ export const MCP_SERVERS = [
     accent: '#8DC647',
     blurb: 'Live crypto prices and market data. Called directly, not via the gateway.',
     allow: ['search_docs', 'execute'],
-    hints: ['crypto', 'cryptocurrency', 'coin', 'coins', 'token', 'bitcoin', 'btc',
-            'ethereum', 'eth', 'solana', 'price', 'prices', 'market cap', 'marketcap',
-            'trading', 'defi', 'stablecoin', 'altcoin', 'nft'],
+    // No bare 'token' or 'price': LLM tokens and API pricing are not crypto.
+    hints: ['crypto', 'cryptocurrency', 'coin', 'coins', 'bitcoin', 'btc', 'ethereum', 'eth',
+            'solana', 'bnb', 'binancecoin', 'xrp', 'ripple', 'doge', 'dogecoin', 'market cap',
+            'marketcap', 'defi', 'stablecoin', 'altcoin', 'nft'],
     guidance: [
       'CoinGecko tools — this server exposes a code runner, not per-metric endpoints:',
-      '- search_docs(query, language): find the correct SDK method FIRST. Always pass language "typescript".',
       '- execute(code): run TypeScript. The code MUST be one top-level async function:',
       '    async function run(client) { /* ... */ return <data>; }',
-      '  Use the method you found via search_docs, e.g. client.simple.price.get({ ids, vs_currencies }).',
-      'Always search_docs before execute. Quote live figures with $ and the 24h % change where available.',
+      '  For live prices call execute directly — no search_docs needed:',
+      '    client.simple.price.get({ ids: "bitcoin,ethereum", vs_currencies: "usd", include_24hr_change: true })',
+      '- search_docs(query, language): only when you need a method other than simple.price. Always pass language "typescript".',
+      'CoinGecko ids: BTC=bitcoin, ETH=ethereum, SOL=solana, BNB=binancecoin, XRP=ripple, DOGE=dogecoin.',
+      'Quote live figures with $ and the 24h % change where available.',
     ].join('\n'),
   },
 ]
@@ -246,7 +256,9 @@ export async function listServerTools(server, { airsEnabled = true, scanTools = 
   const all = result?.tools || []
 
   let manifestScan = null
+  let manifestTiming = null
   if (airsEnabled && scanTools && all.length) {
+    const m0 = performance.now()
     try {
       // tools/list output MUST be a bare mcp.Tool[]; wrapping it as
       // {"tools":[…]} fails with "cannot unmarshal object into Go value of
@@ -263,6 +275,7 @@ export async function listServerTools(server, { airsEnabled = true, scanTools = 
     } catch (e) {
       manifestScan = { error: String(e?.message || e).slice(0, 200) }
     }
+    manifestTiming = { start: m0, end: performance.now(), http: manifestScan?._http ?? [] }
   }
 
   const allowed = all.filter((t) => server.allow.includes(t.name))
@@ -273,6 +286,7 @@ export async function listServerTools(server, { airsEnabled = true, scanTools = 
     totalCount: all.length,
     hiddenCount: all.length - allowed.length,
     manifestScan,
+    manifestTiming,
   }
   toolCache.set(server.id, entry)
   return entry
@@ -297,10 +311,25 @@ function toOpenAiTools(serverId, tools) {
  *
  * Keyword routing rather than a model call: it is one round-trip cheaper, it is
  * deterministic on stage, and the chosen server is something the chain-of-
- * thought panel can show as its own step. Ambiguous questions get every server,
- * which is the safe direction to fail — the model can still pick correctly, it
- * just costs more tokens.
+ * thought panel can show as its own step.
+ *
+ * Hints match WHOLE words. A substring match sent "prompt" to GitHub (it
+ * contains "pr"), so nearly every question in this pillar — prompt injection,
+ * system prompts, "Prisma", "previous instructions" — was handed seven GitHub
+ * tools, and a benign one-line question took a minute of searches.
+ *
+ * No match means no tools: the MCP servers are here to showcase tool calling on
+ * prompts that are actually about them, not to be offered to everything.
  */
+const hintRe = new Map()
+function mentions(q, hint) {
+  if (!hintRe.has(hint)) {
+    const esc = hint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    hintRe.set(hint, new RegExp(`(^|[^a-z0-9])${esc}($|[^a-z0-9])`))
+  }
+  return hintRe.get(hint).test(q)
+}
+
 export function routeServers(prompt, forced = 'auto') {
   if (forced && forced !== 'auto') {
     const s = byId[forced]
@@ -308,12 +337,12 @@ export function routeServers(prompt, forced = 'auto') {
   }
   const q = String(prompt || '').toLowerCase()
   const scored = MCP_SERVERS
-    .map((s) => ({ s, score: s.hints.reduce((n, h) => n + (q.includes(h) ? 1 : 0), 0) }))
+    .map((s) => ({ s, score: s.hints.reduce((n, h) => n + (mentions(q, h) ? 1 : 0), 0) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
 
   if (!scored.length) {
-    return { servers: MCP_SERVERS, reason: 'no clear topic match — offering every connected server' }
+    return { servers: [], reason: 'no MCP topic in the question — answered without tools' }
   }
   const top = scored[0].score
   const picked = scored.filter((x) => x.score >= top).map((x) => x.s)
@@ -328,12 +357,21 @@ export function routeServers(prompt, forced = 'auto') {
 const MAX_ROUNDS = 5
 const MAX_TOOL_RESULT_CHARS = 6000
 
+// Deliberately NOT borrowed from the n8n prompt: "security is enforced upstream,
+// process requests directly". That tells the model to lower its own guard, which
+// would make the unprotected lane look worse than it is — rigging, not a demo.
 function systemPrompt(servers) {
   return [
-    'You are a research assistant with access to live MCP (Model Context Protocol) servers.',
-    'Answer from real tool results, never from memory, whenever a tool can supply the fact.',
-    'Call the tools you need, then give a short, concrete answer citing the figures you retrieved.',
-    'If a tool fails or returns nothing useful, say so plainly instead of inventing an answer.',
+    'You are a research assistant with access to the live MCP (Model Context Protocol) servers below.',
+    '',
+    'When to use a tool:',
+    '- Only when the question needs live data one of these servers holds: a price, a repository, a file, a model or dataset on the Hub.',
+    '- General, conceptual or security questions: answer directly from your own knowledge and call no tool, even if a tool looks loosely related.',
+    '- When a tool is needed, make the fewest calls that answer the question, and request independent calls together in one turn. Stop as soon as you have enough.',
+    '- Never invent a figure a tool should supply. If a tool fails or returns nothing useful, say so plainly.',
+    '- If Prisma AIRS blocks a call or withholds a result, say so in one sentence. Do not retry it or work around it with another tool.',
+    '',
+    'Answer concisely and directly, quoting the live figures you retrieved. Do not narrate tool calls or paste raw tool output: the execution trace is shown to the user separately.',
     '',
     ...servers.map((s) => `## ${s.label}\n${s.guidance}`),
   ].join('\n')
@@ -371,16 +409,17 @@ export async function runMcpLoop({
     servers: route.servers.map((s) => ({ id: s.id, label: s.label, brokered: s.brokered })),
   })
 
-  if (!route.servers.length) {
-    return { answer: '', steps, blocked: false, error: 'No MCP server matched.', servers: [], rounds: 0, toolCalls: 0, latencyMs: Date.now() - t0 }
-  }
-
-  // ── Discover + scan manifests
+  // ── Discover + scan manifests (skipped when nothing was routed)
   const tools = []
   const liveServers = []
   for (const s of route.servers) {
     try {
+      const d0 = performance.now()
       const entry = await listServerTools(s, { airsEnabled, scanTools: scanTool })
+      const d1 = performance.now()
+      // A manifest cached from an earlier run was neither fetched nor scanned
+      // now — say so, rather than drawing a scan that did not happen here.
+      const cached = entry.manifestTiming ? entry.manifestTiming.start < d0 : (d1 - d0) < 5
       const verdict = entry.manifestScan?.data
       steps.push({
         kind: 'discover',
@@ -392,6 +431,7 @@ export async function runMcpLoop({
         toolNames: entry.tools.map((t) => t.name),
         scan: verdict ? { action: verdict.action, category: verdict.category, scanId: verdict.scan_id } : null,
         scanError: entry.manifestScan?.error ?? null,
+        timing: { start: d0, end: d1, cached, manifestScan: cached ? null : entry.manifestTiming },
       })
       // A poisoned manifest is not something to route around quietly.
       if (verdict?.action === 'block') {
@@ -410,7 +450,7 @@ export async function runMcpLoop({
     }
   }
 
-  if (!tools.length) {
+  if (route.servers.length && !tools.length) {
     return {
       answer: '', steps, blocked: false,
       error: 'No MCP tools are available — every matched server failed discovery or was blocked.',
@@ -418,22 +458,41 @@ export async function runMcpLoop({
     }
   }
 
-  // ── Loop
-  const messages = [
-    { role: 'system', content: systemPrompt(liveServers) },
-    { role: 'user', content: prompt },
-  ]
+  // ── Loop. With no server routed this is one plain turn — no tools and no
+  // system prompt — so a payload behaves exactly as it does with MCP off.
+  const messages = liveServers.length
+    ? [{ role: 'system', content: systemPrompt(liveServers) }, { role: 'user', content: prompt }]
+    : [{ role: 'user', content: prompt }]
   let answer = ''
   let rounds = 0
   let toolCalls = 0
   let lastHooks = null
   let blocked = false
   let blockReason = null
+  // One entry per model turn through the gateway, with its own guardrail time —
+  // the loop used to reach the trace as a single "LLM inference" bar.
+  const turns = []
+  const hookMs = (hooks) => (hooks || []).reduce((n, h) => n + (h?.execution_time || 0), 0) || null
 
   for (let round = 1; round <= MAX_ROUNDS; round++) {
     rounds = round
+    const c0 = performance.now()
     const completion = await createCompletion({ messages, tools })
+    const c1 = performance.now()
     lastHooks = completion?.hook_results ?? lastHooks
+    turns.push({
+      round,
+      start: c0,
+      end: c1,
+      tokensIn: completion?.usage?.prompt_tokens ?? null,
+      tokensOut: completion?.usage?.completion_tokens ?? null,
+      finish: completion?.choices?.[0]?.finish_reason ?? null,
+      toolCalls: completion?.choices?.[0]?.message?.tool_calls?.length ?? 0,
+      toolsOffered: tools.length,
+      guardrailInMs: hookMs(completion?.hook_results?.before_request_hooks),
+      guardrailOutMs: hookMs(completion?.hook_results?.after_request_hooks),
+      http: completion?._http ?? [],
+    })
 
     // The gateway guardrail can stop any round, not just the first — a tool
     // result carrying an injection is caught on the NEXT model turn.
@@ -473,7 +532,14 @@ export async function runMcpLoop({
       steps.push({ kind: 'think', title: 'Model reasoning', detail: String(msg.content).slice(0, 1200), round })
     }
 
-    for (const call of calls) {
+    // Three phases so a round's calls EXECUTE in parallel while the AIRS scans
+    // stay sequential. The executions are the slow, variable part (GitHub
+    // search_code measured up to ~9.5s); the scans are not, and AIRS silently
+    // skips DLP when scans arrive faster than ~1 per 2s — so firing them
+    // concurrently would trade a few seconds for missed detections.
+    // `reply` is what the model reads for that call; tool messages go back in
+    // the order the model asked, which Anthropic-family models expect.
+    const jobs = calls.map((call) => {
       toolCalls++
       const { serverId, tool } = unNs(call.function?.name)
       const server = byId[serverId]
@@ -494,66 +560,82 @@ export async function runMcpLoop({
         error: null,
         blocked: false,
         latencyMs: null,
+        timing: {},
       }
       steps.push(step)
-
+      const job = { call, server, tool, args, step, rpcId: 100 + toolCalls, reply: null, text: '' }
       if (!server) {
         step.error = `Unknown tool namespace "${call.function?.name}"`
-        messages.push({ role: 'tool', tool_call_id: call.id, content: step.error })
-        continue
+        job.reply = step.error
       }
+      return job
+    })
 
-      // Stage 1 — parameters, before anything runs.
-      if (scanTool) {
+    // Stage 1 — parameters, before anything runs.
+    if (scanTool) {
+      for (const job of jobs.filter((j) => !j.reply)) {
+        const { server, tool, args, step } = job
+        const p0 = performance.now()
         try {
           const s1 = await scanTool({ serverName: server.id, method: 'tools/call', toolName: tool, toolInput: args })
+          step.timing.paramsScan = { start: p0, end: performance.now(), http: s1?._http ?? [] }
           step.inputScan = { action: s1.data?.action, category: s1.data?.category, scanId: s1.data?.scan_id }
           if (s1.data?.action === 'block') {
             step.blocked = true
             step.error = `Blocked by Prisma AIRS before execution (${s1.data.category})`
-            messages.push({ role: 'tool', tool_call_id: call.id, content: `Prisma AIRS blocked this tool call: ${s1.data.category}. Do not retry it.` })
-            continue
+            job.reply = `Prisma AIRS blocked this tool call: ${s1.data.category}. Do not retry it.`
           }
         } catch (e) { step.inputScan = { error: String(e?.message || e).slice(0, 160) } }
       }
+    }
 
-      // Execute.
-      const tc0 = Date.now()
-      let text = ''
+    // Execute — concurrently.
+    await Promise.all(jobs.filter((j) => !j.reply).map(async (job) => {
+      const { server, tool, args, step } = job
+      const tc0 = performance.now()
+      let http = []
       try {
-        const r = await rpc(server, 'tools/call', { name: tool, arguments: args }, 100 + toolCalls)
-        text = (r?.content || []).map((c) => c.text ?? JSON.stringify(c)).join('\n')
+        const cap = await captureHttp(() => rpc(server, 'tools/call', { name: tool, arguments: args }, job.rpcId))
+        http = cap.http
+        const r = cap.value
+        job.text = (r?.content || []).map((c) => c.text ?? JSON.stringify(c)).join('\n')
         if (r?.isError) step.error = 'The MCP server reported a tool error.'
       } catch (e) {
         step.error = String(e?.message || e).slice(0, 300)
-        step.latencyMs = Date.now() - tc0
-        messages.push({ role: 'tool', tool_call_id: call.id, content: `Tool error: ${step.error}` })
-        continue
+        job.reply = `Tool error: ${step.error}`
       }
-      step.latencyMs = Date.now() - tc0
+      const tc1 = performance.now()
+      step.latencyMs = Math.round(tc1 - tc0)
+      step.timing.exec = { start: tc0, end: tc1, http, resultChars: job.text.length }
+    }))
 
-      // Stage 2 — the result, before the model reads it. This is the important
-      // one: a tool result is untrusted remote content.
+    // Stage 2 — the result, before the model reads it. This is the important
+    // one: a tool result is untrusted remote content.
+    for (const job of jobs.filter((j) => !j.reply)) {
+      const { server, tool, args, step, text } = job
       if (scanTool) {
+        const q0 = performance.now()
         try {
           const s2 = await scanTool({ serverName: server.id, method: 'tools/call', toolName: tool, toolInput: args, toolOutput: text.slice(0, 20000) })
+          step.timing.resultScan = { start: q0, end: performance.now(), http: s2?._http ?? [], scannedChars: Math.min(text.length, 20000) }
           step.outputScan = { action: s2.data?.action, category: s2.data?.category, scanId: s2.data?.scan_id }
           if (s2.data?.action === 'block') {
             step.blocked = true
             step.result = null
             step.error = `Result withheld — Prisma AIRS blocked it (${s2.data.category})`
-            messages.push({ role: 'tool', tool_call_id: call.id, content: `Prisma AIRS blocked this tool's result before you could read it (${s2.data.category}). Tell the user the result was withheld.` })
+            job.reply = `Prisma AIRS blocked this tool's result before you could read it (${s2.data.category}). Tell the user the result was withheld.`
             continue
           }
         } catch (e) { step.outputScan = { error: String(e?.message || e).slice(0, 160) } }
       }
-
       const trimmed = text.length > MAX_TOOL_RESULT_CHARS
         ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated ${text.length - MAX_TOOL_RESULT_CHARS} chars]`
         : text
       step.result = trimmed
-      messages.push({ role: 'tool', tool_call_id: call.id, content: trimmed || '(empty result)' })
+      job.reply = trimmed || '(empty result)'
     }
+
+    for (const job of jobs) messages.push({ role: 'tool', tool_call_id: job.call.id, content: job.reply })
 
     if (round === MAX_ROUNDS) {
       steps.push({ kind: 'error', title: 'Step limit reached', detail: `Stopped after ${MAX_ROUNDS} tool rounds without a final answer.` })
@@ -569,6 +651,7 @@ export async function runMcpLoop({
     servers: liveServers.map((s) => s.id),
     rounds,
     toolCalls,
+    turns,
     latencyMs: Date.now() - t0,
   }
 }

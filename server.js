@@ -28,6 +28,8 @@ import {
   MAX_SCAN_CHARS,
 } from './file-extract.js'
 import { runMcpLoop, describeServers as describeMcpServers, MCP_SERVER_IDS } from './mcp-aigw.js'
+import { Timeline, captureHttp, perfNow, gatewayBreakdown, summarizeHooks, truncateDeep, redactDocument } from './telemetry.js'
+import os from 'os'
 import mohRouter, {
   MOH_ENV as SCM_ENV,
   airscanMoh as airscanScm,
@@ -118,16 +120,16 @@ function awsCredentials() {
 // ─── AIRS scan helper ─────────────────────────────────────────────────────────
 // Fetch detailed threat scan report for one or more report_ids.
 // GET /v1/scan/reports?report_ids=R1,R2  (max 5 per call).
-async function airsFetchReports(reportIds) {
+async function airsFetchReports(reportIds, { base = process.env.AIRS_BASE_URL, key = process.env.AIRS_API_KEY } = {}) {
   if (!reportIds || (Array.isArray(reportIds) && reportIds.length === 0)) return null
   const ids = Array.isArray(reportIds) ? reportIds.join(',') : String(reportIds)
-  const url = `${process.env.AIRS_BASE_URL}/v1/scan/reports?report_ids=${encodeURIComponent(ids)}`
+  const url = `${base}/v1/scan/reports?report_ids=${encodeURIComponent(ids)}`
   const t0 = Date.now()
   const res = await fetch(url, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
-      'x-pan-token': process.env.AIRS_API_KEY,
+      'x-pan-token': key,
     },
   })
   if (!res.ok) {
@@ -147,11 +149,13 @@ export async function airscan(prompt, response = null, model = 'unknown') {
     contents: [{ prompt, ...(response != null ? { response } : {}) }],
   }
 
-  const t0 = Date.now()
   const url = `${process.env.AIRS_BASE_URL}/v1/scan/sync/request`
-  const res = await fetch(
-    url,
-    {
+  // Scan and report are captured separately: the report fetch is a second full
+  // round trip on the critical path, and it used to hide inside "AIRS overhead"
+  // — or rather outside it, since latencyMs stopped before it started.
+  let res, data
+  const scan = await captureHttp(async () => {
+    res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -159,30 +163,38 @@ export async function airscan(prompt, response = null, model = 'unknown') {
         'x-pan-token': process.env.AIRS_API_KEY,
       },
       body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`AIRS scan failed (${res.status}): ${text}`)
     }
-  )
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`AIRS scan failed (${res.status}): ${text}`)
-  }
-
-  const data = await res.json()
-  const latencyMs = Date.now() - t0
+    data = await res.json()
+  })
+  const latencyMs = Math.round(scan.end - scan.start)
 
   // Fetch the detailed threat scan report (verbatim — for the UI's Raw section).
   // Best-effort: report endpoint sometimes lags behind the sync scan; never fails the call.
   let report = null
+  let reportPhase = null
   if (data?.report_id) {
     try {
-      report = await airsFetchReports(data.report_id)
+      reportPhase = await captureHttp(() => airsFetchReports(data.report_id))
+      report = reportPhase.value
     } catch (err) {
       console.warn('[AIRS] report fetch threw:', err.message)
       report = { data: null, error: err.message }
     }
   }
 
-  return { data, latencyMs, requestBody: body, requestUrl: url, report }
+  return {
+    data, latencyMs, requestBody: body, requestUrl: url, report,
+    requestId: res.headers.get('x-request-id'),
+    // Absolute performance.now() stamps + raw exchanges, for the trace timeline.
+    phases: {
+      scan: { start: scan.start, end: scan.end, http: scan.http },
+      report: reportPhase ? { start: reportPhase.start, end: reportPhase.end, http: reportPhase.http } : null,
+    },
+  }
 }
 
 // ─── Azure OpenAI helper ──────────────────────────────────────────────────────
@@ -197,15 +209,17 @@ function makeAzureClient() {
 async function callAzureOpenAI(prompt, deploymentName) {
   const client = makeAzureClient()
   const t0 = Date.now()
-  const response = await client.chat.completions.create({
+  const { data: response, response: raw } = await client.chat.completions.create({
     model: deploymentName,
     messages: [{ role: 'user', content: prompt }],
     max_completion_tokens: 1024,
-  })
+  }).withResponse()
   const latencyMs = Date.now() - t0
   const choice = response.choices?.[0]
   const text = choice?.message?.content ?? ''
   const usage = response.usage ?? {}
+  let endpointHost = null
+  try { endpointHost = new URL(process.env.AZURE_OPENAI_ENDPOINT).host } catch { /* unset */ }
   return {
     text,
     latencyMs,
@@ -215,6 +229,22 @@ async function callAzureOpenAI(prompt, deploymentName) {
       total:  usage.total_tokens      ?? null,
     },
     finishReason: choice?.finish_reason ?? null,
+    meta: {
+      path: 'Azure OpenAI · chat/completions',
+      responseId: response.id ?? null,
+      servedModel: response.model ?? null,
+      systemFingerprint: response.system_fingerprint ?? null,
+      requestId: raw.headers.get('apim-request-id') || raw.headers.get('x-request-id'),
+      region: raw.headers.get('x-ms-region'),
+      endpointHost,
+      reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? null,
+      cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? null,
+      // Azure's own content filter — a provider control that runs whatever AIRS
+      // says, and the reason a response can come back empty with AIRS off.
+      providerFilter: (response.prompt_filter_results || choice?.content_filter_results)
+        ? { prompt: response.prompt_filter_results ?? null, completion: choice?.content_filter_results ?? null }
+        : null,
+    },
   }
 }
 
@@ -241,6 +271,16 @@ export async function callVertexAI(prompt, modelId) {
       total:  usage.totalTokenCount       ?? null,
     },
     finishReason: candidate?.finishReason ?? null,
+    meta: {
+      path: 'Vertex AI · Gemini SDK (generateContent)',
+      region: process.env.GCP_REGION || 'us-central1',
+      responseId: result.response?.responseId ?? null,
+      servedModel: result.response?.modelVersion ?? null,
+      reasoningTokens: usage.thoughtsTokenCount ?? null,
+      cachedTokens: usage.cachedContentTokenCount ?? null,
+      providerFilter: candidate?.safetyRatings?.some((s) => s.blocked) || candidate?.finishReason === 'SAFETY'
+        ? { safetyRatings: candidate.safetyRatings ?? null } : null,
+    },
   }
 }
 
@@ -254,8 +294,10 @@ export async function callVertexMaaS(prompt, modelId, location = 'us-central1') 
   const project = process.env.GCP_PROJECT_ID
   const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
   const url = `https://${host}/v1/projects/${project}/locations/${location}/endpoints/openapi/chat/completions`
+  const a0 = Date.now()
   const client = await maasAuth.getClient()
   const token = (await client.getAccessToken()).token
+  const authMs = Date.now() - a0
   const t0 = Date.now()
   const resp = await fetch(url, {
     method: 'POST',
@@ -279,6 +321,16 @@ export async function callVertexMaaS(prompt, modelId, location = 'us-central1') 
       total:  usage.total_tokens      ?? null,
     },
     finishReason: choice?.finish_reason ?? null,
+    meta: {
+      path: 'Vertex AI · OpenAI-compatible endpoint',
+      region: location,
+      responseId: data.id ?? null,
+      servedModel: data.model ?? null,
+      reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? null,
+      // Getting the ADC token is its own step — usually cached, occasionally a
+      // real refresh, and it happens before the model call starts.
+      authMs,
+    },
   }
 }
 
@@ -292,8 +344,10 @@ export async function callVertexAnthropic(prompt, modelId, location = 'global') 
   const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
   const model = modelId.replace(/^anthropic\//, '')
   const url = `https://${host}/v1/projects/${project}/locations/${location}/publishers/anthropic/models/${model}:rawPredict`
+  const a0 = Date.now()
   const client = await maasAuth.getClient()
   const token = (await client.getAccessToken()).token
+  const authMs = Date.now() - a0
   const t0 = Date.now()
   const resp = await fetch(url, {
     method: 'POST',
@@ -323,6 +377,15 @@ export async function callVertexAnthropic(prompt, modelId, location = 'global') 
       total:  (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0) || null,
     },
     finishReason: data.stop_reason ?? null,
+    meta: {
+      path: 'Vertex AI · Anthropic :rawPredict',
+      region: location,
+      responseId: data.id ?? null,
+      servedModel: data.model ?? null,
+      cachedTokens: usage.cache_read_input_tokens ?? null,
+      cacheWriteTokens: usage.cache_creation_input_tokens ?? null,
+      authMs,
+    },
   }
 }
 
@@ -397,6 +460,21 @@ export async function callBedrock(prompt, modelId) {
           total:  (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0) || null,
         },
         finishReason: response.stopReason ?? null,
+        meta: {
+          path: 'AWS Bedrock · Converse',
+          region: process.env.AWS_REGION || 'us-east-1',
+          invokedId: id,
+          profileRetry: id !== modelId, // bare id refused → retried as a us. inference profile
+          transientRetries: attempt - 1,
+          requestId: response.$metadata?.requestId ?? null,
+          sdkAttempts: response.$metadata?.attempts ?? null,
+          sdkRetryDelayMs: response.$metadata?.totalRetryDelay ?? null,
+          // Bedrock's own measurement of the model call. The gap between this and
+          // our wall clock is network, queueing and the SDK — not the model.
+          serverLatencyMs: response.metrics?.latencyMs ?? null,
+          cachedTokens: usage.cacheReadInputTokens ?? null,
+          cacheWriteTokens: usage.cacheWriteInputTokens ?? null,
+        },
       }
     } catch (err) {
       lastErr = err
@@ -519,8 +597,11 @@ function buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelL
 }
 
 // ─── Persist trace + spans to SQLite ─────────────────────────────────────────
-export function persistTrace({ message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta }) {
+export function persistTrace({ message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta, detail = null }) {
   const traceId = `trace_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  // Measured path — /api/chat hands over a real timeline. The MOH and legacy
+  // gateway pillars call without one and keep the synthesized spans below.
+  if (detail?.timeline) return persistMeasuredTrace({ traceId, message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta, detail })
   const timing  = telemetry.timing ?? {}
   const llm     = telemetry.llm ?? {}
   const summary = telemetry.summary ?? {}
@@ -587,7 +668,184 @@ export function persistTrace({ message, chatResponse, telemetry, backend, resolv
   return traceId
 }
 
+function persistMeasuredTrace({ traceId, message, chatResponse, telemetry, backend, resolvedModelId, airsEnabled, attackMeta, detail }) {
+  const timing = telemetry.timing ?? {}
+  const llm = telemetry.llm ?? {}
+  const summary = telemetry.summary ?? {}
+  const verdict = summary.verdict ?? (airsEnabled ? 'ALLOWED' : 'DIRECT')
+  try {
+    insertTrace({
+      id: traceId,
+      created_at: detail.timeline.startedAt,
+      prompt: message,
+      response: chatResponse?.content ?? null,
+      backend,
+      model: resolvedModelId ?? backend,
+      verdict,
+      category: summary.category ?? 'benign',
+      threats_detected: summary.threats_detected ?? [],
+      airs_enabled: airsEnabled,
+      total_ms: detail.timeline.totalMs,
+      airs_input_ms: timing.airs_input_scan_ms || null,
+      llm_ms: timing.llm_ms || null,
+      airs_output_ms: timing.airs_output_scan_ms || null,
+      tokens_in: llm.tokens_in ?? null,
+      tokens_out: llm.tokens_out ?? null,
+      profile: summary.profile ?? detail.airs?.profile ?? null,
+      attack_label: attackMeta?.label ?? null,
+      attack_severity: attackMeta?.severity ?? null,
+      detail,
+    })
+    // Real spans, real offsets. Names the Observability drawer already knows
+    // (airs_input_scan, llm_inference, airs_output_scan) are kept for the spans
+    // that mean the same thing; everything else is new and self-describing.
+    const blocked = verdict === 'BLOCKED'
+    const spans = [
+      { name: 'user_prompt_received', start: 0, end: 0, status: 'ok', attrs: null },
+      ...detail.timeline.spans,
+      { name: 'response_delivered', start: detail.timeline.totalMs, end: detail.timeline.totalMs, status: blocked ? 'blocked' : 'ok', attrs: null },
+    ]
+    for (const s of spans) {
+      insertSpan({
+        trace_id: traceId,
+        name: s.name,
+        start_ms: Math.round(s.start),
+        end_ms: Math.round(s.end),
+        latency_ms: Math.max(0, Math.round(s.end - s.start)),
+        status: s.status === 'ok' ? 'success' : s.status,
+        metadata: s.attrs || s.label ? { label: s.label ?? null, ...(s.attrs || {}), ...(s.parent ? { parent: s.parent } : {}) } : null,
+      })
+    }
+  } catch (err) {
+    console.error('[TraceStore] Failed to persist measured trace:', err.message)
+  }
+  return traceId
+}
+
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
+// ─── Trace detail — the measured telemetry the Prompt Telemetry drawer reads ─
+//
+// Everything in here was observed on this request: timeline spans with real
+// offsets, HTTP phases, the AIRS scan and report verbatim, provider and gateway
+// metadata. Nothing is estimated except where a field says `derived`.
+
+const AIRS_API_HOST = (() => { try { return new URL(process.env.AIRS_BASE_URL).host } catch { return null } })()
+
+const SCAN_FIELDS = ['action', 'category', 'scan_id', 'report_id', 'tr_id', 'transaction_id', 'session_id',
+  'profile_id', 'profile_name', 'source', 'timeout', 'error', 'errors',
+  'prompt_detected', 'response_detected', 'tool_detected',
+  'prompt_masked_data', 'response_masked_data', 'prompt_detection_details', 'response_detection_details']
+const pickScan = (d) => Object.fromEntries(SCAN_FIELDS.map((k) => [k, d?.[k] ?? null]))
+
+/** A direct airscan() result (API layer). */
+function scanDetail(s) {
+  if (!s) return null
+  return {
+    via: 'airs-api',
+    ...pickScan(s.data),
+    latencyMs: s.latencyMs ?? null,
+    requestId: s.requestId ?? null,
+    endpoint: s.requestUrl ? s.requestUrl.replace(/^https?:\/\//, '') : null,
+    request: s.requestBody ?? null,
+    report: s.report?.data ?? null,
+    reportError: s.report?.error ?? null,
+  }
+}
+
+/** A gateway guardrail stage — same shape, scanned inside the AI-GW. */
+function gatewayScanDetail(stage, hooks, phase) {
+  if (!stage) return null
+  const hook = (hooks || []).find((h) => h.phase === phase)
+  return {
+    via: 'ai-gateway-guardrail',
+    ...pickScan(stage.raw),
+    latencyMs: stage.latencyMs ?? null,
+    guardrailId: hook?.id ?? null,
+    checkId: hook?.checks?.[0]?.id ?? null,
+    report: null, // fetched on demand by the drawer — /api/airs/report
+  }
+}
+
+/** Scan + report fetch as two measured spans. */
+function airsSpans(tl, scan, which) {
+  const p = scan?.phases
+  if (!p) return
+  const d = scan.data || {}
+  tl.add(`airs_${which}_scan`, which === 'input' ? 'AIRS prompt scan' : 'AIRS response scan', p.scan.start, p.scan.end,
+    { action: d.action, category: d.category, scan_id: d.scan_id },
+    { http: p.scan.http, status: d.action === 'block' ? 'blocked' : 'ok' })
+  if (p.report) {
+    tl.add(`airs_${which}_report`, 'AIRS report fetch', p.report.start, p.report.end,
+      { report_id: d.report_id }, { http: p.report.http })
+  }
+}
+
+function llmDetail(r, backend, modelId) {
+  const t = r?.tokens || {}
+  const m = r?.meta || {}
+  return {
+    backend,
+    modelId,
+    latencyMs: r?.latencyMs ?? null,
+    finishReason: r?.finishReason ?? null,
+    tokens: {
+      input: t.input ?? null, output: t.output ?? null, total: t.total ?? null,
+      cached: m.cachedTokens ?? null, cacheWrite: m.cacheWriteTokens ?? null, reasoning: m.reasoningTokens ?? null,
+    },
+    meta: m,
+  }
+}
+
+/** Model call as a span, plus the ADC token fetch inside it when there was one. */
+async function llmSpan(tl, backend, fn) {
+  const labels = { vertex: 'Model call · Vertex AI', bedrock: 'Model call · AWS Bedrock', azure: 'Model call · Azure OpenAI' }
+  const r = await tl.span('llm_inference', labels[backend] ?? 'Model call', fn)
+  const rec = tl.spans[tl.spans.length - 1]
+  if (r?.meta?.authMs > 1) {
+    const s = tl.t0 + rec.start
+    tl.add('provider_auth', 'Google ADC access token', s, s + r.meta.authMs, {}, { parent: 'llm_inference' })
+  }
+  return r
+}
+
+function buildDetail({ tl, req, backend, modelId, airsEnabled, enforcement, verdict, llm = null, airsIn = null, airsOut = null, gateway = null, mcp = null, document = null }) {
+  let detail = {
+    v: 2,
+    backend,
+    modelId,
+    enforcement,
+    verdict,
+    airsEnabled,
+    host: { server: os.hostname(), via: req.headers.host ?? null, node: process.version },
+    airs: {
+      profile: backend === 'aigw' ? (airsIn?.profile_name ?? SCM_ENV.airsProfile ?? null) : (process.env.AIRS_PROFILE_NAME ?? null),
+      host: backend === 'aigw' ? 'inside the SCM AI Gateway' : AIRS_API_HOST,
+      // Which SCM tenant holds these scans on THIS host — the gateway's are
+      // always personal; the API-layer ones follow the host's AIRS_* key
+      // (personal locally, team on EC2).
+      tsg: backend === 'aigw' ? (process.env.AIGW_TSG_ID || null) : (process.env.SCM_TSG_ID || process.env.TSG_ID || null),
+      input: airsIn,
+      output: airsOut,
+    },
+    llm,
+    gateway,
+    mcp,
+    attachment: document?.text ? { name: document.name, chars: document.text.length } : null,
+    timeline: tl.toJSON(),
+  }
+  // An attached document is stored as a reference only — never quoted back
+  // through the AIRS request body, the masked prompt or the report snippets.
+  if (document?.text) detail = redactDocument(detail)
+  return truncateDeep(detail, 4000)
+}
+
+/** Everything the drawer needs from a gateway call, minus absolute clock stamps. */
+function gatewayDetail(g) {
+  if (!g?.gateway) return null
+  const { callStart, callEnd, breakdown, ...rest } = g.gateway
+  return { ...rest, breakdown: breakdown ? { ...breakdown, segments: undefined } : null }
+}
+
 app.post('/api/chat', async (req, res) => {
   const {
     message, backend = 'vertex', modelId, airsEnabled = false, document = null,
@@ -597,6 +855,8 @@ app.post('/api/chat', async (req, res) => {
     mcpEnabled = false, mcpServer = 'auto',
   } = req.body
   if (!message) return res.status(400).json({ error: 'message is required' })
+  // t0 for the whole request — the drawer's total is this clock, not a sum.
+  const tl = new Timeline()
 
   // An attached document reaches the model and the guardrail, but NOT the
   // trace: traces.db has no TTL, so archiving the full text buys nothing that
@@ -632,8 +892,13 @@ app.post('/api/chat', async (req, res) => {
           airsEnabled,
           // AIRS off means no scanning anywhere, the same as every other
           // backend in this pillar — not "scan but ignore the verdict".
+          // Each scan carries its own HTTP phases back on `_http`.
           scanTool: airsEnabled
-            ? (a) => airscanScm({ ...a, model: resolvedModelId })
+            ? async (a) => {
+                const cap = await captureHttp(() => airscanScm({ ...a, model: resolvedModelId }))
+                if (cap.value && typeof cap.value === 'object') cap.value._http = cap.http
+                return cap.value
+              }
             : null,
           detectBlock: (completion) => {
             const hr = completion?.hook_results
@@ -647,9 +912,47 @@ app.post('/api/chat', async (req, res) => {
             const client = buildAigwClient(configId, {
               metadata: { demo: 'api-intercept-mcp', _user: 'demo-user', lane: airsEnabled ? 'airs' : 'none' },
             })
-            return client.chat.completions.create({ model: resolvedModelId, messages, tools, tool_choice: 'auto', max_tokens: 2048 })
+            // No server routed → a plain turn. An empty tools array with
+            // tool_choice set is a request some providers reject outright.
+            const toolParams = tools?.length ? { tools, tool_choice: 'auto' } : {}
+            const cap = await captureHttp(() => client.chat.completions.create({ model: resolvedModelId, messages, ...toolParams, max_tokens: 2048 }))
+            if (cap.value) cap.value._http = cap.http
+            return cap.value
           },
         })
+
+        // Rebuild the loop on the request timeline from the stamps it recorded.
+        for (const st of m.steps) {
+          const tm = st.timing
+          if (!tm) continue
+          if (st.kind === 'discover') {
+            tl.add('mcp_discovery', `${st.title}${tm.cached ? ' · cached manifest' : ''}`, tm.start, tm.end,
+              { server: st.server, cached: tm.cached, toolsOffered: st.toolNames?.length ?? 0, via: st.brokered ? 'AI-GW' : 'direct' })
+            if (tm.manifestScan) {
+              tl.add('mcp_manifest_scan', 'AIRS tool_event · manifest scan', tm.manifestScan.start, tm.manifestScan.end,
+                { action: st.scan?.action, category: st.scan?.category, scan_id: st.scan?.scanId },
+                { http: tm.manifestScan.http, parent: 'mcp_discovery', status: st.scan?.action === 'block' ? 'blocked' : 'ok' })
+            }
+          }
+          if (st.kind === 'tool') {
+            const who = `${st.server} · ${st.tool}`
+            if (tm.paramsScan) tl.add('mcp_tool_params_scan', `${who} · params scan`, tm.paramsScan.start, tm.paramsScan.end,
+              { action: st.inputScan?.action, category: st.inputScan?.category, scan_id: st.inputScan?.scanId, round: st.round },
+              { http: tm.paramsScan.http, status: st.inputScan?.action === 'block' ? 'blocked' : 'ok' })
+            if (tm.exec) tl.add('mcp_tool_exec', `${who} · execute`, tm.exec.start, tm.exec.end,
+              { round: st.round, resultChars: tm.exec.resultChars, via: st.brokered ? 'AI-GW' : 'direct', error: st.error && !st.blocked ? st.error : null },
+              { http: tm.exec.http, status: st.error && !st.blocked ? 'error' : 'ok' })
+            if (tm.resultScan) tl.add('mcp_tool_result_scan', `${who} · result scan`, tm.resultScan.start, tm.resultScan.end,
+              { action: st.outputScan?.action, category: st.outputScan?.category, scan_id: st.outputScan?.scanId, scannedChars: tm.resultScan.scannedChars, round: st.round },
+              { http: tm.resultScan.http, status: st.outputScan?.action === 'block' ? 'blocked' : 'ok' })
+          }
+        }
+        for (const tu of m.turns ?? []) {
+          tl.add('mcp_model_turn', `Model turn ${tu.round} · AI-GW`, tu.start, tu.end,
+            { round: tu.round, tokensIn: tu.tokensIn, tokensOut: tu.tokensOut, toolCalls: tu.toolCalls, toolsOffered: tu.toolsOffered, finish: tu.finish, guardrailInMs: tu.guardrailInMs, guardrailOutMs: tu.guardrailOutMs },
+            { http: tu.http })
+        }
+        const clientSteps = m.steps.map(({ timing, ...s }) => s)
 
         const blockedSteps = m.steps.filter((st) => st.blocked || st.kind === 'blocked')
         const isBlocked = m.blocked || blockedSteps.length > 0
@@ -667,9 +970,15 @@ app.post('/api/chat', async (req, res) => {
           // here, which is why an MCP run showed no detection at all.
           inputScan: stageFromHook(m.hookResults?.before_request_hooks, 'prompt'),
           outputScan: stageFromHook(m.hookResults?.after_request_hooks, 'response'),
-          timing: { llm_ms: m.latencyMs, airs_input_scan_ms: null, airs_output_scan_ms: null, total_ms: m.latencyMs },
-          llm: { model: modelLabel, latency_ms: m.latencyMs, tokens_in: null, tokens_out: null, tokens_total: null, throughput_tps: null, finish_reason: null },
-          mcp: { steps: m.steps, servers: m.servers, rounds: m.rounds, toolCalls: m.toolCalls, enabled: true },
+          timing: { llm_ms: m.latencyMs, airs_input_scan_ms: null, airs_output_scan_ms: null, total_ms: tl.elapsed() },
+          // Summed over every model turn — each turn re-sends the whole history,
+          // so tokens_in grows round by round.
+          llm: (() => {
+            const tin = (m.turns ?? []).reduce((n, x) => n + (x.tokensIn ?? 0), 0) || null
+            const tout = (m.turns ?? []).reduce((n, x) => n + (x.tokensOut ?? 0), 0) || null
+            return { model: modelLabel, latency_ms: m.latencyMs, tokens_in: tin, tokens_out: tout, tokens_total: (tin ?? 0) + (tout ?? 0) || null, throughput_tps: null, finish_reason: m.turns?.at(-1)?.finish ?? null }
+          })(),
+          mcp: { steps: clientSteps, servers: m.servers, rounds: m.rounds, toolCalls: m.toolCalls, enabled: true },
           chatResponse: {
             role: 'assistant',
             content: m.blocked ? '' : (m.answer || m.error || ''),
@@ -677,7 +986,26 @@ app.post('/api/chat', async (req, res) => {
             block_reason: m.blockReason ?? null,
           },
         }
-        const traceId = persistTrace({ message: traceMessage, chatResponse: payload.chatResponse, telemetry: payload, backend, resolvedModelId, airsEnabled, attackMeta: req.body.attackMeta ?? null })
+        const hooks = summarizeHooks(m.hookResults)
+        const detail = buildDetail({
+          tl, req, backend, modelId: resolvedModelId, airsEnabled, document,
+          enforcement: payload.summary.enforcement, verdict: payload.summary.verdict,
+          airsIn: gatewayScanDetail(payload.inputScan, hooks, 'input'),
+          airsOut: gatewayScanDetail(payload.outputScan, hooks, 'output'),
+          llm: {
+            backend, modelId: resolvedModelId, latencyMs: m.latencyMs, finishReason: payload.llm.finish_reason,
+            tokens: { input: payload.llm.tokens_in, output: payload.llm.tokens_out, total: payload.llm.tokens_total },
+            meta: { path: 'SCM AI-GW · agentic tool loop', turns: (m.turns ?? []).length },
+          },
+          gateway: { baseUrl: SCM_ENV.baseUrl, configId: resolveAigwConfig(airsEnabled).configId ?? null, lane: airsEnabled ? 'protected' : 'unprotected', hooks },
+          mcp: {
+            route: m.steps.find((s) => s.kind === 'route')?.detail ?? null,
+            servers: m.servers, rounds: m.rounds, toolCalls: m.toolCalls,
+            turns: (m.turns ?? []).map(({ start, end, http, ...x }) => ({ ...x, ms: Math.round(end - start) })),
+            steps: clientSteps.map((s) => (s.result ? { ...s, result: String(s.result).slice(0, 1500) } : s)),
+          },
+        })
+        const traceId = persistTrace({ message: traceMessage, chatResponse: payload.chatResponse, telemetry: payload, backend, resolvedModelId, airsEnabled, attackMeta: req.body.attackMeta ?? null, detail })
         return res.json({ ...payload, trace_id: traceId })
       } catch (err) {
         console.error('[SCM AI-GW · MCP] Error:', err.message)
@@ -686,7 +1014,13 @@ app.post('/api/chat', async (req, res) => {
     }
 
     try {
-      const g = await callScmGateway(llmInput, resolvedModelId, airsEnabled)
+      const g = await tl.span('gateway_call', 'SCM AI-GW call', () => callScmGateway(llmInput, resolvedModelId, airsEnabled),
+        { lane: airsEnabled ? 'protected' : 'unprotected' })
+      // What happened inside the gateway, from its own hook timestamps.
+      for (const seg of g.gateway?.breakdown?.segments ?? []) {
+        tl.add(seg.name, seg.label, seg.start, seg.end, {}, { parent: 'gateway_call', derived: 'gateway-clock' })
+      }
+      const providerMs = g.gateway?.breakdown?.providerMs ?? null
       const payload = {
         summary: {
           verdict: g.blocked ? 'BLOCKED' : airsEnabled ? 'ALLOWED' : 'DIRECT',
@@ -704,16 +1038,30 @@ app.post('/api/chat', async (req, res) => {
         },
         inputScan: g.inputScan,
         outputScan: g.outputScan,
-        timing: { llm_ms: g.latencyMs, airs_input_scan_ms: g.inputScan?.latencyMs ?? null, airs_output_scan_ms: g.outputScan?.latencyMs ?? null, total_ms: g.latencyMs },
+        timing: { llm_ms: g.latencyMs, airs_input_scan_ms: g.inputScan?.latencyMs ?? null, airs_output_scan_ms: g.outputScan?.latencyMs ?? null, total_ms: tl.elapsed() },
         llm: {
           model: modelLabel, latency_ms: g.latencyMs,
           tokens_in: g.tokens.input, tokens_out: g.tokens.output, tokens_total: g.tokens.total,
-          throughput_tps: (g.tokens.output && g.latencyMs) ? Math.round((g.tokens.output / g.latencyMs) * 1000) : null,
+          // Over the provider's share of the call when the gateway tells us it,
+          // not over a total that includes two guardrail scans.
+          throughput_tps: (g.tokens.output && (providerMs || g.latencyMs)) ? Math.round((g.tokens.output / (providerMs || g.latencyMs)) * 1000) : null,
           finish_reason: g.finishReason,
         },
         chatResponse: { role: 'assistant', content: g.text, blocked: g.blocked, block_reason: g.blockReason },
       }
-      const traceId = persistTrace({ message: traceMessage, chatResponse: payload.chatResponse, telemetry: payload, backend, resolvedModelId, airsEnabled, attackMeta: req.body.attackMeta ?? null })
+      const gwd = gatewayDetail(g)
+      const detail = buildDetail({
+        tl, req, backend, modelId: resolvedModelId, airsEnabled, document,
+        enforcement: payload.summary.enforcement, verdict: payload.summary.verdict,
+        airsIn: gatewayScanDetail(g.inputScan, gwd?.hooks, 'input'),
+        airsOut: gatewayScanDetail(g.outputScan, gwd?.hooks, 'output'),
+        llm: {
+          ...llmDetail({ latencyMs: g.latencyMs, tokens: { ...g.tokens }, finishReason: g.finishReason, meta: { cachedTokens: gwd?.cachedTokens } }, backend, resolvedModelId),
+          meta: { path: 'SCM AI-GW → provider', provider: gwd?.provider ?? null, servedModel: gwd?.servedModel ?? null, responseId: gwd?.completionId ?? null, providerMs },
+        },
+        gateway: gwd,
+      })
+      const traceId = persistTrace({ message: traceMessage, chatResponse: payload.chatResponse, telemetry: payload, backend, resolvedModelId, airsEnabled, attackMeta: req.body.attackMeta ?? null, detail })
       return res.json({ ...payload, trace_id: traceId })
     } catch (err) {
       console.error('[SCM AI-GW] Error:', err.message)
@@ -727,15 +1075,16 @@ app.post('/api/chat', async (req, res) => {
   if (!airsEnabled) {
     console.log(`[LLM] Unprotected — calling ${modelLabel} directly…`)
     try {
-      const r = backend === 'vertex'  ? await callVertexModel(llmInput, resolvedModelId)
-              : backend === 'azure'   ? await callAzureOpenAI(llmInput, resolvedModelId)
-              : await callBedrock(llmInput, resolvedModelId)
+      const r = await llmSpan(tl, backend, () => (
+        backend === 'vertex' ? callVertexModel(llmInput, resolvedModelId)
+        : backend === 'azure' ? callAzureOpenAI(llmInput, resolvedModelId)
+        : callBedrock(llmInput, resolvedModelId)))
       console.log(`[LLM] Response received (${r.latencyMs}ms, ${r.tokens?.total ?? '?'} tokens) — no AIRS scan`)
       const responsePayload = {
         summary: null,
         inputScan: null,
         outputScan: null,
-        timing: { llm_ms: r.latencyMs, airs_input_scan_ms: null, airs_output_scan_ms: null, total_ms: r.latencyMs },
+        timing: { llm_ms: r.latencyMs, airs_input_scan_ms: null, airs_output_scan_ms: null, total_ms: tl.elapsed() },
         llm: {
           model: modelLabel,
           latency_ms: r.latencyMs,
@@ -748,7 +1097,11 @@ app.post('/api/chat', async (req, res) => {
         },
         chatResponse: { role: 'assistant', content: r.text, blocked: false, block_reason: null },
       }
-      const traceId = persistTrace({ message: traceMessage, chatResponse: responsePayload.chatResponse, telemetry: responsePayload, backend, resolvedModelId, airsEnabled: false, attackMeta: req.body.attackMeta ?? null })
+      const detail = buildDetail({
+        tl, req, backend, modelId: resolvedModelId, airsEnabled: false, document,
+        enforcement: 'none', verdict: 'DIRECT', llm: llmDetail(r, backend, resolvedModelId),
+      })
+      const traceId = persistTrace({ message: traceMessage, chatResponse: responsePayload.chatResponse, telemetry: responsePayload, backend, resolvedModelId, airsEnabled: false, attackMeta: req.body.attackMeta ?? null, detail })
       return res.json({ ...responsePayload, trace_id: traceId })
     } catch (err) {
       console.error('[LLM] Error:', err.message)
@@ -761,21 +1114,29 @@ app.post('/api/chat', async (req, res) => {
     // Step 1: AIRS scan the prompt
     console.log(`[AIRS] Scanning prompt via profile "${process.env.AIRS_PROFILE_NAME}"…`)
     const airsPromptScan = await airscan(llmInput, null, modelLabel)
+    airsSpans(tl, airsPromptScan, 'input')
     console.log(`[AIRS] Prompt verdict: ${airsPromptScan.data.action} / ${airsPromptScan.data.category}`)
 
     if (airsPromptScan.data.action === 'block') {
       const telemetry = buildTelemetry({ airsPromptScan, airsResponseScan: null, llmLatencyMs: null, modelLabel, llmText: null, llmTokens: null, llmFinishReason: null })
-      const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
+      telemetry.timing.total_ms = tl.elapsed()
+      const detail = buildDetail({
+        tl, req, backend, modelId: resolvedModelId, airsEnabled: true, document,
+        enforcement: 'api-layer', verdict: 'BLOCKED', airsIn: scanDetail(airsPromptScan),
+      })
+      const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null, detail })
       return res.json({ ...telemetry, trace_id: traceId })
     }
 
     // Step 2: Call LLM
-    let llmText = '', llmLatencyMs = 0, llmTokens = null, llmFinishReason = null
+    let llmText = '', llmLatencyMs = 0, llmTokens = null, llmFinishReason = null, llmResult = null
     try {
       console.log(`[LLM] Calling ${modelLabel}…`)
-      const r = backend === 'vertex'  ? await callVertexModel(llmInput, resolvedModelId)
-              : backend === 'azure'   ? await callAzureOpenAI(llmInput, resolvedModelId)
-              : await callBedrock(llmInput, resolvedModelId)
+      const r = await llmSpan(tl, backend, () => (
+        backend === 'vertex' ? callVertexModel(llmInput, resolvedModelId)
+        : backend === 'azure' ? callAzureOpenAI(llmInput, resolvedModelId)
+        : callBedrock(llmInput, resolvedModelId)))
+      llmResult = r
       llmText = r.text; llmLatencyMs = r.latencyMs; llmTokens = r.tokens; llmFinishReason = r.finishReason
       console.log(`[LLM] Response received (${llmLatencyMs}ms)`)
     } catch (err) {
@@ -786,10 +1147,18 @@ app.post('/api/chat', async (req, res) => {
     // Step 3: AIRS scan the response
     console.log('[AIRS] Scanning LLM response…')
     const airsResponseScan = await airscan(message, llmText, modelLabel)
+    airsSpans(tl, airsResponseScan, 'output')
     console.log(`[AIRS] Response verdict: ${airsResponseScan.data.action} / ${airsResponseScan.data.category}`)
 
     const telemetry = buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelLabel, llmText, llmTokens, llmFinishReason })
-    const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null })
+    telemetry.timing.total_ms = tl.elapsed()
+    const detail = buildDetail({
+      tl, req, backend, modelId: resolvedModelId, airsEnabled: true, document,
+      enforcement: 'api-layer', verdict: telemetry.summary.verdict,
+      airsIn: scanDetail(airsPromptScan), airsOut: scanDetail(airsResponseScan),
+      llm: llmDetail(llmResult, backend, resolvedModelId),
+    })
+    const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null, detail })
     return res.json({ ...telemetry, trace_id: traceId })
   } catch (err) {
     console.error('[server] Unhandled error:', err)
@@ -1122,6 +1491,7 @@ async function callScmGateway(prompt, modelId, airsEnabled) {
   })
 
   const t0 = Date.now()
+  const callStart = perfNow()
   let completion, hookResults = null, blockedHook = null, raw = null
   try {
     completion = await client.chat.completions.create({
@@ -1137,9 +1507,14 @@ async function callScmGateway(prompt, modelId, airsEnabled) {
     raw = parsed.raw
     if (!blockedHook) throw new Error(raw.slice(0, 300))
   }
+  const callEnd = perfNow()
 
   const blocked = !!blockedHook || hookVerdictFailed(hookResults)
   const usage = completion?.usage ?? {}
+  // The Portkey SDK hangs its response headers off the body as getHeaders():
+  // trace-id, provider, retry-attempt-count, cache-status, last-used-option-index.
+  let gwHeaders = null
+  try { gwHeaders = completion?.getHeaders?.() ?? null } catch { /* not present on a thrown block */ }
   return {
     text: blocked ? '' : (completion?.choices?.[0]?.message?.content ?? ''),
     blocked,
@@ -1156,6 +1531,20 @@ async function callScmGateway(prompt, modelId, airsEnabled) {
       total:  usage.total_tokens ?? null,
     },
     finishReason: completion?.choices?.[0]?.finish_reason ?? null,
+    gateway: {
+      baseUrl: SCM_ENV.baseUrl,
+      configId: configId ?? null,
+      lane: airsEnabled ? 'protected' : 'unprotected',
+      headers: gwHeaders,
+      completionId: completion?.id ?? null,
+      servedModel: completion?.model ?? null,
+      provider: completion?.provider ?? gwHeaders?.provider ?? null,
+      cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? null,
+      hooks: summarizeHooks(hookResults),
+      breakdown: gatewayBreakdown(hookResults, callStart, callEnd),
+      callStart,
+      callEnd,
+    },
   }
 }
 
@@ -1794,6 +2183,23 @@ app.get('/api/traces/metrics', (req, res) => {
   } catch (err) {
     console.error('[traces/metrics] Error:', err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── GET /api/airs/report — the detailed AIRS report, on demand ──────────────
+// The API-layer lanes fetch the report inline. The AI-GW guardrail returns only
+// a report_id, so the drawer asks for it here — with the key of the tenant that
+// ran the scan. Gateway scans live on the personal tenant (MOH_AIRS_*), and the
+// team key cannot read them.
+app.get('/api/airs/report', async (req, res) => {
+  const id = String(req.query.id || '')
+  if (!/^R[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'invalid report id' })
+  try {
+    const gw = req.query.via === 'gateway'
+    const r = await airsFetchReports(id, gw ? { base: SCM_ENV.airsBase, key: SCM_ENV.airsKey } : undefined)
+    res.json(r ?? { data: null, error: 'no report' })
+  } catch (err) {
+    res.status(502).json({ data: null, error: err.message })
   }
 })
 

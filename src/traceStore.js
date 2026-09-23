@@ -65,6 +65,11 @@ function db() {
   for (const col of [['username','TEXT'],['country','TEXT'],['city','TEXT'],['region','TEXT'],['timezone','TEXT'],['screen_res','TEXT'],['language','TEXT']]) {
     if (!cols.includes(col[0])) _db.exec(`ALTER TABLE activity_log ADD COLUMN ${col[0]} ${col[1]}`)
   }
+  // `detail` holds the full measured telemetry for a trace (timeline, AIRS scans
+  // and reports, provider and gateway metadata). Older rows have none, and the
+  // drawer falls back to the summary columns for them.
+  const traceCols = _db.prepare(`PRAGMA table_info(traces)`).all().map(c => c.name)
+  if (!traceCols.includes('detail')) _db.exec(`ALTER TABLE traces ADD COLUMN detail TEXT`)
   return _db
 }
 
@@ -73,16 +78,17 @@ export function insertTrace(t) {
   db().prepare(`
     INSERT INTO traces (id, created_at, prompt, response, backend, model, verdict, category,
       threats_detected, airs_enabled, total_ms, airs_input_ms, llm_ms, airs_output_ms,
-      tokens_in, tokens_out, profile, attack_label, attack_severity)
+      tokens_in, tokens_out, profile, attack_label, attack_severity, detail)
     VALUES (@id, @created_at, @prompt, @response, @backend, @model, @verdict, @category,
       @threats_detected, @airs_enabled, @total_ms, @airs_input_ms, @llm_ms, @airs_output_ms,
-      @tokens_in, @tokens_out, @profile, @attack_label, @attack_severity)
+      @tokens_in, @tokens_out, @profile, @attack_label, @attack_severity, @detail)
   `).run({
     ...t,
     id,
-    created_at: new Date().toISOString(),
+    created_at: t.created_at ?? new Date().toISOString(),
     threats_detected: JSON.stringify(t.threats_detected ?? []),
     airs_enabled: t.airs_enabled ? 1 : 0,
+    detail: t.detail ? JSON.stringify(t.detail) : null,
   })
   return id
 }
@@ -108,15 +114,19 @@ export function getTraces({ status, model, category, search, limit = 50, offset 
   const rows = db().prepare(
     `SELECT * FROM traces WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
   ).all(...params, limit, offset)
-  return rows.map(r => ({ ...r, threats_detected: JSON.parse(r.threats_detected || '[]'), airs_enabled: !!r.airs_enabled }))
+  // `detail` is per-trace forensics — tens of KB — and a list never renders it.
+  return rows.map(({ detail, ...r }) => ({ ...r, threats_detected: JSON.parse(r.threats_detected || '[]'), airs_enabled: !!r.airs_enabled, has_detail: !!detail }))
 }
 
 export function getTrace(id) {
   const trace = db().prepare('SELECT * FROM traces WHERE id = ?').get(id)
   if (!trace) return null
   const spans = db().prepare('SELECT * FROM spans WHERE trace_id = ? ORDER BY start_ms ASC').all(id)
+  let detail = null
+  try { detail = trace.detail ? JSON.parse(trace.detail) : null } catch { /* corrupt row — fall back */ }
   return {
     ...trace,
+    detail,
     threats_detected: JSON.parse(trace.threats_detected || '[]'),
     airs_enabled: !!trace.airs_enabled,
     spans: spans.map(s => ({ ...s, metadata: s.metadata ? JSON.parse(s.metadata) : null })),

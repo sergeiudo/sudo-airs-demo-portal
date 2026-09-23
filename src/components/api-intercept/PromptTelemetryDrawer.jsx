@@ -1,471 +1,213 @@
-// PromptTelemetryDrawer — fetches /api/traces/:id and renders identical to TraceDrawer
-// Opened from each assistant message bubble via the "Prompt Telemetry" button.
-import React, { useState, useEffect } from 'react'
+// PromptTelemetryDrawer — the measured telemetry for one prompt, opened from a
+// record's "Telemetry" action in both the 2027 console and the legacy view.
+//
+// It reads /api/traces/:id and renders `trace.detail`: what the server actually
+// observed on that request — a wall-clock timeline, HTTP phases, the AIRS scans
+// and reports, provider and gateway metadata. The previous version showed a
+// total that was a sum of parts and a "how latency is measured" panel with
+// typed-in numbers; none of that survives here. Traces recorded before this
+// (or by pillars that do not record detail yet) get an honest fallback.
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  X, ShieldX, ShieldCheck, Zap, AlertTriangle,
-  ChevronDown, Clock, Cpu, Activity, Copy,
-} from 'lucide-react'
+import { X, RefreshCw, Loader2 } from 'lucide-react'
+import { useAppContext } from '../../context/AppContext'
+import { tokens, VERDICT_META } from '../../views/api-intercept-2027/tokens'
+import { FONT, LBL, CopyButton, Chip } from './telemetry/primitives'
+import { OverviewTab, TimelineTab, ModelTab, NetworkTab, RawTab, LegacyView, allHttp } from './telemetry/sections'
+import { SecurityTab } from './telemetry/SecurityTab'
 
-// ─── CopyButton ───────────────────────────────────────────────────────────────
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
-  return (
-    <button onClick={copy} className="ml-1 text-slate-600 hover:text-slate-400 transition-colors flex-shrink-0" title="Copy to clipboard">
-      {copied ? <span className="text-[8px] text-emerald-400">✓</span> : <Copy size={10} />}
-    </button>
-  )
+const MIN_W = 520
+const MAX_W = 1200
+const WIDTH_KEY = 'airs.telemetryDrawer.width'
+
+function verdictMetaOf(trace) {
+  if (trace.verdict === 'BLOCKED') return VERDICT_META.blocked
+  if (trace.verdict === 'DIRECT' || !trace.airs_enabled) return VERDICT_META.unscanned
+  return VERDICT_META.passed
 }
 
-// ─── Span config ──────────────────────────────────────────────────────────────
-const SPAN_CFG = {
-  user_prompt_received: {
-    label: 'User Prompt', icon: '👤',
-    dotBg: 'bg-slate-100 border-slate-300', bar: 'bg-slate-400', text: 'text-slate-600',
-    cardBg: 'bg-white/[0.06] border-white/[0.10]', line: '#94a3b8', badge: 'received',
-    detail: () => 'Message sent to the protected LLM endpoint',
-  },
-  airs_input_scan: {
-    label: 'AIRS Input Scan', icon: '🔍',
-    dotBg: 'bg-emerald-50 border-emerald-300', bar: 'bg-emerald-500', text: 'text-emerald-600',
-    cardBg: 'bg-emerald-500/[0.06] border-emerald-500/20', line: '#34d399', badge: null,
-    detail: (span) => {
-      const m = span.metadata ?? {}
-      const parts = []
-      if (m.action) parts.push(`action: ${m.action}`)
-      if (m.category) parts.push(m.category)
-      if (m.scan_id) parts.push(`scan: ${m.scan_id.slice(0, 8)}…`)
-      return parts.join(' · ') || 'Prompt scanned · Prisma AIRS'
-    },
-  },
-  llm_inference: {
-    label: 'LLM Inference', icon: '🤖',
-    dotBg: 'bg-blue-50 border-blue-300', bar: 'bg-blue-500', text: 'text-blue-600',
-    cardBg: 'bg-blue-500/[0.06] border-blue-500/20', line: '#60a5fa', badge: null,
-    detail: (span) => {
-      const m = span.metadata ?? {}
-      const parts = []
-      if (m.model) parts.push(m.model)
-      if (m.tokens_in != null && m.tokens_out != null) parts.push(`${m.tokens_in} in / ${m.tokens_out} out tokens`)
-      if (m.finish_reason) parts.push(`stop reason: ${m.finish_reason}`)
-      return parts.join(' · ') || 'LLM processing'
-    },
-  },
-  airs_output_scan: {
-    label: 'AIRS Output Scan', icon: '🔍',
-    dotBg: 'bg-violet-50 border-violet-300', bar: 'bg-violet-500', text: 'text-violet-600',
-    cardBg: 'bg-violet-500/[0.06] border-violet-500/20', line: '#a78bfa', badge: null,
-    detail: (span) => {
-      const m = span.metadata ?? {}
-      const parts = []
-      if (m.action) parts.push(`action: ${m.action}`)
-      if (m.category) parts.push(m.category)
-      return parts.join(' · ') || 'Response scanned · Prisma AIRS'
-    },
-  },
-  response_delivered: {
-    label: 'Response Delivered', icon: '✅',
-    dotBg: 'bg-teal-50 border-teal-300', bar: 'bg-teal-500', text: 'text-teal-600',
-    cardBg: 'bg-teal-500/[0.06] border-teal-500/20', line: '#14b8a6', badge: null,
-    detail: (span) => span.status === 'blocked' ? 'Blocked — response suppressed' : 'Clean response returned to user',
-  },
+function relative(ms) {
+  const s = Math.round(ms / 1000)
+  if (s < 5) return 'just now'
+  if (s < 60) return `${s}s ago`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} h ago`
+  return `${Math.round(h / 24)} d ago`
 }
 
-// ─── VerdictBanner ────────────────────────────────────────────────────────────
-function VerdictBanner({ trace }) {
-  const isBlocked = trace.verdict === 'BLOCKED'
-  const isDirect  = trace.verdict === 'DIRECT'
-  const styles = isBlocked
-    ? { wrap: 'bg-red-500/10 border-red-500/30', icon: <ShieldX size={22} className="text-red-400" />, iconBg: 'bg-red-500/20', text: 'text-red-300', badge: 'bg-red-500/20 border-red-500/30 text-red-400' }
-    : isDirect
-    ? { wrap: 'bg-white/[0.04] border-white/[0.08]', icon: <Zap size={22} className="text-slate-400" />, iconBg: 'bg-white/[0.06]', text: 'text-slate-300', badge: 'bg-white/[0.06] border-white/[0.08] text-slate-500' }
-    : { wrap: 'bg-emerald-500/10 border-emerald-500/30', icon: <ShieldCheck size={22} className="text-emerald-400" />, iconBg: 'bg-emerald-500/20', text: 'text-emerald-300', badge: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400' }
-
-  return (
-    <div className={`p-4 rounded-2xl border ${styles.wrap}`}>
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${styles.iconBg}`}>
-          {styles.icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className={`text-base font-black tracking-wide ${styles.text}`}>{trace.verdict}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5 truncate font-medium">
-            {trace.backend} · {trace.model ?? trace.backend}
-            {trace.profile ? ` · ${trace.profile}` : ''}
-            {trace.created_at ? ` · ${new Date(trace.created_at).toLocaleString()}` : ''}
-          </div>
-        </div>
-        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border flex-shrink-0 ${styles.badge}`}>
-          {trace.category?.toUpperCase() ?? 'UNKNOWN'}
-        </span>
-      </div>
-      {trace.threats_detected?.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/[0.06]">
-          {trace.threats_detected.map(t => (
-            <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-100 border border-red-300 text-[9px] font-black text-slate-900 uppercase tracking-wide">
-              <AlertTriangle size={7} />{t.replace(/_/g, ' ')}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+function stamp(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const date = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  return { date, time: `${time}.${String(d.getMilliseconds()).padStart(3, '0')}`, tz, ms: d.getTime() }
 }
 
-// ─── MetricsStrip ─────────────────────────────────────────────────────────────
-function MetricsStrip({ trace }) {
-  const airsMs = (trace.airs_input_ms ?? 0) + (trace.airs_output_ms ?? 0)
-  const cards = [
-    { label: 'Total Time',  value: trace.total_ms, sub: 'end-to-end',  color: 'text-slate-300',   icon: Clock },
-    { label: 'LLM Latency', value: trace.llm_ms,   sub: 'inference',   color: 'text-blue-400',    icon: Cpu },
-    ...(airsMs > 0 ? [{ label: 'AIRS Overhead', value: airsMs, sub: 'total scans', color: 'text-emerald-400', icon: Activity }] : []),
-  ].filter(c => c.value != null)
-
-  if (!cards.length) return null
-
-  return (
-    <div className="space-y-2">
-      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cards.length}, 1fr)` }}>
-        {cards.map(({ label, value, sub, color, icon: Icon }) => (
-          <div key={label} className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Icon size={11} className={color} />
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">{label}</span>
-            </div>
-            <div className={`text-xl font-black font-mono leading-none ${color}`}>
-              {value.toLocaleString()}
-              <span className="text-xs font-normal text-slate-500 ml-1">ms</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-1 font-medium">{sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Latency flow diagram */}
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(59,130,246,0.2)', background: 'rgba(59,130,246,0.03)' }}>
-        <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: '1px solid rgba(59,130,246,0.1)', background: 'rgba(59,130,246,0.05)' }}>
-          <span style={{ color: '#3b82f6', fontSize: 14 }}>ℹ</span>
-          <span className="text-[11px] font-bold tracking-wide" style={{ color: '#0f172a' }}>HOW AIRS SCAN LATENCY IS MEASURED</span>
-        </div>
-        <div className="px-3 pt-3 pb-1">
-          {[
-            { n: '1', bg: '#64748b', line: 'linear-gradient(#64748b,#10b981)', bodyBg: '#f8fafc', bodyBorder: '#e2e8f0', title: 'User prompt received', titleColor: '#334155', detail: 'Message arrives at your app server · t₀ = Date.now() starts here', detailColor: '#64748b', badge: null },
-            { n: '2', bg: '#10b981', line: 'linear-gradient(#10b981,#3b82f6)', bodyBg: 'rgba(16,185,129,0.06)', bodyBorder: 'rgba(16,185,129,0.25)', title: 'HTTP POST → Prisma AIRS Cloud', titleColor: '#065f46', detail: 'POST /v1/scan/sync/request · uses AIRS_BASE_URL from your config', detailColor: '#047857', badge: null },
-            { n: '3', bg: '#3b82f6', line: 'linear-gradient(#3b82f6,#8b5cf6)', bodyBg: 'rgba(59,130,246,0.06)', bodyBorder: 'rgba(59,130,246,0.25)', title: 'Network transit', titleColor: '#1e40af', detail: 'TCP handshake + TLS negotiation + payload in-flight to AIRS endpoint', detailColor: '#1d4ed8', badge: { text: '~150–200ms', bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' } },
-            { n: '4', bg: '#8b5cf6', line: 'linear-gradient(#8b5cf6,#f97316)', bodyBg: 'rgba(139,92,246,0.06)', bodyBorder: 'rgba(139,92,246,0.25)', title: 'AIRS ML classifiers run', titleColor: '#5b21b6', detail: 'Prompt injection · Jailbreak · DLP · Toxicity · Agent detection — all in parallel', detailColor: '#6d28d9', badge: { text: '~500–600ms', bg: '#ede9fe', color: '#5b21b6', border: '#c4b5fd' } },
-            { n: '5', bg: '#f97316', line: 'linear-gradient(#f97316,#14b8a6)', bodyBg: 'rgba(249,115,22,0.06)', bodyBorder: 'rgba(249,115,22,0.25)', title: 'Verdict returned to your server', titleColor: '#9a3412', detail: 'action=block|allow · category · scan_id · latencyMs = Date.now() − t₀', detailColor: '#c2410c', badge: null },
-            { n: '6', bg: '#14b8a6', line: null, bodyBg: 'rgba(20,184,166,0.06)', bodyBorder: 'rgba(20,184,166,0.25)', title: 'LLM called or response suppressed', titleColor: '#0f766e', detail: 'BLOCKED → response suppressed immediately · ALLOWED → LLM inference begins', detailColor: '#0d9488', badge: null },
-          ].map(({ n, bg, line, bodyBg, bodyBorder, title, titleColor, detail, detailColor, badge }) => (
-            <div key={n} className="flex gap-3">
-              <div className="flex flex-col items-center flex-shrink-0" style={{ width: 28 }}>
-                <div className="flex items-center justify-center text-[9px] font-black text-white flex-shrink-0 z-10"
-                  style={{ width: 22, height: 22, borderRadius: '50%', background: bg }}>
-                  {n}
-                </div>
-                {line && <div style={{ width: 2, flex: 1, minHeight: 8, background: line, opacity: 0.5, margin: '2px auto' }} />}
-              </div>
-              <div className="flex-1 mb-2 px-2.5 py-2 rounded-lg text-[10px] leading-relaxed"
-                style={{ background: bodyBg, border: `1px solid ${bodyBorder}` }}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold" style={{ color: titleColor }}>{title}</span>
-                  {badge && (
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full"
-                      style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
-                      {badge.text}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-0.5" style={{ color: detailColor }}>{detail}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)' }}>
-          <div className="flex items-center gap-2 flex-wrap text-[11px] mb-1.5">
-            <span style={{ color: '#0f172a' }}>Typical US → US:</span>
-            <span className="font-black font-mono" style={{ color: '#2563eb', fontSize: 14 }}>~200ms</span>
-            <span style={{ color: '#0f172a', fontSize: 10 }}>network</span>
-            <span style={{ color: '#0f172a', fontWeight: 700 }}>+</span>
-            <span className="font-black font-mono" style={{ color: '#7c3aed', fontSize: 14 }}>~550ms</span>
-            <span style={{ color: '#0f172a', fontSize: 10 }}>AIRS processing</span>
-            <span style={{ color: '#0f172a', fontWeight: 700 }}>=</span>
-            <span className="font-black font-mono" style={{ color: '#059669', fontSize: 15 }}>500–900ms</span>
-          </div>
-          <div className="flex gap-2 flex-wrap text-[10px]" style={{ color: '#0f172a' }}>
-            <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399' }}>Co-located</span>
-            <span>Same cloud region → network &lt;10ms</span>
-            <span style={{ color: '#334155' }}>·</span>
-            <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>Async mode</span>
-            <span>AIRS runs parallel with LLM → off critical path</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── TokenBar ─────────────────────────────────────────────────────────────────
-function TokenBar({ trace }) {
-  const { tokens_in, tokens_out, llm_ms } = trace
-  if (tokens_in == null && tokens_out == null) return null
-  const total  = (tokens_in ?? 0) + (tokens_out ?? 0)
-  const inPct  = total > 0 ? ((tokens_in ?? 0) / total) * 100 : 0
-  const outPct = total > 0 ? ((tokens_out ?? 0) / total) * 100 : 0
-  const tps    = (tokens_out && llm_ms) ? Math.round((tokens_out / llm_ms) * 1000) : null
-
-  return (
-    <div className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] font-semibold text-slate-400">Token distribution</span>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono font-bold text-slate-300">{total.toLocaleString()} total</span>
-          {tps != null && <span className="text-[10px] font-bold text-slate-500">{tps} tok/s</span>}
-        </div>
-      </div>
-      <div className="flex h-3 rounded-lg overflow-hidden bg-black/[0.06] gap-px">
-        <motion.div className="bg-blue-500/80" initial={{ width: 0 }} animate={{ width: `${inPct}%` }} transition={{ duration: 0.5, ease: 'easeOut' }} />
-        <motion.div className="bg-violet-500/80" initial={{ width: 0 }} animate={{ width: `${outPct}%` }} transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }} />
-      </div>
-      <div className="flex items-center gap-4 mt-2">
-        <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
-          <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block" />
-          {tokens_in ?? '—'} input tokens
-        </span>
-        <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
-          <span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block" />
-          {tokens_out ?? '—'} output tokens
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// ─── FlowNode ─────────────────────────────────────────────────────────────────
-function FlowNode({ span, totalMs, isLast }) {
-  const cfg = SPAN_CFG[span.name] ?? {
-    label: span.name, icon: '●',
-    dotBg: 'bg-slate-100 border-slate-300', bar: 'bg-slate-400', text: 'text-slate-600',
-    cardBg: 'bg-white/[0.06] border-white/[0.10]', line: '#94a3b8', badge: null,
-    detail: () => '',
-  }
-  const isBlocked = span.status === 'blocked'
-  const barPct    = totalMs > 0 && span.latency_ms > 0 ? Math.max((span.latency_ms / totalMs) * 100, 2) : 0
-  const detail    = typeof cfg.detail === 'function' ? cfg.detail(span) : cfg.detail
-
-  return (
-    <div className="flex gap-3 items-stretch">
-      <div className="flex flex-col items-center flex-shrink-0" style={{ width: 44 }}>
-        <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center text-lg flex-shrink-0 z-10 ${cfg.dotBg} ${isBlocked ? 'ring-2 ring-red-400' : ''}`}>
-          {cfg.icon}
-        </div>
-        {!isLast && <div className="w-0.5 flex-1 mt-1" style={{ background: cfg.line, opacity: 0.4, minHeight: 16 }} />}
-      </div>
-      <div className={`flex-1 mb-3 p-3 rounded-xl border ${cfg.cardBg}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[12px] font-bold ${cfg.text}`}>{cfg.label}</span>
-              {cfg.badge && <span className="text-[10px] text-slate-400">{cfg.badge}</span>}
-              {isBlocked && (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 border border-red-300 text-slate-900 text-[8px] font-black">
-                  <AlertTriangle size={7} />BLOCKED
-                </span>
-              )}
-            </div>
-            {detail && <div className="text-[11px] text-slate-400 mt-1 leading-relaxed font-medium">{detail}</div>}
-            {span.metadata?.scan_id && (
-              <span className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9px] font-mono text-slate-500 truncate">{span.metadata.scan_id.slice(0, 16)}…</span>
-                <CopyButton text={span.metadata.scan_id} />
-              </span>
-            )}
-          </div>
-          {span.latency_ms > 0 && (
-            <span className={`text-[11px] font-mono font-bold flex-shrink-0 ${cfg.text}`}>
-              {span.latency_ms.toLocaleString()}ms
-            </span>
-          )}
-        </div>
-        {barPct > 0 && (
-          <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mt-2.5">
-            <motion.div
-              className={`h-full rounded-full ${cfg.bar} opacity-70`}
-              initial={{ width: 0 }}
-              animate={{ width: `${barPct}%` }}
-              transition={{ duration: 0.4, ease: 'easeOut' }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── PipelineFlow ─────────────────────────────────────────────────────────────
-function PipelineFlow({ spans, traceTotalMs }) {
-  if (!spans?.length) return null
-  const totalMs = traceTotalMs || spans.reduce((max, s) => Math.max(max, s.end_ms), 0) || 1
-  return (
-    <div>
-      {spans.map((span, i) => (
-        <FlowNode key={span.id ?? `${span.name}-${i}`} span={span} totalMs={totalMs} isLast={i === spans.length - 1} />
-      ))}
-      <div className="flex items-center justify-between text-[11px] pt-3 mt-1 border-t border-white/[0.08]">
-        <span className="text-slate-400 font-bold">Total round-trip</span>
-        <span className="font-mono font-bold text-slate-300">{totalMs.toLocaleString()}ms</span>
-      </div>
-    </div>
-  )
-}
-
-// ─── MessageBubble ────────────────────────────────────────────────────────────
-function MessageBubble({ text }) {
-  return (
-    <div className="p-3 rounded-xl border bg-white/[0.03] border-white/[0.06] text-xs text-slate-400 font-mono leading-relaxed">
-      <div className="overflow-y-auto max-h-[160px] pr-1 whitespace-pre-wrap break-words">{text}</div>
-    </div>
-  )
-}
-
-// ─── RawJsonToggle ────────────────────────────────────────────────────────────
-function RawJsonToggle({ data }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div>
-      <button onClick={() => setOpen(v => !v)} className="flex items-center gap-2 text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
-        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.18 }}>
-          <ChevronDown size={12} />
-        </motion.div>
-        Raw JSON
-      </button>
-      {open && (
-        <pre className="mt-2 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[9px] text-slate-500 overflow-auto max-h-[200px]">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      )}
-    </div>
-  )
-}
-
-// ─── SectionLabel ─────────────────────────────────────────────────────────────
-function SectionLabel({ children }) {
-  return <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{children}</div>
-}
-
-// ─── PromptTelemetryDrawer ────────────────────────────────────────────────────
 export function PromptTelemetryDrawer({ traceId, onClose }) {
-  const [trace, setTrace]     = useState(null)
+  const { state } = useAppContext()
+  const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
+  const [trace, setTrace] = useState(null)
+  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [tab, setTab] = useState('overview')
+  const [now, setNow] = useState(Date.now())
+  const [width, setWidth] = useState(() => {
+    const saved = Number(typeof localStorage !== 'undefined' && localStorage.getItem(WIDTH_KEY))
+    return saved >= MIN_W && saved <= MAX_W ? saved : 720
+  })
+  const drag = useRef(null)
+  const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // "2 min ago" stays true while the drawer is open.
   useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15000)
+    return () => clearInterval(id)
+  }, [])
+
+  const load = useCallback(() => {
     if (!traceId) return
-    setTrace(null)
     setLoading(true)
+    setError(null)
     fetch(`/api/traces/${traceId}`)
-      .then(r => r.json())
-      .then(setTrace)
-      .catch(console.error)
+      .then((r) => (r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || `HTTP ${r.status}`)))))
+      .then((j) => { setTrace(j); setNow(Date.now()) })
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [traceId])
+
+  useEffect(() => { setTrace(null); setTab('overview'); load() }, [load])
+
+  // Resizable from the left edge — the repo default for side panels.
+  useEffect(() => {
+    if (!dragging) return
+    const move = (e) => {
+      const max = Math.min(MAX_W, window.innerWidth - 80)
+      setWidth(Math.max(MIN_W, Math.min(max, drag.current.w + (drag.current.x - e.clientX))))
+    }
+    const up = () => setDragging(false)
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+  }, [dragging])
+  useEffect(() => { if (!dragging) localStorage.setItem(WIDTH_KEY, String(width)) }, [dragging, width])
+
+  const detail = trace?.detail
+  const vm = trace ? verdictMetaOf(trace) : VERDICT_META.idle
+  const when = trace ? stamp(detail?.timeline?.startedAt ?? trace.created_at) : null
+  const spans = detail?.timeline?.spans || []
+
+  const tabs = detail ? [
+    { id: 'overview', label: 'Overview' },
+    { id: 'timeline', label: 'Timeline', count: spans.filter((s) => !s.parent).length },
+    { id: 'security', label: 'Security', alert: trace.verdict === 'BLOCKED' },
+    { id: 'model', label: detail.gateway ? 'Model & gateway' : detail.mcp ? 'Model & MCP' : 'Model' },
+    { id: 'network', label: 'Network', count: allHttp(spans).length },
+    { id: 'raw', label: 'Raw' },
+  ] : []
 
   return (
     <AnimatePresence>
       {traceId && (
-        <motion.div
+        <motion.aside
           key="prompt-telemetry-drawer"
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="fixed top-0 right-0 bottom-0 w-[600px] bg-white/[0.02] border-l border-white/[0.08] z-50 flex flex-col shadow-2xl backdrop-blur-xl"
+          transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+          className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
+          style={{ width, background: t.ground, borderLeft: `1px solid ${t.hairline}`, boxShadow: '-18px 0 48px rgba(0,0,0,0.18)', userSelect: dragging ? 'none' : 'auto' }}
         >
-          {/* Header */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.08] flex-shrink-0">
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-slate-300">Prompt Telemetry</div>
-              <div className="flex items-center gap-1">
-                <div className="text-[9px] font-mono text-slate-600 truncate mt-0.5">{traceId}</div>
-                <CopyButton text={traceId} />
-              </div>
+          {/* resize handle */}
+          <div
+            onMouseDown={(e) => { drag.current = { x: e.clientX, w: width }; setDragging(true) }}
+            className="absolute top-0 bottom-0 group"
+            style={{ left: -5, width: 10, cursor: 'col-resize', zIndex: 2 }}
+            title="Drag to resize"
+          >
+            <div className="absolute top-0 bottom-0" style={{ left: 4, width: 2, background: dragging ? t.live : 'transparent', transition: 'background .15s' }} />
+            <div className="absolute flex flex-col gap-[3px] opacity-60 group-hover:opacity-100" style={{ top: '50%', left: 3, transform: 'translateY(-50%)' }}>
+              {[0, 1, 2, 3].map((i) => <span key={i} style={{ width: 3, height: 3, borderRadius: 3, background: dragging ? t.live : t.inkFaint }} />)}
             </div>
-            <button onClick={onClose} className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center transition-colors">
-              <X size={12} className="text-slate-400" />
-            </button>
           </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {loading && (
-              <div className="flex items-center justify-center py-16 text-slate-600 text-sm">Loading trace…</div>
+          {/* header */}
+          <header className="flex-shrink-0 px-5 pt-4 pb-3" style={{ background: t.panel, borderBottom: `1px solid ${t.hairline}` }}>
+            <div className="flex items-center gap-2">
+              <span style={{ ...LBL, fontSize: 9.5, color: t.inkDim }}>Prompt telemetry</span>
+              {trace && <Chip t={t} tone={vm.color} solid={trace.verdict === 'BLOCKED'}>{vm.label}</Chip>}
+              {trace && !detail && <Chip t={t} tone={t.warn}>approximate · older trace</Chip>}
+              <span className="flex-1" />
+              <button type="button" onClick={load} title="Reload" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: t.inkDim, background: t.sunken }}>
+                {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              </button>
+              <button type="button" onClick={onClose} title="Close (Esc)" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: t.inkDim, background: t.sunken }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1 mt-1.5 min-w-0">
+              <span className="truncate" dir="ltr" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: t.ink }}>{traceId}</span>
+              <CopyButton t={t} text={traceId} size={10} />
+            </div>
+            {when && (
+              <div className="flex flex-wrap items-baseline gap-x-2 mt-0.5" style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkDim }}>
+                <span style={{ color: t.ink, fontWeight: 600 }}>{when.date}</span>
+                <span style={{ fontFamily: FONT.mono, color: t.ink }}>{when.time}</span>
+                <span style={{ color: t.inkFaint }}>{when.tz}</span>
+                <span style={{ color: t.inkFaint }}>· {relative(now - when.ms)}</span>
+              </div>
             )}
+            {tabs.length > 0 && (
+              <nav className="flex gap-1 mt-3 -mb-1 overflow-x-auto">
+                {tabs.map((x) => {
+                  const on = tab === x.id
+                  return (
+                    <button key={x.id} type="button" onClick={() => setTab(x.id)}
+                      className="px-3 py-1.5 rounded-full whitespace-nowrap inline-flex items-center gap-1.5"
+                      style={{ ...LBL, fontSize: 8.5, color: on ? (t.isLight ? '#fff' : t.ground) : t.inkDim, background: on ? t.ink : t.sunken }}>
+                      {x.alert && <span style={{ width: 6, height: 6, borderRadius: 6, background: t.block }} />}
+                      {x.label}
+                      {x.count != null && <span style={{ opacity: 0.6 }}>{x.count}</span>}
+                    </button>
+                  )
+                })}
+              </nav>
+            )}
+          </header>
 
-            {!loading && trace && (
+          {/* body */}
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {loading && !trace && (
+              <div className="flex items-center justify-center gap-2 py-16" style={{ fontFamily: FONT.prose, fontSize: 12, color: t.inkFaint }}>
+                <Loader2 size={14} className="animate-spin" /> Loading trace…
+              </div>
+            )}
+            {error && (
+              <div className="px-4 py-3" style={{ background: `${t.warn}14`, border: `1px solid ${t.warn}40`, borderRadius: 14, fontFamily: FONT.prose, fontSize: 12, color: t.ink }}>
+                Could not load this trace: {error}
+              </div>
+            )}
+            {trace && !detail && <LegacyView t={t} trace={trace} verdictMeta={vm} />}
+            {trace && detail && (
               <>
-                <VerdictBanner trace={trace} />
-
-                {(trace.model || trace.backend) && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/[0.04] border border-white/[0.08] w-fit">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                    <span className="text-[11px] font-semibold text-slate-400">
-                      {trace.model && trace.model !== trace.backend
-                        ? `${trace.model} · ${trace.backend === 'vertex' ? 'Vertex AI' : trace.backend === 'bedrock' ? 'AWS Bedrock' : trace.backend}`
-                        : trace.backend}
-                    </span>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <SectionLabel>Performance Metrics</SectionLabel>
-                  <MetricsStrip trace={trace} />
-                </div>
-
-                <div className="space-y-2">
-                  <SectionLabel>Token Usage</SectionLabel>
-                  <TokenBar trace={trace} />
-                </div>
-
-                <div className="space-y-3">
-                  <SectionLabel>Pipeline Flow</SectionLabel>
-                  <PipelineFlow spans={trace.spans} traceTotalMs={trace.total_ms} />
-                </div>
-
-                {trace.prompt && (
-                  <div className="space-y-1.5">
-                    <SectionLabel>Prompt</SectionLabel>
-                    <MessageBubble text={trace.prompt} />
-                  </div>
-                )}
-
-                {trace.attack_label && (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-orange-500/[0.07] border border-orange-500/20">
-                    <AlertTriangle size={14} className="text-orange-400 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-xs font-bold text-orange-300">{trace.attack_label}</div>
-                      <div className="text-[10px] text-orange-500/70 mt-0.5">{trace.attack_severity} severity</div>
-                    </div>
-                    <span className="text-[9px] font-bold px-2 py-1 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-400 uppercase">
-                      {trace.attack_severity}
-                    </span>
-                  </div>
-                )}
-
-                <RawJsonToggle data={trace} />
+                {tab === 'overview' && <OverviewTab t={t} trace={trace} detail={detail} verdictMeta={vm} />}
+                {tab === 'timeline' && <TimelineTab t={t} detail={detail} />}
+                {tab === 'security' && <SecurityTab t={t} detail={detail} />}
+                {tab === 'model' && <ModelTab t={t} detail={detail} />}
+                {tab === 'network' && <NetworkTab t={t} detail={detail} />}
+                {tab === 'raw' && <RawTab t={t} trace={trace} />}
               </>
             )}
           </div>
-        </motion.div>
+        </motion.aside>
       )}
     </AnimatePresence>
   )
