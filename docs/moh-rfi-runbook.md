@@ -30,13 +30,12 @@ forgets to name one still gets scanned.
 from the pillar's **Launch citizen app** button (`/?app=briut`) — no sidebar, no
 portal chrome. Put the projector window on Hebrew (`עב`) and light theme.
 
-Models: **Kimi K2.5** is the default — fastest by throughput (~196 ch/s vs Opus ~50),
-excellent Hebrew, and it refuses the runtime attacks unaided just like Claude, so the
-protected story is unchanged. Switch to **Opus 4.8** if you want the most polished
-Hebrew prose and can afford ~19s per answer. **Nemotron Nano 12B** (purple) is the one
-that leaks — use it for beat 2. **Claude 3 Haiku** for the RAG beat. Sonnet 5 is amber
-(patchy cross-region access); Fable 5 red (Bedrock data-retention setting); DeepSeek and
-Qwen red — denied by an AWS org SCP, which is itself worth a sentence.
+Models: **Claude Sonnet 5** is the default. Switch to **Opus 4.8** if you want the most
+polished Hebrew prose and can afford ~19s per answer. **Nemotron Nano 12B** (purple) is
+the one that leaks — use it for beat 2. **Claude 3 Haiku** for the RAG beat. Fable 5 red
+(Bedrock data-retention setting); DeepSeek, Qwen and — since Sep 2026 — **Kimi** red,
+denied by an AWS org SCP, which is itself worth a sentence. Kimi K2.5 was the default
+until the SCP took it; the list the audience sees shrinking is the governance point.
 
 ---
 

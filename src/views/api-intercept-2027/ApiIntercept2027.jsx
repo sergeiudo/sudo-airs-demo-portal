@@ -30,7 +30,7 @@ const DEFAULT_MODELS = {
   vertex:  'google/gemini-3.5-flash',
   bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
   azure:   'gpt-5.4-nano',
-  aigw:    '@sudo-bedrock/moonshotai.kimi-k2.5',
+  aigw:    '@sudo-bedrock/us.anthropic.claude-sonnet-5',
 }
 
 const LIMITS = { left: [264, 572], right: [286, 616] }

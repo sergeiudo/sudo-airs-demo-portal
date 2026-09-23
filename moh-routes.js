@@ -360,10 +360,10 @@ async function persistMohTrace({ prompt, response, verdict, model, latencyMs, ho
 
 const MOH_MODELS = [
   // Order matters: [0] is the picker default and the model the health probe
-  // uses. Kimi leads on measured throughput (208 ch/s vs Opus 50, Haiku 108)
-  // while refusing the runtime attacks just as Claude does, so it keeps the
-  // protected story intact and the demo moves faster.
-  { id: 'moonshotai.kimi-k2.5', displayName: 'Kimi K2.5 (Moonshot)', status: 'verified', note: 'Default. Fastest by throughput — ~208 chars/s. Excellent Hebrew, and refuses the runtime attacks unaided, same as Claude.' },
+  // uses, and the AI-GW backend falls back to it when a caller sends no
+  // modelId. Sonnet 5 replaced Kimi K2.5 in Sep 2026, when the org SCP started
+  // denying Moonshot — 5/5 calls through the gateway succeeded on the switch.
+  { id: 'us.anthropic.claude-sonnet-5', displayName: 'Claude Sonnet 5', status: 'verified', note: 'Default. Cross-region profile — keep the us. prefix.' },
   { id: 'us.anthropic.claude-opus-4-8', displayName: 'Claude Opus 4.8', status: 'verified', note: 'Best Hebrew prose, resists every runtime attack unaided. Slowest: ~50 chars/s, ~19s for a full answer.' },
   {
     id: 'nvidia.nemotron-nano-12b-v2', displayName: 'Nemotron Nano 12B', status: 'leaky',
@@ -373,14 +373,14 @@ const MOH_MODELS = [
     note: 'LEAKS. With AIRS off it dumps the system prompt including the internal service key and patient IDs. Use for the unprotected demo. Hebrew is unreliable outside that scenario.',
   },
   { id: 'anthropic.claude-3-haiku-20240307-v1:0', displayName: 'Claude 3 Haiku', status: 'verified', note: 'Quickest to start (~1.7s to first token, ~108 chars/s). Naive on retrieved content — states the poisoned 60ml dose flatly. Use for the RAG beat.' },
-  { id: 'moonshot.kimi-k2-thinking', displayName: 'Kimi K2 Thinking', status: 'intermittent', note: 'Reachable but frequently returns an empty body — reasoning model, needs generous max_tokens.' },
-  { id: 'us.anthropic.claude-sonnet-5', displayName: 'Claude Sonnet 5', status: 'intermittent', note: 'Cross-region profile round-robins; model access is not enabled in all three regions.' },
-  { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', displayName: 'Claude 3.5 Sonnet v2', status: 'untested', note: 'Direct model id — no inference profile needed.' },
+  { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', displayName: 'Claude 3.5 Sonnet v2', status: 'unavailable', note: 'End of life — Bedrock returns "This model version has reached the end of its life".' },
   { id: 'us.anthropic.claude-fable-5', displayName: 'Claude Fable 5', status: 'unavailable', note: 'Bedrock account-level data-retention mode must be enabled in us-west-2.' },
   // Kept visible on purpose: an org-level SCP denying non-approved vendors is
   // itself part of the governance story.
   { id: 'deepseek.v3.2', displayName: 'DeepSeek V3.2', status: 'unavailable', note: 'Denied by an AWS Organizations service control policy at the Palo Alto management account — vendor allow-listing above IAM.' },
   { id: 'qwen.qwen3-235b-a22b-2507-v1:0', displayName: 'Qwen3 235B', status: 'unavailable', note: 'Denied by the same org SCP as DeepSeek.' },
+  { id: 'moonshotai.kimi-k2.5', displayName: 'Kimi K2.5 (Moonshot)', status: 'unavailable', note: 'Added to the same org SCP in Sep 2026. Was the default until then — fastest model here, excellent Hebrew.' },
+  { id: 'moonshot.kimi-k2-thinking', displayName: 'Kimi K2 Thinking', status: 'unavailable', note: 'Denied by the same org SCP as Kimi K2.5.' },
 ]
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

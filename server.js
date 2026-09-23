@@ -882,7 +882,6 @@ const BEDROCK_CURATED = [
   { id: 'anthropic.claude-sonnet-5',                label: 'Claude Sonnet 5',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
   { id: 'anthropic.claude-opus-4-8',                label: 'Claude Opus 4.8',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
   { id: 'openai.gpt-6-astra',                       label: 'GPT-6 Astra',        provider: 'OpenAI',      tier: 'frontier', status: 'available', verified: true },
-  { id: 'moonshotai.kimi-k2.5',                     label: 'Kimi K2.5',          provider: 'Moonshot AI', tier: 'frontier', status: 'available', verified: true,  note: 'Very fast; refuses runtime attacks unaided.' },
 
   // ── fast ──
   { id: 'anthropic.claude-haiku-4-5-20251001-v1:0', label: 'Claude Haiku 4.5',   provider: 'Anthropic',   tier: 'fast',     status: 'available', verified: true,  note: 'Fastest Claude — good default for live demos.' },
@@ -906,6 +905,7 @@ const BEDROCK_CURATED = [
   { id: 'deepseek.v3.2',                            label: 'DeepSeek V3.2',      provider: 'DeepSeek',    tier: 'denied',   status: 'unavailable', verified: true, note: 'Explicit deny in an AWS Organizations SCP. Available on the Azure backend.' },
   { id: 'qwen.qwen3-235b-a22b-2507-v1:0',           label: 'Qwen3 235B',         provider: 'Qwen',        tier: 'denied',   status: 'unavailable', verified: true, note: 'Denied by the same org SCP as DeepSeek.' },
   { id: 'xai.grok-4.6',                             label: 'Grok 4.6',           provider: 'xAI',         tier: 'denied',   status: 'unavailable', verified: true, note: 'Explicit SCP deny on every id (bare, us., global.). Use the Azure backend for Grok.' },
+  { id: 'moonshotai.kimi-k2.5',                     label: 'Kimi K2.5',          provider: 'Moonshot AI', tier: 'denied',   status: 'unavailable', verified: true, note: 'Added to the same org SCP in Sep 2026 — worked until then.' },
 ]
 
 app.get('/api/models/bedrock', async (req, res) => {
