@@ -41,6 +41,30 @@ export function useAttackSimulator() {
   const [activeTelemetry, setActiveTelemetry] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
+  // /api/chat answers before the AIRS report is fetched — the report is
+  // display-only, and waiting for it made a block take 2-3x longer than the
+  // verdict. Ask for it once the record is on screen and merge it in when it
+  // lands; the server joins its own in-flight fetch, so AIRS is not called twice.
+  const hydrateReports = useCallback((msgId, telemetry) => {
+    const pending = ['inputScan', 'outputScan'].filter((k) => telemetry?.[k]?.reportPending && telemetry[k].report_id)
+    if (!pending.length) return
+    Promise.all(pending.map((k) =>
+      fetch(`/api/airs/report?id=${encodeURIComponent(telemetry[k].report_id)}`)
+        .then((r) => r.json())
+        .then((report) => [k, report])
+        .catch((err) => [k, { data: null, error: err.message }]),
+    )).then((entries) => {
+      const patch = (t) => {
+        if (!t) return t
+        const next = { ...t }
+        for (const [k, report] of entries) if (next[k]) next[k] = { ...next[k], report, reportPending: false }
+        return next
+      }
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, telemetry: patch(m.telemetry) } : m)))
+      setActiveTelemetry((cur) => (cur?.inputScan?.scan_id && cur.inputScan.scan_id === telemetry.inputScan?.scan_id ? patch(cur) : cur))
+    })
+  }, [])
+
   const send = useCallback(async ({ payload, attackMeta = null, backend = 'vertex', modelId = null, document = null, mcpEnabled = false, mcpServer = 'auto' }) => {
     const userMsg = {
       id: `msg-${Date.now()}-user`,
@@ -91,8 +115,9 @@ export function useAttackSimulator() {
         ? telemetry.summary.verdict
         : 'DIRECT'
 
+      const msgId = `msg-${Date.now()}-assistant`
       setMessages(prev => [...prev, {
-        id: `msg-${Date.now()}-assistant`,
+        id: msgId,
         role: 'assistant',
         content: chatResponse?.content ?? null,
         blocked: chatResponse?.blocked ?? false,
@@ -110,6 +135,7 @@ export function useAttackSimulator() {
         telemetry: { ...telemetry, chatResponse, prompt: payload, attackMeta },
       }])
       setActiveTelemetry({ ...telemetry, chatResponse })
+      hydrateReports(msgId, telemetry)
 
       const url = buildScmUrl(telemetry.inputScan, backend)
       if (url) dispatch({ type: 'SET_SCM_URL', payload: url })
@@ -118,7 +144,7 @@ export function useAttackSimulator() {
     } finally {
       setIsLoading(false)
     }
-  }, [isProtected])
+  }, [isProtected, hydrateReports])
 
   // MCP attacks route through /api/mcp/invoke → real MCP server + real AIRS two-stage scan
   const sendMcpAttack = useCallback(async (attack, backend, modelId) => {

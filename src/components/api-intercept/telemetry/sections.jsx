@@ -62,7 +62,8 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
   const spans = detail.timeline?.spans || []
   const total = detail.timeline?.totalMs
   const airsMs = kindMs(spans, ['airs'])
-  const reportMs = kindMs(spans, ['report'])
+  const reportMs = kindMs(spans, ['report'])                           // on the critical path (older traces)
+  const reportBgMs = kindMs(spans, ['report'], { background: true })   // deferred, after or alongside
   const modelMs = detail.llm?.meta?.providerMs ?? detail.llm?.latencyMs ?? kindMs(spans, ['model'])
   const serverMs = detail.llm?.meta?.serverLatencyMs
   const tk = detail.llm?.tokens || {}
@@ -96,7 +97,9 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
         <Stat t={t} label="Server total · wall clock" value={fmtMs(total)} sub={`request in → response ready · ${spans.filter((s) => !s.parent).length} measured steps`} />
         <Stat t={t} label="Prisma AIRS" value={detail.airsEnabled ? fmtMs(airsMs) : 'off'}
           tone={!detail.airsEnabled ? t.warn : trace.verdict === 'BLOCKED' ? t.block : t.pass}
-          sub={detail.airsEnabled ? `${pct(airsMs, total)} of total${reportMs ? ` · +${fmtMs(reportMs)} report fetch` : ''}` : 'nothing scanned'} />
+          sub={detail.airsEnabled
+            ? `${pct(airsMs, total)} of total${reportMs ? ` · +${fmtMs(reportMs)} report fetch` : ''}${reportBgMs ? ` · report fetched off the critical path` : ''}`
+            : 'nothing scanned'} />
         {detail.llm ? (
           <Stat t={t} label={detail.backend === 'aigw' ? 'Provider (inside gateway)' : 'Model call'} value={fmtMs(modelMs)} tone={modelColor(t)}
             sub={serverMs != null ? `provider-reported ${fmtMs(serverMs)} · ${fmtMs(Math.max(0, (detail.llm?.latencyMs ?? 0) - serverMs))} outside the model` : `${pct(modelMs, total)} of total`} />
@@ -171,9 +174,10 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
 export function TimelineTab({ t, detail }) {
   const spans = detail.timeline?.spans || []
   const total = detail.timeline?.totalMs || 0
-  const covered = Math.round(coveredMs(spans))
+  const covered = Math.round(coveredMs(spans, total))
   const own = Math.max(0, total - covered)
   const hasDerived = spans.some((s) => s.derived)
+  const bg = spans.filter((s) => s.background || s.attrs?.background)
   const bedrock = detail.backend === 'bedrock'
   return (
     <div className="space-y-3">
@@ -198,6 +202,13 @@ export function TimelineTab({ t, detail }) {
           providers return their own processing time, so no split is invented here.
           {bedrock && ' The AWS SDK does not use fetch, so Bedrock calls show no HTTP phases — instead Bedrock reports its own server-side model time (Model tab).'}
         </Note>
+        {bg.length > 0 && (
+          <Note t={t}>
+            The AIRS report fetch{bg.length > 1 ? 'es' : ''} ({bg.map((s) => fmtMs(s.ms)).join(' + ')}) ran off the critical path — the verdict comes from
+            the scan itself, so the report is fetched alongside the model call or after the response went out, and fills in the
+            per-service evidence when it lands. It used to run inline and cost 0.6–2.0s on every block.
+          </Note>
+        )}
         {hasDerived && (
           <Note t={t}>
             Rows marked ≈ sit inside the AI-GW call. Their order and durations come from the gateway's own hook timestamps; only their

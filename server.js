@@ -16,7 +16,7 @@ import { GoogleAuth } from 'google-auth-library'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
-import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity } from './src/traceStore.js'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail } from './src/traceStore.js'
 import portkeyRouter from './portkey-routes.js'
 import {
   extractText as extractUploadText,
@@ -120,18 +120,53 @@ function awsCredentials() {
 // ─── AIRS scan helper ─────────────────────────────────────────────────────────
 // Fetch detailed threat scan report for one or more report_ids.
 // GET /v1/scan/reports?report_ids=R1,R2  (max 5 per call).
+/**
+ * fetch() that rides out AIRS's per-second rate limit.
+ *
+ * AIRS answers HTTP 429 "Requests per second exceeded limit" when calls from one
+ * key overlap. Deferring the report fetch made that reachable — a background
+ * report can now coincide with the next request's scan — and a 429 on the scan
+ * used to surface to the audience as a server error. Every attempt still shows
+ * in the trace's network phases, so a retry is visible, not hidden.
+ */
+async function airsFetch(url, init, delays) {
+  for (let i = 0; ; i++) {
+    const res = await fetch(url, init)
+    if (res.status !== 429) return res
+    const text = await res.text().catch(() => '')
+    // Two different 429s, measured: "Requests per second exceeded limit" (no
+    // retry_after — clears in well under a second) and the reports endpoint's
+    // per-minute quota, `retry_after: {interval: 1, unit: "minute"}`. Retrying
+    // the second in seconds only burns more of the quota, so stop and report it.
+    let waitMs = 0
+    try {
+      const ra = JSON.parse(text)?.error?.retry_after
+      if (ra?.interval) waitMs = ra.interval * ({ second: 1e3, minute: 6e4, hour: 36e5 }[ra.unit] ?? 1e3)
+    } catch { /* not JSON */ }
+    const path = new URL(url).pathname
+    if (i >= delays.length || waitMs > 5000) {
+      if (waitMs > 5000) console.warn(`[AIRS] 429 on ${path} — quota says retry in ${Math.round(waitMs / 1000)}s; not retrying`)
+      return new Response(text, { status: 429, headers: res.headers })
+    }
+    console.warn(`[AIRS] 429 rate limit on ${path} — retry ${i + 1}/${delays.length} in ${delays[i]}ms`)
+    await new Promise((r) => setTimeout(r, Math.max(delays[i], waitMs)))
+  }
+}
+const SCAN_RETRY_MS = [250, 600]          // enforcement path: short
+const REPORT_RETRY_MS = [500, 1200, 2500] // background: patient
+
 async function airsFetchReports(reportIds, { base = process.env.AIRS_BASE_URL, key = process.env.AIRS_API_KEY } = {}) {
   if (!reportIds || (Array.isArray(reportIds) && reportIds.length === 0)) return null
   const ids = Array.isArray(reportIds) ? reportIds.join(',') : String(reportIds)
   const url = `${base}/v1/scan/reports?report_ids=${encodeURIComponent(ids)}`
   const t0 = Date.now()
-  const res = await fetch(url, {
+  const res = await airsFetch(url, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
       'x-pan-token': key,
     },
-  })
+  }, REPORT_RETRY_MS)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     console.warn(`[AIRS] reports fetch failed (${res.status}): ${text.slice(0, 200)}`)
@@ -141,7 +176,28 @@ async function airsFetchReports(reportIds, { base = process.env.AIRS_BASE_URL, k
   return { data, latencyMs: Date.now() - t0, url }
 }
 
-export async function airscan(prompt, response = null, model = 'unknown') {
+// ─── Deferred AIRS reports ───────────────────────────────────────────────────
+//
+// The report is display-only — the verdict comes from the sync scan. Measured
+// on 18 protected chats, fetching it inline cost 0.6–2.0s per block (46–75% of
+// the request) and ~1s on allowed ones, because the endpoint waits until AIRS
+// has built the report. So /api/chat now answers without it and fetches it in
+// the background. One promise per report_id: the browser's request for the
+// same report joins the in-flight fetch instead of calling AIRS a second time.
+const REPORT_TTL_MS = 10 * 60_000
+const reportCache = new Map() // report_id → { promise, at }
+
+function startReportFetch(reportId, opts) {
+  const promise = captureHttp(() => airsFetchReports(reportId, opts))
+    .then(({ value, http, start, end }) => ({ report: value, phase: { start, end, http } }))
+    .catch((err) => ({ report: { data: null, error: err.message }, phase: null }))
+  const now = Date.now()
+  for (const [k, v] of reportCache) if (now - v.at > REPORT_TTL_MS) reportCache.delete(k)
+  reportCache.set(reportId, { promise, at: now })
+  return promise
+}
+
+export async function airscan(prompt, response = null, model = 'unknown', { deferReport = false } = {}) {
   const body = {
     tr_id: `citadel-${Date.now()}`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
@@ -155,7 +211,7 @@ export async function airscan(prompt, response = null, model = 'unknown') {
   // — or rather outside it, since latencyMs stopped before it started.
   let res, data
   const scan = await captureHttp(async () => {
-    res = await fetch(url, {
+    res = await airsFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -163,7 +219,7 @@ export async function airscan(prompt, response = null, model = 'unknown') {
         'x-pan-token': process.env.AIRS_API_KEY,
       },
       body: JSON.stringify(body),
-    })
+    }, SCAN_RETRY_MS)
     if (!res.ok) {
       const text = await res.text()
       throw new Error(`AIRS scan failed (${res.status}): ${text}`)
@@ -171,6 +227,16 @@ export async function airscan(prompt, response = null, model = 'unknown') {
     data = await res.json()
   })
   const latencyMs = Math.round(scan.end - scan.start)
+
+  // Deferred: hand back the in-flight fetch and let the caller answer first.
+  if (deferReport) {
+    return {
+      data, latencyMs, requestBody: body, requestUrl: url, report: null,
+      reportPromise: data?.report_id ? startReportFetch(data.report_id) : null,
+      requestId: res.headers.get('x-request-id'),
+      phases: { scan: { start: scan.start, end: scan.end, http: scan.http }, report: null },
+    }
+  }
 
   // Fetch the detailed threat scan report (verbatim — for the UI's Raw section).
   // Best-effort: report endpoint sometimes lags behind the sync scan; never fails the call.
@@ -538,6 +604,8 @@ function buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelL
       rawResponse: airsPromptScan.data ?? null,
       requestUrl:  airsPromptScan.requestUrl ?? null,
       report:      airsPromptScan.report ?? null,  // GET /v1/scan/reports?report_ids=…
+      // true → the report is still being fetched; GET /api/airs/report?id=…
+      reportPending: !!airsPromptScan.reportPromise,
     },
 
     // ── Output scan (response) — full raw AIRS payload ────────────────────
@@ -563,6 +631,7 @@ function buildTelemetry({ airsPromptScan, airsResponseScan, llmLatencyMs, modelL
       rawResponse: airsResponseScan.data ?? null,
       requestUrl:  airsResponseScan.requestUrl ?? null,
       report:      airsResponseScan.report ?? null,
+      reportPending: !!airsResponseScan.reportPromise,
     } : null,
 
     // ── Timing & LLM stats ────────────────────────────────────────────────
@@ -749,6 +818,59 @@ function scanDetail(s) {
     request: s.requestBody ?? null,
     report: s.report?.data ?? null,
     reportError: s.report?.error ?? null,
+    reportPending: !!s.reportPromise,
+  }
+}
+
+/**
+ * After the response has gone out: wait for the deferred report fetches, then
+ * write the reports and their measured spans into the stored trace. The spans
+ * are flagged `background` — they are real, they just no longer hold up the
+ * client. Never throws; a failed fetch is recorded as an error on the scan.
+ */
+async function finishDeferredReports(traceId, tl, scans, document) {
+  const done = await Promise.all(scans.map(async ([which, s]) => [which, s, s?.reportPromise ? await s.reportPromise : null]))
+  const spans = []
+  try {
+    updateTraceDetail(traceId, (detail) => {
+      for (const [which, s, r] of done) {
+        if (!r) continue
+        const target = detail.airs?.[which]
+        if (target) {
+          let report = r.report?.data ?? null
+          if (document?.text && report) report = redactDocument(report)
+          target.report = truncateDeep(report, 4000)
+          target.reportError = r.report?.error ?? null
+          target.reportPending = false
+        }
+        if (r.phase) {
+          const span = {
+            name: `airs_${which}_report`,
+            label: 'AIRS report fetch · off the critical path',
+            start: tl.rel(r.phase.start),
+            end: tl.rel(r.phase.end),
+            ms: Math.round(r.phase.end - r.phase.start),
+            status: r.report?.error ? 'error' : 'ok',
+            attrs: { report_id: s.data?.report_id, background: true },
+            http: r.phase.http.map((x) => tl.exchange(x)),
+            background: true,
+          }
+          detail.timeline.spans.push(span)
+          spans.push(span)
+        }
+      }
+      detail.timeline.spans.sort((a, b) => a.start - b.start)
+      return detail
+    })
+    for (const s of spans) {
+      insertSpan({
+        trace_id: traceId, name: s.name, start_ms: Math.round(s.start), end_ms: Math.round(s.end),
+        latency_ms: s.ms, status: s.status === 'ok' ? 'success' : s.status,
+        metadata: { label: s.label, ...s.attrs },
+      })
+    }
+  } catch (err) {
+    console.warn('[TraceStore] could not attach deferred AIRS reports:', err.message)
   }
 }
 
@@ -1113,7 +1235,9 @@ app.post('/api/chat', async (req, res) => {
   try {
     // Step 1: AIRS scan the prompt
     console.log(`[AIRS] Scanning prompt via profile "${process.env.AIRS_PROFILE_NAME}"…`)
-    const airsPromptScan = await airscan(llmInput, null, modelLabel)
+    // The report is deferred: on a block the client hears back as soon as the
+    // verdict is in, and on an allow the report fetch runs alongside the model.
+    const airsPromptScan = await airscan(llmInput, null, modelLabel, { deferReport: true })
     airsSpans(tl, airsPromptScan, 'input')
     console.log(`[AIRS] Prompt verdict: ${airsPromptScan.data.action} / ${airsPromptScan.data.category}`)
 
@@ -1125,7 +1249,9 @@ app.post('/api/chat', async (req, res) => {
         enforcement: 'api-layer', verdict: 'BLOCKED', airsIn: scanDetail(airsPromptScan),
       })
       const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null, detail })
-      return res.json({ ...telemetry, trace_id: traceId })
+      res.json({ ...telemetry, trace_id: traceId })
+      void finishDeferredReports(traceId, tl, [['input', airsPromptScan]], document)
+      return
     }
 
     // Step 2: Call LLM
@@ -1146,7 +1272,7 @@ app.post('/api/chat', async (req, res) => {
 
     // Step 3: AIRS scan the response
     console.log('[AIRS] Scanning LLM response…')
-    const airsResponseScan = await airscan(message, llmText, modelLabel)
+    const airsResponseScan = await airscan(message, llmText, modelLabel, { deferReport: true })
     airsSpans(tl, airsResponseScan, 'output')
     console.log(`[AIRS] Response verdict: ${airsResponseScan.data.action} / ${airsResponseScan.data.category}`)
 
@@ -1159,7 +1285,9 @@ app.post('/api/chat', async (req, res) => {
       llm: llmDetail(llmResult, backend, resolvedModelId),
     })
     const traceId = persistTrace({ message: traceMessage, chatResponse: telemetry.chatResponse, telemetry, backend, resolvedModelId, airsEnabled: true, attackMeta: req.body.attackMeta ?? null, detail })
-    return res.json({ ...telemetry, trace_id: traceId })
+    res.json({ ...telemetry, trace_id: traceId })
+    void finishDeferredReports(traceId, tl, [['input', airsPromptScan], ['output', airsResponseScan]], document)
+    return
   } catch (err) {
     console.error('[server] Unhandled error:', err)
     res.status(500).json({ error: err.message })
@@ -2195,6 +2323,13 @@ app.get('/api/airs/report', async (req, res) => {
   const id = String(req.query.id || '')
   if (!/^R[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'invalid report id' })
   try {
+    // A report /api/chat deferred: join that fetch (it may still be in flight)
+    // rather than asking AIRS for it twice.
+    const cached = reportCache.get(id)
+    if (cached) {
+      const r = await cached.promise
+      return res.json(r.report ?? { data: null, error: 'no report' })
+    }
     const gw = req.query.via === 'gateway'
     const r = await airsFetchReports(id, gw ? { base: SCM_ENV.airsBase, key: SCM_ENV.airsKey } : undefined)
     res.json(r ?? { data: null, error: 'no report' })

@@ -848,8 +848,15 @@ export function EvidencePane({ t, message, scmUrl }) {
 
         {allResults.some((r) => r._derived) && (
           <p style={{ fontFamily: FONT.prose, fontSize: 10, color: t.inkFaint, marginTop: 2 }}>
-            Verdicts from the in-gateway guardrail. Per-service parameters are only
-            returned by the direct Runtime API.
+            {inScan?.reportPending || outScan?.reportPending
+              // The report is fetched after the answer now, so for a moment
+              // only the scan's own detector map is on screen.
+              ? 'Verdicts from the scan. Per-service evidence is loading from the AIRS report…'
+              : (inScan?.report?.error || outScan?.report?.error)
+                // The reports endpoint has its own per-minute quota; a fast demo
+                // can exhaust it. The verdict is unaffected — only the detail.
+                ? `Verdicts from the scan. The AIRS report could not be fetched${/429|rate limit/i.test(inScan?.report?.error || outScan?.report?.error || '') ? ' — its per-minute quota was exhausted' : ''}, so per-service evidence is unavailable for this record.`
+                : 'Verdicts from the in-gateway guardrail. Per-service parameters are only returned by the direct Runtime API.'}
           </p>
         )}
 

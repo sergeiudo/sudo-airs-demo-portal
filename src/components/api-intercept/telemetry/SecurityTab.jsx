@@ -5,7 +5,7 @@
  * report belongs to the key configured inside the gateway); MCP tool scans can
  * load their report on demand.
  */
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ShieldCheck, ShieldX, Loader2 } from 'lucide-react'
 import { Card, KV, Chip, IdValue, Note, Empty, FONT, LBL, fmtMs } from './primitives'
 
@@ -206,6 +206,29 @@ function DetailsBlock({ t, details, where }) {
   ))
 }
 
+/**
+ * The drawer opened before the deferred report landed. The server joins its own
+ * in-flight fetch for this id, so asking here does not call AIRS again.
+ */
+function PendingReport({ t, reportId, dir }) {
+  const [state, setState] = useState({ report: null, error: null })
+  useEffect(() => {
+    let live = true
+    fetch(`/api/airs/report?id=${encodeURIComponent(reportId)}`)
+      .then((r) => r.json())
+      .then((j) => live && setState({ report: j.data?.length ? j.data : null, error: j.data?.length ? null : (j.error || 'AIRS returned no report') }))
+      .catch((e) => live && setState({ report: null, error: e.message }))
+    return () => { live = false }
+  }, [reportId])
+  if (state.report) return <ReportTable t={t} report={state.report} dir={dir} />
+  if (state.error) return <Note t={t}>AIRS report: {state.error}</Note>
+  return (
+    <div className="flex items-center gap-2 py-1" style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkFaint }}>
+      <Loader2 size={12} className="animate-spin" /> Loading the AIRS report — it is fetched after the response now, off the critical path.
+    </div>
+  )
+}
+
 function StageCard({ t, stage }) {
   const s = stage.scan
   const bad = isBad(s)
@@ -244,6 +267,7 @@ function StageCard({ t, stage }) {
       )}
       <div className="mt-2">
         {s.report ? <ReportTable t={t} report={s.report} dir={where} />
+          : s.reportPending && s.report_id ? <PendingReport t={t} reportId={s.report_id} dir={where} />
           : s.via === 'ai-gateway-guardrail'
             ? <Note t={t}>The per-service report for a gateway guardrail scan belongs to the AIRS key configured inside the guardrail, so this portal cannot read it (verified: the reports endpoint returns an empty list for it). The detector map and masking above come from the gateway's own hook result.</Note>
             : s.reportError ? <Note t={t}>AIRS report fetch failed: {s.reportError}</Note> : null}

@@ -65,9 +65,16 @@ function nest(spans) {
   return rows
 }
 
-/** Wall-clock covered by top-level spans — overlaps counted once. */
-export function coveredMs(spans) {
-  const iv = spans.filter((s) => !s.parent).map((s) => [s.start, s.end]).sort((a, b) => a[0] - b[0])
+/** Background work (a deferred AIRS report) no longer holds up the client. */
+export const isBackground = (s) => !!(s.background || s.attrs?.background)
+
+/**
+ * Wall-clock covered by top-level, critical-path spans — overlaps counted once,
+ * clipped to the response time when one is given.
+ */
+export function coveredMs(spans, until = Infinity) {
+  const iv = spans.filter((s) => !s.parent && !isBackground(s))
+    .map((s) => [Math.min(s.start, until), Math.min(s.end, until)]).sort((a, b) => a[0] - b[0])
   let total = 0, cur = null
   for (const [a, b] of iv) {
     if (!cur || a > cur[1]) { if (cur) total += cur[1] - cur[0]; cur = [a, b] } else cur[1] = Math.max(cur[1], b)
@@ -77,8 +84,9 @@ export function coveredMs(spans) {
 }
 
 /** Union of spans of one kind (any depth) — "how long was AIRS actually busy". */
-export function kindMs(spans, kinds) {
-  const iv = spans.filter((s) => kinds.includes(spanKind(s.name))).map((s) => [s.start, s.end]).sort((a, b) => a[0] - b[0])
+export function kindMs(spans, kinds, { background = false } = {}) {
+  const iv = spans.filter((s) => kinds.includes(spanKind(s.name)) && isBackground(s) === background)
+    .map((s) => [s.start, s.end]).sort((a, b) => a[0] - b[0])
   let total = 0, cur = null
   for (const [a, b] of iv) {
     if (!cur || a > cur[1]) { if (cur) total += cur[1] - cur[0]; cur = [a, b] } else cur[1] = Math.max(cur[1], b)
@@ -153,6 +161,9 @@ export function Waterfall({ t, spans = [], totalMs, compact = false }) {
   const pctOf = (ms) => Math.max(0, Math.min(100, (ms / total) * 100))
   const labelW = compact ? '34%' : '40%'
   const grid = ticks(total)
+  // When work outlived the response (a deferred report), mark the moment the
+  // response actually went out — everything right of it did not delay anyone.
+  const sentAt = totalMs && spans.some((s) => s.end > totalMs + 1) ? totalMs : null
 
   if (!rows.length) return null
 
@@ -167,6 +178,11 @@ export function Waterfall({ t, spans = [], totalMs, compact = false }) {
               {v === 0 ? '0' : fmtMs(v)}
             </span>
           ))}
+          {sentAt != null && (
+            <span className="absolute whitespace-nowrap" style={{ left: `${pctOf(sentAt)}%`, top: -11, transform: 'translateX(-50%)', ...LBL, fontSize: 7.5, color: t.ink }}>
+              response sent
+            </span>
+          )}
         </div>
         <div style={{ width: 56 }} />
       </div>
@@ -199,6 +215,9 @@ export function Waterfall({ t, spans = [], totalMs, compact = false }) {
                 {grid.map((v) => (
                   <span key={v} className="absolute top-0 bottom-0" style={{ left: `${pctOf(v)}%`, width: 1, background: t.hairline }} />
                 ))}
+                {sentAt != null && (
+                  <span className="absolute top-0 bottom-0" style={{ left: `${pctOf(sentAt)}%`, width: 0, borderLeft: `1.5px dashed ${t.ink}`, opacity: 0.45 }} />
+                )}
                 <span
                   className="absolute"
                   style={{
@@ -206,7 +225,7 @@ export function Waterfall({ t, spans = [], totalMs, compact = false }) {
                     top: compact ? 3 : 3, height: depth ? 7 : 9, borderRadius: 3,
                     background: s.derived ? `${c}55` : c,
                     border: s.derived ? `1px dashed ${c}` : 'none',
-                    opacity: depth && !s.derived ? 0.8 : 1,
+                    opacity: isBackground(s) ? 0.45 : depth && !s.derived ? 0.8 : 1,
                   }}
                 />
                 {!compact && (s.http || []).map((h, j) => {
@@ -258,6 +277,11 @@ export function Legend({ t, spans }) {
       ))}
       {spans.some((s) => s.derived) && (
         <span className="inline-flex items-center gap-1.5" style={{ ...LBL, fontSize: 8, color: t.inkFaint }}>≈ derived</span>
+      )}
+      {spans.some(isBackground) && (
+        <span className="inline-flex items-center gap-1.5" style={{ fontFamily: FONT.prose, fontSize: 10, color: t.inkDim }}>
+          <span style={{ width: 10, height: 8, borderRadius: 2, background: '#8FA3B8', opacity: 0.45 }} />faded · off the critical path
+        </span>
       )}
     </div>
   )

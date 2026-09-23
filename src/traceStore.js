@@ -133,6 +133,16 @@ export function getTrace(id) {
   }
 }
 
+/** Read-modify-write a trace's detail — used when a deferred AIRS report lands. */
+export function updateTraceDetail(id, mutate) {
+  const d = db()
+  const row = d.prepare('SELECT detail FROM traces WHERE id = ?').get(id)
+  if (!row?.detail) return false
+  const next = mutate(JSON.parse(row.detail))
+  d.prepare('UPDATE traces SET detail = ? WHERE id = ?').run(JSON.stringify(next), id)
+  return true
+}
+
 export function deleteTrace(id) {
   const d = db()
   d.prepare('DELETE FROM spans WHERE trace_id = ?').run(id)
