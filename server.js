@@ -1878,9 +1878,133 @@ app.get('/api/scanner/health', async (_req, res) => {
   const scannerPort = process.env.MODEL_SCANNER_PORT || 8001
   try {
     const r = await fetch(`http://localhost:${scannerPort}/`)
-    res.json({ running: r.ok, port: scannerPort })
+    // The stub answers `/` with 200 too, so `r.ok` alone reported LIVE for a
+    // scanner that rejects every scan with 503. The real app serves HTML there;
+    // the stub serves JSON naming what is missing.
+    let reason = null
+    if ((r.headers.get('content-type') || '').includes('application/json')) {
+      const body = await r.json().catch(() => null)
+      if (body?.status === 'stub') reason = Array.isArray(body.reason) ? body.reason : []
+    }
+    res.json({ running: r.ok, configured: r.ok && !reason, reason, port: scannerPort })
   } catch {
-    res.json({ running: false, port: scannerPort })
+    res.json({ running: false, configured: false, reason: null, port: scannerPort })
+  }
+})
+
+// ─── AI Supply Chain · SCM model-scan history ────────────────────────────────
+// Read-only views over the documented AIMS data plane (pan.dev → Prisma AIRS
+// Model Security → Data Plane: `GET /v1/scans`, `GET /v1/scans/{uuid}`,
+// `GET /v1/scans/{uuid}/rule-violations`). Same OAuth client-credentials flow
+// and the same MODEL_SECURITY_* / TSG_ID variables the Python scanner uses —
+// but served from Express, so the history works on hosts where the scanner
+// process does not run (EC2).
+//
+// Skill scans are deliberately absent: AI Skill Security is a Preview whose
+// only documented workflow is the SCM UI — there is no published API to list
+// or submit them.
+const AIMS_BASE = 'https://api.sase.paloaltonetworks.com/aims'
+const aimsToken = { value: null, expiresAt: 0 }
+
+function aimsConfigured() {
+  return !!(process.env.MODEL_SECURITY_CLIENT_ID && process.env.MODEL_SECURITY_CLIENT_SECRET && process.env.TSG_ID)
+}
+
+async function aimsAccessToken(force = false) {
+  if (!force && aimsToken.value && aimsToken.expiresAt - 60_000 > Date.now()) return aimsToken.value
+  const basic = Buffer.from(`${process.env.MODEL_SECURITY_CLIENT_ID}:${process.env.MODEL_SECURITY_CLIENT_SECRET}`).toString('base64')
+  const r = await fetch('https://auth.apps.paloaltonetworks.com/oauth2/access_token', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'client_credentials', scope: `tsg_id:${process.env.TSG_ID}` }),
+  })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok || !d.access_token) throw new Error(`token request failed (${r.status})`)
+  aimsToken.value = d.access_token
+  aimsToken.expiresAt = Date.now() + (d.expires_in ?? 900) * 1000
+  return aimsToken.value
+}
+
+/** GET on the data plane; one retry with a fresh token on 401. */
+async function aimsGet(path, params) {
+  const url = `${AIMS_BASE}/data${path}${params?.toString() ? `?${params}` : ''}`
+  let r = await fetch(url, { headers: { Authorization: `Bearer ${await aimsAccessToken()}` } })
+  if (r.status === 401) r = await fetch(url, { headers: { Authorization: `Bearer ${await aimsAccessToken(true)}` } })
+  const body = await r.json().catch(() => null)
+  if (!r.ok) {
+    const err = new Error(body?.detail ? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)) : body?.msg || `HTTP ${r.status}`)
+    err.status = r.status
+    throw err
+  }
+  return body
+}
+
+const SCAN_OUTCOMES = new Set(['ALLOWED', 'BLOCKED', 'ERROR', 'PENDING'])
+const SCAN_SOURCES = new Set(['HUGGING_FACE', 'LOCAL', 'S3', 'GCS', 'AZURE', 'ARTIFACTORY', 'GITLAB'])
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+app.get('/api/supply-chain/scans', async (req, res) => {
+  const tsg = process.env.TSG_ID || null
+  if (!aimsConfigured()) {
+    return res.status(503).json({ configured: false, tsg, error: 'MODEL_SECURITY_CLIENT_ID / MODEL_SECURITY_CLIENT_SECRET / TSG_ID are not set on this host' })
+  }
+  const params = new URLSearchParams({
+    limit: String(Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25))),
+    skip: String(Math.max(0, parseInt(req.query.skip, 10) || 0)),
+    sort_order: 'desc',
+  })
+  const outcome = String(req.query.outcome || '').toUpperCase()
+  if (SCAN_OUTCOMES.has(outcome)) params.append('eval_outcomes', outcome)
+  const source = String(req.query.source || '').toUpperCase()
+  if (SCAN_SOURCES.has(source)) params.append('source_types', source)
+  // `search_query` is a PREFIX match on model_uri (measured: `sentimentcheck`
+  // finds nothing, `https://huggingface.co/google` finds every google/* scan),
+  // so a bare `org` or `org/model` is expanded to the full Hugging Face URI.
+  const q = String(req.query.q || '').trim().slice(0, 200)
+  if (q) params.set('search_query', /^https?:\/\//i.test(q) ? q : `https://huggingface.co/${q.replace(/^\/+/, '')}`)
+  try {
+    const d = await aimsGet('/v1/scans', params)
+    res.json({
+      configured: true, tsg,
+      total: d.pagination?.total_items ?? null,
+      countCapped: !!d.count_capped,
+      scans: d.scans ?? [],
+    })
+  } catch (e) {
+    res.status(e.status && e.status < 500 ? e.status : 502).json({ configured: true, tsg, error: String(e.message).slice(0, 300) })
+  }
+})
+
+// One scan, in the same shape POST /scan-model returns, so the console renders
+// a historical scan with exactly the components it uses for a live one.
+app.get('/api/supply-chain/scans/:uuid', async (req, res) => {
+  if (!aimsConfigured()) return res.status(503).json({ configured: false, error: 'Model Security credentials are not set on this host' })
+  if (!UUID_RE.test(req.params.uuid)) return res.status(400).json({ error: 'not a scan uuid' })
+  try {
+    const scan = await aimsGet(`/v1/scans/${req.params.uuid}`)
+    let violations = []
+    let violations_error
+    try {
+      const v = await aimsGet(`/v1/scans/${req.params.uuid}/rule-violations`, new URLSearchParams({ skip: '0', limit: '100' }))
+      violations = v.violations ?? []
+    } catch (e) {
+      violations_error = String(e.message).slice(0, 200)
+    }
+    const violations_counts = {}
+    for (const v of violations) {
+      const s = String(v.rule_instance_state || 'OTHER').toUpperCase()
+      violations_counts[s] = (violations_counts[s] ?? 0) + 1
+    }
+    const s = scan.eval_summary ?? {}
+    res.json({
+      ...scan,
+      rules_summary: { passed: s.rules_passed ?? 0, failed: s.rules_failed ?? 0, total: s.total_rules ?? 0 },
+      violations, violations_counts,
+      ...(violations_error ? { violations_error } : {}),
+      scan_source: scan.source_type === 'HUGGING_FACE' ? 'huggingface' : 'local',
+    })
+  } catch (e) {
+    res.status(e.status && e.status < 500 ? e.status : 502).json({ error: String(e.message).slice(0, 300) })
   }
 })
 

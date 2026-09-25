@@ -102,7 +102,7 @@ function Actions({ t, prompt, response, onResend, onTranslate, translating, onOp
  * never read as a missing message.
  */
 
-function Copyable({ t, text, children }) {
+export function Copyable({ t, text, children }) {
   const [done, setDone] = useState(false)
   return (
     <button
@@ -219,7 +219,7 @@ function FaultNotice({ t, reason }) {
   )
 }
 
-function Reveal({ t, icon: Icon, title, count, accent, children, defaultOpen = false }) {
+export function Reveal({ t, icon: Icon, title, count, accent, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen)
   const c = accent || t.inkDim
   return (
@@ -256,7 +256,7 @@ function Reveal({ t, icon: Icon, title, count, accent, children, defaultOpen = f
   )
 }
 
-function Chip({ t, tone, children, glow }) {
+export function Chip({ t, tone, children, glow }) {
   return (
     <span className="px-2 py-0.5 rounded-full"
           style={{

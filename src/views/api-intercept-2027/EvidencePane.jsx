@@ -14,7 +14,7 @@ import { FONT, label as LBL, VERDICT_META, verdictOf, glass, bloom } from './tok
  * stream already said what happened, this says prove it.
  */
 
-function Row({ t, label, value }) {
+export function Row({ t, label, value }) {
   const [done, setDone] = useState(false)
   if (!value) return null
   return (
@@ -29,7 +29,7 @@ function Row({ t, label, value }) {
   )
 }
 
-function Block({ t, title, children, count, accent, defaultOpen = true }) {
+export function Block({ t, title, children, count, accent, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
   const c = accent || t.inkDim
   return (

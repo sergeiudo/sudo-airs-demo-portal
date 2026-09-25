@@ -9,7 +9,7 @@ import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 const VIEW_LABELS = {
   apiIntercept:    { label: 'AIRS Runtime & AI-GW',         sublabel: 'API-layer scanning vs in-gateway guardrail · four targets', text: 'text-red-400',    color: '#EF4444' },
-  modelScanning:   { label: 'Model Scanning',               sublabel: 'AI model vulnerability assessment',          text: 'text-blue-400',   color: '#3B82F6' },
+  modelScanning:   { label: 'AI Supply Chain',              sublabel: 'Model & skill security',                     text: 'text-blue-400',   color: '#3B82F6' },
   redTeaming:      { label: 'Red Teaming',                  sublabel: 'Automated adversarial campaign runner',      text: 'text-orange-400', color: '#F97316' },
   claudeHooks:     { label: 'AI Code Assistant Protection', sublabel: 'Claude Code hooks integration guide',        text: 'text-purple-400', color: '#8B5CF6' },
   observability:   { label: 'LLM Telemetry',                sublabel: 'Prompt history, metrics & pipeline traces',  text: 'text-teal-400',   color: '#10B981' },
@@ -123,6 +123,17 @@ export function TopBar() {
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#0ea5e9' }} />
             <span className="text-[10px] font-bold tracking-widest" style={{ color: '#0ea5e9' }}>
               AIRS PER SCENARIO
+            </span>
+          </div>
+        ) : state.activeView === 'modelScanning' ? (
+          /* Model scanning has no runtime toggle — every artifact is scanned,
+             that is the product. A SECURED/VULNERABLE switch here changed
+             nothing on the page and invited a click that did nothing. */
+          <div className="flex items-center gap-2 h-8 px-3.5 rounded-full border"
+               style={{ background: 'rgba(59,130,246,0.12)', borderColor: 'rgba(59,130,246,0.4)' }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#3b82f6' }} />
+            <span className="text-[10px] font-bold tracking-widest" style={{ color: '#3b82f6' }}>
+              SCAN BEFORE LOAD
             </span>
           </div>
         ) : (

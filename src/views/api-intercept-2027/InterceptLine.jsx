@@ -25,7 +25,7 @@ import { FONT, label as LBL, bloom, glass } from './tokens'
 
 const MIN_SEG = 0.12
 
-function useReducedMotion() {
+export function useReducedMotion() {
   const [r, setR] = useState(false)
   useEffect(() => {
     const q = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -37,7 +37,7 @@ function useReducedMotion() {
 }
 
 /** A labelled box. `enforce` adds the amber dot the legend refers to. */
-function Box({ t, title, sub, color, dead, struck, impact, live, reduced, enforce, wide }) {
+export function Box({ t, title, sub, color, dead, struck, impact, live, reduced, enforce, wide }) {
   const [hover, setHover] = useState(false)
   return (
     <div className="relative flex-shrink-0" style={{ width: wide ? 168 : 138 }}
@@ -82,7 +82,7 @@ function Box({ t, title, sub, color, dead, struck, impact, live, reduced, enforc
 }
 
 /** Connector with an arrowhead. Flowing when live, dashed when nothing passed. */
-function Arrow({ t, flex, color, dead, flowing, reduced, knocking, note }) {
+export function Arrow({ t, flex, color, dead, flowing, reduced, knocking, note }) {
   return (
     <div className="relative flex-1 min-w-0 self-start" style={{ flexGrow: flex, height: 58 }}>
       <div className="absolute left-0 right-3 rounded-full"
@@ -125,7 +125,7 @@ function Arrow({ t, flex, color, dead, flowing, reduced, knocking, note }) {
   )
 }
 
-function ColHead({ t, children, style }) {
+export function ColHead({ t, children, style }) {
   return <div className="text-center" style={{ ...LBL, fontSize: 8.5, color: t.inkFaint, ...style }}>{children}</div>
 }
 

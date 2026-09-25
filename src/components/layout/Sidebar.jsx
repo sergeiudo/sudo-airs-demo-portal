@@ -17,8 +17,8 @@ const NAV_ITEMS = [
   },
   {
     id: 'modelScanning',
-    label: 'Model Scanning',
-    sublabel: 'CVE vulnerability scanner',
+    label: 'AI Supply Chain',
+    sublabel: 'Model & skill scanning',
     icon: ScanSearch,
     color: { text: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/30',   bar: 'bg-blue-400' },
   },

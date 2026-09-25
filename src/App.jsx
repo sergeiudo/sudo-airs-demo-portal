@@ -9,6 +9,10 @@ import { ApiIntercept2027 } from './views/api-intercept-2027/ApiIntercept2027'
 const LEGACY_UI = new URLSearchParams(window.location.search).get('ui') === 'legacy'
 const Intercept = () => (LEGACY_UI ? <ApiInterceptView /> : <ApiIntercept2027 />)
 import { ModelScanningView } from './views/ModelScanningView'
+import { ModelScanning2027 } from './views/model-scanning-2027/ModelScanning2027'
+// Same switch for the model-scanning pillar: the redesign by default, the
+// original view under ?ui=legacy.
+const ModelScanning = () => (LEGACY_UI ? <ModelScanningView /> : <ModelScanning2027 />)
 import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeView } from './views/HomeView'
@@ -45,7 +49,7 @@ function AppContent() {
   const renderView = () => {
     switch (state.activeView) {
       case 'apiIntercept':   return <Intercept />
-      case 'modelScanning':  return <ModelScanningView />
+      case 'modelScanning':  return <ModelScanning />
       case 'redTeaming':     return <RedTeamingView />
       case 'claudeHooks':    return <ClaudeHooksView />
       case 'observability':     return <ObservabilityView />

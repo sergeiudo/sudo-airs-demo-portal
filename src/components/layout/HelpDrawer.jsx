@@ -6,7 +6,7 @@ import { useAppContext } from '../../context/AppContext'
 
 const VIEWS = [
   { id: 'apiIntercept',    icon: Crosshair,  label: 'AIRS Runtime & AI-GW',         desc: 'Fire real attack payloads at four targets and watch AIRS intercept them live.', color: '#EF4444' },
-  { id: 'modelScanning',   icon: ScanSearch, label: 'Model Scanning',               desc: 'Scan AI model files for embedded malware and vulnerabilities.',        color: '#3B82F6' },
+  { id: 'modelScanning',   icon: ScanSearch, label: 'AI Supply Chain',              desc: 'Scan AI models before they load, browse your SCM scan history, and see how skill scanning works.',        color: '#3B82F6' },
   { id: 'redTeaming',      icon: Swords,     label: 'Red Teaming',                  desc: 'Run automated adversarial campaigns and measure robustness scores.',   color: '#F97316' },
   { id: 'claudeHooks',     icon: Terminal,   label: 'AI Code Assistant Protection', desc: 'See how AIRS protects Claude Code via pre/post-tool hook scripts.',    color: '#8B5CF6' },
   { id: 'llmGateway',      icon: Waypoints,  label: 'AI/LLM Gateway',               desc: 'Portkey LLM gateway demo — model picker, fallback, cache, and a 3-lane comparison showing what AIRS catches that Portkey defaults miss.', color: '#EC4899' },

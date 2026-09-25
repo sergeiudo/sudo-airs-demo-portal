@@ -18,7 +18,7 @@ const PILLARS = [
   {
     id: 'modelScanning',
     icon: ScanSearch,
-    title: 'Model Scanning',
+    title: 'AI Supply Chain',
     tag: 'Supply-Chain Security',
     color: 'blue',
     description:
