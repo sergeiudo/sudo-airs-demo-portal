@@ -1,0 +1,188 @@
+/* ─── New design layer ──────────────────────────────────────────────────────
+ *
+ * Active only under html.ui-new (the Design switch, AppContext.uiMode). With
+ * Classic selected none of this applies and the portal is exactly as it was.
+ *
+ * Two halves:
+ *   ui-new.css            (this file) tokens + structure, hand-written
+ *   ui-new.generated.css  one exact rule per Tailwind colour class in use,
+ *                         produced by scripts/gen-ui-new-css.mjs
+ *
+ * Tokens mirror src/views/api-intercept-2027/tokens.js — the design system of
+ * the rebuilt consoles — so a classic pillar and a rebuilt one read as the same
+ * product: warm grey ground, white cards, charcoal ink, hairlines instead of
+ * heavy borders, and four meaning colours (block / pass / warn / live).
+ * Semantic text colours are tuned to ≥5:1 on every surface in both themes.
+ *
+ * Must load AFTER globals.css: its html.light rules have the same specificity,
+ * and the later !important wins.
+ * ------------------------------------------------------------------------- */
+
+/* ── tokens: dark ── */
+html.ui-new {
+  --n-ground: #151517;
+  --n-panel: #202024;
+  --n-card: #202024;
+  --n-raised: #26262B;
+  --n-sunken: #1A1A1E;
+  --n-code: #141417;
+  --n-hover: rgba(255, 255, 255, 0.06);
+  --n-hover-strong: rgba(255, 255, 255, 0.10);
+  --n-hair: rgba(255, 255, 255, 0.08);
+  --n-hair-strong: rgba(255, 255, 255, 0.14);
+  --n-grid: rgba(255, 255, 255, 0.022);
+  --n-ink: #F3F3F5;
+  --n-ink2: #D9D9DE;
+  --n-dim: #A6A6B0;
+  --n-faint: #8C8C96;
+  --n-block: #F07459;  --n-block-solid: #E0553A;  --n-block-rgb: 224, 85, 58;
+  --n-pass: #45BD96;   --n-pass-solid: #2E9E7B;   --n-pass-rgb: 46, 158, 123;
+  --n-warn: #ECB45E;   --n-warn-solid: #E8A33D;   --n-warn-rgb: 232, 163, 61;
+  --n-live: #86A2F7;   --n-live-solid: #4A76F0;   --n-live-rgb: 74, 118, 240;
+  --n-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --n-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.35);
+  --n-radius-lg: 10px;
+  --n-radius-xl: 14px;
+  --n-radius-2xl: 20px;
+}
+
+/* ── tokens: light ── */
+html.ui-new.light {
+  --n-ground: #E9E9EB;
+  --n-panel: #FFFFFF;
+  --n-card: #FFFFFF;
+  --n-raised: #FFFFFF;
+  --n-sunken: #F1F1F3;
+  --n-code: #F4F4F6;
+  --n-hover: rgba(20, 20, 24, 0.05);
+  --n-hover-strong: rgba(20, 20, 24, 0.08);
+  --n-hair: rgba(20, 20, 24, 0.08);
+  --n-hair-strong: rgba(20, 20, 24, 0.14);
+  --n-grid: rgba(20, 20, 24, 0.028);
+  --n-ink: #131316;
+  --n-ink2: #2A2A30;
+  --n-dim: #55555D;
+  --n-faint: #686870;
+  --n-block: #B03822;
+  --n-pass: #176F52;
+  --n-warn: #85570D;
+  --n-live: #3354C4;
+  --n-shadow: 0 10px 30px rgba(18, 18, 22, 0.07), 0 2px 6px rgba(18, 18, 22, 0.05);
+  --n-shadow-sm: 0 3px 10px rgba(18, 18, 22, 0.06);
+}
+
+/* ── page ── */
+html.ui-new,
+html.ui-new body,
+html.ui-new #root {
+  background-color: var(--n-ground) !important;
+  color: var(--n-ink);
+}
+
+html.ui-new .grid-bg {
+  background-color: var(--n-ground) !important;
+  background-image:
+    linear-gradient(var(--n-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--n-grid) 1px, transparent 1px) !important;
+  background-size: 44px 44px !important;
+}
+
+/* ── surfaces the generator cannot see: classes built with a wildcard ── */
+html.ui-new [class*="bg-base-9"],
+html.ui-new [class*="bg-base-8"] {
+  background-color: var(--n-panel) !important;
+  box-shadow: none !important;
+}
+html.ui-new [class*="bg-base-95"] {
+  background-color: var(--n-ground) !important;
+}
+html.ui-new [class*="border-white/"] {
+  border-color: var(--n-hair) !important;
+}
+
+/* ── cards: soft elevation instead of glow ── */
+html.ui-new .glass-card {
+  background-color: var(--n-card) !important;
+  border-color: var(--n-hair) !important;
+  box-shadow: var(--n-shadow-sm) !important;
+  backdrop-filter: none !important;
+}
+
+/* ── shape: the 2027 system uses larger radii ── */
+html.ui-new .rounded-lg  { border-radius: var(--n-radius-lg); }
+html.ui-new .rounded-xl  { border-radius: var(--n-radius-xl); }
+html.ui-new .rounded-2xl { border-radius: var(--n-radius-2xl); }
+
+/* ── type: Space Grotesk for headings. Heebo is second in the stack, so a
+      Hebrew heading falls back per glyph to a font that has Hebrew. ── */
+html.ui-new h1,
+html.ui-new h2,
+html.ui-new h3 {
+  font-family: "Space Grotesk", Heebo, Inter, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* ── shell ── */
+html.ui-new aside[data-ui-chrome],
+html.ui-new header[data-ui-chrome] {
+  background-color: var(--n-panel) !important;
+  border-color: var(--n-hair) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+/* Other asides (drawers) — opaque panel, soft shadow. Dialogs excluded: the
+   rebuilt surfaces style their own. */
+html.ui-new aside:not([data-ui-chrome]):not([role="dialog"]) {
+  background-color: var(--n-panel) !important;
+  border-color: var(--n-hair) !important;
+}
+
+/* The light layer turns every backdrop-blur-xl into an opaque slate drawer;
+   under New it is a panel. */
+html.ui-new .backdrop-blur-xl {
+  background-color: var(--n-panel) !important;
+  backdrop-filter: none !important;
+  border-color: var(--n-hair) !important;
+  box-shadow: var(--n-shadow) !important;
+}
+
+/* ── form controls ── */
+html.ui-new input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.ui-new textarea,
+html.ui-new select {
+  background-color: var(--n-panel) !important;
+  color: var(--n-ink) !important;
+  border-color: var(--n-hair-strong) !important;
+}
+html.ui-new input::placeholder,
+html.ui-new textarea::placeholder {
+  color: var(--n-faint) !important;
+}
+
+/* ── code — plain monospace panels follow the theme; syntax-highlighted
+      viewers set their own dark background inline and are left alone ── */
+html.ui-new pre:not([style*="background"]) {
+  background-color: var(--n-code);
+}
+
+/* ── scrollbars ── */
+html.ui-new ::-webkit-scrollbar-thumb { background: var(--n-hair-strong) !important; }
+html.ui-new ::-webkit-scrollbar-thumb:hover { background: var(--n-faint) !important; }
+
+/* ── the classic light layer's verdict hero cards, restated in the new
+      palette so a block reads vermilion and a pass reads green ── */
+html.ui-new [class*="from-red-950"] {
+  background: rgba(var(--n-block-rgb), 0.10) !important;
+  border-color: rgba(var(--n-block-rgb), 0.45) !important;
+  box-shadow: 0 10px 28px rgba(var(--n-block-rgb), 0.16) !important;
+}
+html.ui-new [class*="from-emerald-950"] {
+  background: rgba(var(--n-pass-rgb), 0.10) !important;
+  border-color: rgba(var(--n-pass-rgb), 0.45) !important;
+  box-shadow: 0 10px 28px rgba(var(--n-pass-rgb), 0.14) !important;
+}
+html.ui-new [class*="from-slate-900"] {
+  background: var(--n-sunken) !important;
+  border-color: var(--n-hair-strong) !important;
+  box-shadow: none !important;
+}

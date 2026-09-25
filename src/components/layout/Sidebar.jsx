@@ -93,6 +93,7 @@ export function Sidebar() {
       transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
+      data-ui-chrome="sidebar"
       className="flex flex-col flex-shrink-0 h-full border-r border-white/10 bg-base-900/80 backdrop-blur-xl overflow-hidden z-20"
     >
       {/* Logo */}

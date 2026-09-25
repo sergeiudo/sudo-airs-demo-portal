@@ -5,6 +5,7 @@ import { useAppContext } from '../../context/AppContext'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { PulsingDot } from '../shared/PulsingDot'
 import { HelpDrawer } from './HelpDrawer'
+import { DesignSwitch } from '../shared/DesignSwitch'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 const VIEW_LABELS = {
@@ -56,7 +57,9 @@ export function TopBar() {
   const groupBorder = isLight ? 'rgba(0,48,135,0.09)' : 'rgba(255,255,255,0.07)'
 
   return (
-    <header className="flex items-center h-16 px-6 border-b border-white/10 flex-shrink-0" style={{ background: '#13161f' }}>
+    // data-ui-chrome: under the New design the theme layer paints this as the
+    // portal's panel surface (its !important beats the inline classic colour).
+    <header data-ui-chrome="topbar" className="flex items-center h-16 px-6 border-b border-white/10 flex-shrink-0" style={{ background: '#13161f' }}>
       {/* Home + Breadcrumb */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <button
@@ -212,6 +215,9 @@ export function TopBar() {
             </motion.a>
           )}
         </AnimatePresence>
+
+        {/* Classic | New for the whole portal — reachable from inside any pillar */}
+        <DesignSwitch compact />
 
         {/* Utilities, as one segmented control rather than three loose icons */}
         <div className="flex items-center gap-0.5 p-1 rounded-full"

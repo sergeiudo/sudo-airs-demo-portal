@@ -27,7 +27,7 @@ import { WhatsNew } from './WhatsNew'
  *
  * Detail is one level down (a side sheet), never on the grid. Same token set
  * as the runtime console, so the front door looks like the rooms behind it.
- * Classic (HomeViewV2) is kept beside it; the HomeSwitch pill picks one.
+ * Classic (HomeViewV2) is kept beside it; the global Design switch (Classic | New) picks one.
  */
 
 function IconButton({ t, label, onClick, children }) {
