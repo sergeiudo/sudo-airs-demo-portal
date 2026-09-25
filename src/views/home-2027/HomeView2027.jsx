@@ -4,9 +4,10 @@ import { Shield, Search, Sun, Moon, FileText, ArrowRight, Play } from 'lucide-re
 import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
-import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, WHATS_NEW, PAYLOADS, MOH_SCENARIOS, readLastOpened, markOpened } from './homeData'
+import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, WHATS_NEW, readLastOpened, markOpened } from './homeData'
 import { PillarTile } from './PillarTile'
-import { Preflight } from './Preflight'
+import { ReadinessPill } from './Preflight'
+import { LiveProof } from './LiveProof'
 import { DetailsSheet, CommandPalette } from './overlays'
 import { WhatsNew } from './WhatsNew'
 
@@ -22,7 +23,10 @@ import { WhatsNew } from './WhatsNew'
  *   • follow the run of show — the running order is explicit (01–05) and the
  *     main demo is the one large tile, a bento grid rather than equal cards;
  *   • jump anywhere — ⌘K / Ctrl+K / "/", because typing "moh" beats scanning;
- *   • check readiness — a pre-flight card from config-only /api/health;
+ *   • see it work — live proof from the portal's own trace store: attacks
+ *     stopped, how many before the model was called, what fired;
+ *   • check readiness — a "Ready" pill in the top bar (config-only
+ *     /api/health), presenter information kept off the front stage;
  *   • see what changed — every NEW highlight in one strip.
  *
  * Detail is one level down (a side sheet), never on the grid. Same token set
@@ -132,6 +136,7 @@ export function HomeView2027({ homeSwitch }) {
           </button>
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <ReadinessPill t={t} />
             {homeSwitch}
             <button type="button" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' })}
                     className="hidden sm:inline-flex items-center gap-2 rounded-full px-3.5"
@@ -182,15 +187,6 @@ export function HomeView2027({ homeSwitch }) {
               </button>
             </div>
 
-            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-9">
-              {[[HOME_PILLARS.length, 'pillars'], [PAYLOADS, 'attack payloads'], [4, 'live targets'], [MOH_SCENARIOS, 'MOH scenarios']].map(([v, k]) => (
-                <div key={k}>
-                  <dt className="sr-only">{k}</dt>
-                  <dd style={{ fontFamily: FONT.display, fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', color: t.ink, lineHeight: 1 }}>{v}</dd>
-                  <dd style={{ fontFamily: FONT.prose, fontSize: 12.5, color: t.inkDim, marginTop: 5 }} aria-hidden="true">{k}</dd>
-                </div>
-              ))}
-            </dl>
             {/* The author credit — a card, not a footnote. The initials badge
                 carries Palo Alto Networks orange, the one place that colour
                 appears on the page. */}
@@ -217,7 +213,7 @@ export function HomeView2027({ homeSwitch }) {
             </div>
           </motion.div>
 
-          <Preflight t={t} />
+          <LiveProof t={t} onOpenTelemetry={() => launch('observability')} onOpenRuntime={() => launch('apiIntercept')} />
         </section>
 
         {/* ── what's new ── */}

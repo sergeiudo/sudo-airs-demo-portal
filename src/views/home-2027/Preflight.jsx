@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Activity } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { RefreshCw, Activity, ChevronDown } from 'lucide-react'
 import { FONT, label as LBL, glass } from '../api-intercept-2027/tokens'
 
 /**
@@ -48,7 +48,11 @@ function Pill({ t, on, children }) {
   )
 }
 
-export function Preflight({ t }) {
+/**
+ * Readiness checks, shared by the top-bar pill and its popover. Configuration
+ * only — see the note at the top of this file.
+ */
+export function usePreflight(t) {
   const [h, setH] = useState(null)
   const [scanner, setScanner] = useState(null)
   const [at, setAt] = useState(null)
@@ -112,8 +116,18 @@ export function Preflight({ t }) {
     },
   ] : []
 
+  // Amber = a core surface is unconfigured. The scanner (laptop-only) and the
+  // Model Security history are optional and never turn the pill amber.
+  const core = rows.filter((r) => ['AIRS Runtime API', 'SCM AI Gateway', 'Model providers'].includes(r.name))
+  const needsAttention = core.some((r) => r.tone === warn)
+  return { h, rows, at, busy, check, needsAttention, loaded: !!h || (!busy && at != null) }
+}
+
+/** The full check list — rendered inside the pill's popover. */
+function PreflightPanel({ t, pf }) {
+  const { h, rows, at, busy, check } = pf
   return (
-    <section aria-labelledby="preflight-title" className="flex flex-col lg:self-center" style={{ ...glass(t, { radius: 24 }), padding: 20 }}>
+    <section aria-labelledby="preflight-title" className="flex flex-col" style={{ ...glass(t, { radius: 22 }), padding: 18 }}>
       <div className="flex items-center gap-2 mb-1">
         <Activity size={15} style={{ color: t.ink }} aria-hidden="true" />
         <h2 id="preflight-title" style={{ fontFamily: FONT.display, fontSize: 16, fontWeight: 700, color: t.ink }}>Pre-flight</h2>
@@ -142,5 +156,49 @@ export function Preflight({ t }) {
         <span style={{ fontFamily: FONT.mono, color: t.ink }}>/api/moh/health?probe=1</span>.
       </p>
     </section>
+  )
+}
+
+/**
+ * ReadinessPill — the pre-flight checks, off the front stage.
+ *
+ * They used to be a card in the home page hero, where an audience read
+ * "protected config set" and "live on :8001" as noise. They are presenter
+ * information, so they now live behind a pill in the top bar: green "Ready"
+ * when the core surfaces are configured, amber when one is not, and the
+ * full list one click away.
+ */
+export function ReadinessPill({ t }) {
+  const pf = usePreflight(t)
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const tone = !pf.loaded ? t.idle : pf.needsAttention ? t.warn : t.pass
+  const label = !pf.loaded ? 'Checking' : pf.needsAttention ? 'Check setup' : 'Ready'
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog"
+              title="Pre-flight: configuration on this host"
+              className="inline-flex items-center gap-2 rounded-full px-3"
+              style={{ height: 38, fontFamily: FONT.prose, fontSize: 13, fontWeight: 600, color: t.ink, background: t.panel, border: `1px solid ${t.hairline}` }}>
+        <span className="rounded-full" style={{ width: 8, height: 8, background: tone, boxShadow: `0 0 0 3px ${tone}2e` }} aria-hidden="true" />
+        {label}
+        <ChevronDown size={13} style={{ color: t.inkDim, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} aria-hidden="true" />
+      </button>
+      {open && (
+        <div role="dialog" aria-label="Pre-flight" className="absolute right-0 z-50" style={{ top: 'calc(100% + 8px)', width: 440 }}>
+          <PreflightPanel t={t} pf={pf} />
+        </div>
+      )}
+    </div>
   )
 }

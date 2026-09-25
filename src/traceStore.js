@@ -158,6 +158,76 @@ export function insertActivity({ view, ip, user_agent, username, country, city, 
     timezone ?? null, screen_res ?? null, language ?? null)
 }
 
+// Detector keys arrive in several spellings (injection, prompt:injection,
+// toxic content, url_cats …); the home page shows six families a customer
+// recognises. First match wins, so order matters.
+const FAMILIES = [
+  ['injection', 'Prompt injection', /inject|jailbreak/i],
+  ['data', 'Sensitive data (DLP)', /dlp|data/i],
+  ['toxic', 'Toxic content', /toxic/i],
+  ['url', 'Malicious URL', /url/i],
+  ['code', 'Malicious code', /code|malicious/i],
+  ['agent', 'Agent / tool misuse', /agent|tool/i],
+]
+function familyOf(key) {
+  const hit = FAMILIES.find(([, , re]) => re.test(String(key)))
+  return hit ? { key: hit[0], label: hit[1] } : null
+}
+
+/**
+ * Evidence for the home page hero: what AIRS actually stopped on this portal.
+ * "Before the model" uses the same test as the Telemetry pillar's "Blocked at
+ * Input Scan" (no LLM time recorded), so the two pages never disagree. The
+ * latest intercepts carry the attack's library label or its detector family —
+ * never the prompt text, which is raw test traffic.
+ */
+export function homeProof({ latest = 4 } = {}) {
+  const d = db()
+  const agg = d.prepare(`
+    SELECT COUNT(*) as total,
+           SUM(CASE WHEN airs_enabled=1 THEN 1 ELSE 0 END) as scanned,
+           SUM(CASE WHEN verdict='BLOCKED' THEN 1 ELSE 0 END) as blocked,
+           SUM(CASE WHEN verdict='BLOCKED' AND (llm_ms IS NULL OR llm_ms=0) THEN 1 ELSE 0 END) as before_model,
+           MIN(created_at) as first, MAX(created_at) as last
+    FROM traces`).get()
+
+  const counts = {}
+  for (const r of d.prepare(`SELECT threats_detected FROM traces WHERE verdict='BLOCKED' AND threats_detected != '[]'`).all()) {
+    let keys = []
+    try { keys = JSON.parse(r.threats_detected) } catch { /* malformed row */ }
+    // Count each family once per request, however many spellings fired.
+    for (const f of new Set(keys.map(familyOf).filter(Boolean).map((x) => x.key))) counts[f] = (counts[f] ?? 0) + 1
+  }
+  const families = FAMILIES.map(([key, label]) => ({ key, label, count: counts[key] ?? 0 }))
+    .filter((f) => f.count > 0).sort((a, b) => b.count - a.count)
+
+  const rows = d.prepare(`
+    SELECT created_at, attack_label, backend, model, threats_detected, llm_ms
+    FROM traces WHERE verdict='BLOCKED' ORDER BY created_at DESC LIMIT ?`).all(latest)
+  const recent = rows.map((r) => {
+    let keys = []
+    try { keys = JSON.parse(r.threats_detected || '[]') } catch { /* malformed row */ }
+    const fam = keys.map(familyOf).find(Boolean)
+    // Some labels are internal ids (MOH "ag-01", gateway lane "defaults");
+    // only a label that reads like words is shown as-is.
+    const human = r.attack_label && /\s/.test(r.attack_label) && !/^[a-z]{1,4}-\d+$/i.test(r.attack_label)
+    const origin = { 'moh-aigw': 'Ministry of Health scenario', portkey: 'Gateway guardrail block', aigw: 'AI Gateway guardrail block' }[String(r.backend).split('/')[0]]
+    return {
+      at: r.created_at,
+      label: (human && r.attack_label) || fam?.label || origin || 'Blocked by policy',
+      family: fam?.label ?? null,
+      backend: r.backend ? String(r.backend).split('/')[0] : null,
+      beforeModel: !r.llm_ms,
+    }
+  })
+
+  return {
+    total: agg.total ?? 0, scanned: agg.scanned ?? 0, blocked: agg.blocked ?? 0,
+    beforeModel: agg.before_model ?? 0, first: agg.first, last: agg.last,
+    families, recent,
+  }
+}
+
 /** Cheap totals for the home page's pre-flight card — one indexed COUNT each. */
 export function countTraces() {
   const d = db()

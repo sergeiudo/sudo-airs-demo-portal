@@ -16,7 +16,7 @@ import { GoogleAuth } from 'google-auth-library'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
-import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail, countTraces } from './src/traceStore.js'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail, countTraces, homeProof } from './src/traceStore.js'
 import portkeyRouter from './portkey-routes.js'
 import {
   extractText as extractUploadText,
@@ -2424,6 +2424,12 @@ app.get('/api/health', (_req, res) => {
     azure: { configured: !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY) },
     traces: (() => { try { return countTraces() } catch { return null } })(),
   })
+})
+
+// ─── GET /api/home/proof — the home page's "live from this portal" panel ─────
+// Read-only aggregates over the local trace store; no network calls.
+app.get('/api/home/proof', (_req, res) => {
+  try { res.json(homeProof()) } catch (e) { res.status(500).json({ error: String(e.message).slice(0, 200) }) }
 })
 
 // ─── GET /api/traces ──────────────────────────────────────────────────────────

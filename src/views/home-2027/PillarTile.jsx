@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, X } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
@@ -22,6 +22,23 @@ import { ago } from './homeData'
  */
 
 const focusRing = (t) => `0 0 0 2px ${t.panel}, 0 0 0 4px ${t.live}`
+
+/**
+ * Glyph colour on a solid accent fill: whichever of white or charcoal has the
+ * higher contrast. Several pillar accents are light (amber, teal, sky) and a
+ * white arrow on them measures ~2:1, under the 3:1 a graphic needs.
+ */
+function onAccent(hex) {
+  const n = parseInt(hex.slice(1, 7), 16)
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  const lum = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+  const onWhite = 1.05 / (lum + 0.05)
+  const onInk = (lum + 0.05) / 0.0565 // #131316
+  return onWhite >= onInk ? '#ffffff' : '#131316'
+}
 
 function RunBadge({ t, n, accent }) {
   return (
@@ -55,18 +72,24 @@ function Stat({ t, children }) {
   )
 }
 
-function LaunchButton({ t, pillar, onLaunch, size = 'md', solid }) {
+function LaunchButton({ t, pillar, onLaunch, size = 'md', solid, hot, tone }) {
   const big = size === 'lg'
+  // Only the arrow-only button fills. The labelled one stays ink: white text
+  // on several accents (rose 3.7:1) misses the 4.5:1 text needs, and the tile
+  // around it is already lit.
+  const filled = hot && tone && !big && !solid
   return (
     <button type="button" onClick={() => onLaunch(pillar.id)}
             aria-label={`Launch ${pillar.title}`}
-            className="relative z-[2] inline-flex items-center justify-center gap-1.5 rounded-full transition-transform active:scale-[0.97] focus-visible:outline-none"
+            className="relative z-[2] inline-flex items-center justify-center gap-1.5 rounded-full active:scale-[0.97] focus-visible:outline-none"
             style={{
               height: big ? 40 : 34, padding: big ? '0 18px' : solid ? '0 14px' : 0, width: big || solid ? 'auto' : 34,
               fontFamily: FONT.prose, fontSize: 13, fontWeight: 600,
-              color: solid || big ? t.panel : t.ink,
-              background: solid || big ? t.ink : t.sunken,
-              border: `1px solid ${solid || big ? t.ink : t.hairline}`,
+              color: filled ? onAccent(tone) : solid || big ? t.panel : t.ink,
+              background: filled ? tone : solid || big ? t.ink : t.sunken,
+              border: `1px solid ${filled ? tone : solid || big ? t.ink : t.hairline}`,
+              boxShadow: filled ? `0 6px 16px ${tone}55` : 'none',
+              transition: 'background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease',
               cursor: 'pointer',
             }}
             onFocus={(e) => { e.currentTarget.style.boxShadow = focusRing(t) }}
@@ -120,26 +143,58 @@ export function PillarTile({ t, pillar, variant = 'tile', onOpen, onLaunch, last
   const compact = variant === 'compact'
   const opened = ago(lastOpened)
   const legacy = !!pillar.legacy
+  const tone = legacy ? '#94a3b8' : pillar.accent
+  // Hot = hovered or holding keyboard focus: the tile takes on its pillar's
+  // colour the way the classic cards do, so the one under the pointer is
+  // unmistakable across a room. Keyboard focus earns the same highlight.
+  const [hot, setHot] = useState(false)
 
   return (
     <motion.article
       initial={reduce ? false : { opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: reduce ? 0 : 0.04 * index, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={reduce ? undefined : { y: -2 }}
+      animate={{ opacity: 1, y: hot && !reduce ? -4 : 0, scale: hot && !reduce ? 1.015 : 1 }}
+      transition={{
+        // Entry fades in staggered; hover lift is a spring with no delay, so
+        // the last tile in the grid responds as fast as the first.
+        opacity: { delay: reduce ? 0 : 0.04 * index, duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+        y: { type: 'spring', stiffness: 380, damping: 28 },
+        scale: { type: 'spring', stiffness: 380, damping: 28 },
+      }}
+      onMouseEnter={() => setHot(true)}
+      onMouseLeave={() => setHot(false)}
+      onFocus={() => setHot(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setHot(false) }}
       className={`group relative flex flex-col overflow-hidden ${featured ? 'md:col-span-2 xl:row-span-2' : ''}`}
       style={{
         background: t.panel, borderRadius: featured ? 28 : 22,
-        border: `1px solid ${t.glassEdge}`, boxShadow: t.shadow,
+        border: `1px solid ${hot ? `${tone}80` : t.glassEdge}`,
+        boxShadow: hot ? `0 18px 44px ${tone}40, 0 0 0 1px ${tone}33, ${t.shadowSm}` : t.shadow,
+        transition: 'border-color 200ms ease, box-shadow 220ms ease',
         padding: featured ? 28 : compact ? 18 : 20,
         minHeight: compact ? 0 : 220,
+        zIndex: hot ? 3 : 'auto',
       }}
     >
-      {/* accent wash, top corner — colour as identity, not as text */}
+      {/* hover tint — an overlay whose opacity animates; a gradient background
+          on the tile itself would jump rather than fade */}
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none"
+           style={{ background: `${tone}${t.isLight ? '12' : '1c'}`, opacity: hot ? 1 : 0, transition: 'opacity 200ms ease' }} />
+
+      {/* accent bar across the top on hover, like the classic cards */}
+      <span aria-hidden="true" className="absolute top-0 left-0 right-0 pointer-events-none"
+            style={{
+              height: 3, background: tone,
+              transform: hot ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left',
+              transition: 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1)',
+            }} />
+
+      {/* accent wash, top corner — colour as identity, not as text; it
+          brightens on hover */}
       <div aria-hidden="true" className="absolute pointer-events-none"
            style={{
              right: -60, top: -60, width: featured ? 280 : 180, height: featured ? 280 : 180, borderRadius: '50%',
-             background: `radial-gradient(circle, ${legacy ? '#94a3b8' : pillar.accent}${featured ? '26' : '1c'}, transparent 70%)`,
+             background: `radial-gradient(circle, ${tone}${featured ? '40' : '33'}, transparent 70%)`,
+             opacity: hot ? 1 : 0.6, transition: 'opacity 220ms ease',
            }} />
 
       {/* the whole tile opens details */}
@@ -208,7 +263,7 @@ export function PillarTile({ t, pillar, variant = 'tile', onOpen, onLaunch, last
             <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: t.inkDim }}>opened {opened}</span>
           )}
           <span className="ml-auto pointer-events-auto">
-            <LaunchButton t={t} pillar={pillar} onLaunch={onLaunch} size={featured ? 'lg' : 'md'} />
+            <LaunchButton t={t} pillar={pillar} onLaunch={onLaunch} size={featured ? 'lg' : 'md'} hot={hot} tone={tone} />
           </span>
         </div>
       </div>
