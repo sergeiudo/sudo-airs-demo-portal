@@ -158,6 +158,13 @@ export function insertActivity({ view, ip, user_agent, username, country, city, 
     timezone ?? null, screen_res ?? null, language ?? null)
 }
 
+/** Cheap totals for the home page's pre-flight card — one indexed COUNT each. */
+export function countTraces() {
+  const d = db()
+  const row = d.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN verdict='BLOCKED' THEN 1 ELSE 0 END) as blocked, MAX(created_at) as last FROM traces`).get()
+  return { total: row.total ?? 0, blocked: row.blocked ?? 0, last: row.last ?? null }
+}
+
 export function getActivity({ limit = 100 } = {}) {
   return db().prepare(`
     SELECT

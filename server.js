@@ -16,7 +16,7 @@ import { GoogleAuth } from 'google-auth-library'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
-import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail } from './src/traceStore.js'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail, countTraces } from './src/traceStore.js'
 import portkeyRouter from './portkey-routes.js'
 import {
   extractText as extractUploadText,
@@ -2417,6 +2417,12 @@ app.get('/api/health', (_req, res) => {
       localGroupSet: !!process.env.LOCAL_SCAN_GROUP_UUID,
       hfGroupSet: !!process.env.HF_SCAN_GROUP_UUID,
     },
+    // Configuration only, like everything above — the home page's pre-flight
+    // card reads this on load, so it must never make a network call. An
+    // end-to-end check is /api/moh/health?probe=1, run deliberately.
+    aigw: { configured: !!(process.env.AIGW_API_KEY && process.env.AIGW_CONFIG_PROTECTED) },
+    azure: { configured: !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY) },
+    traces: (() => { try { return countTraces() } catch { return null } })(),
   })
 })
 

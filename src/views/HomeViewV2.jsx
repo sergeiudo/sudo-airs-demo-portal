@@ -13,9 +13,9 @@ import airsLogo from '../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
  * chip next to the bullet — used to make a newly shipped capability legible on
  * a card that otherwise reads as one undifferentiated feature list.
  */
-const hl = (h) => (typeof h === 'string' ? { t: h, tag: null } : h)
+export const hl = (h) => (typeof h === 'string' ? { t: h, tag: null } : h)
 
-const PILLARS = [
+export const PILLARS = [
   {
     id: 'apiIntercept',
     icon: Crosshair,
@@ -459,7 +459,7 @@ function HeroCard({ pillar, onClose, onLaunch, isDark }) {
 }
 
 // ─── Main V2 home view ─────────────────────────────────────────────────────────
-export function HomeViewV2() {
+export function HomeViewV2({ homeSwitch = null } = {}) {
   const { state, dispatch } = useAppContext()
   const [selected, setSelected] = useState(null)
 
@@ -532,6 +532,7 @@ export function HomeViewV2() {
         {/* Right: byline + theme toggle */}
         <div className="flex flex-col items-end gap-1.5 flex-1">
           <div className="flex items-center gap-3">
+            {homeSwitch}
             <span className="text-[10px] tracking-widest text-slate-600 uppercase">Palo Alto Networks</span>
             <button
               onClick={() => dispatch({ type: 'TOGGLE_THEME' })}

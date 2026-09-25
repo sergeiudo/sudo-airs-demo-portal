@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AppProvider, useAppContext } from './context/AppContext'
 import { MainLayout } from './components/layout/MainLayout'
 import { ApiInterceptView } from './views/ApiInterceptView'
@@ -17,6 +17,25 @@ import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeView } from './views/HomeView'
 import { HomeViewV2 } from './views/HomeViewV2'
+import { HomeView2027 } from './views/home-2027/HomeView2027'
+import { HomeSwitch } from './views/home-2027/HomeSwitch'
+
+/**
+ * Two homes, both kept: Classic (HomeViewV2) and New (HomeView2027), switched
+ * from a pill on either page. The choice is remembered per browser; Classic is
+ * the default for anyone who has not chosen. ?home=classic|new (or the older
+ * ?home=v2) picks one for this link and remembers it.
+ */
+const HOME_KEY = 'sudo-airs.home.version'
+function initialHome() {
+  const q = new URLSearchParams(window.location.search).get('home')
+  const fromUrl = q === 'new' || q === '2027' ? 'new' : q === 'classic' || q === 'v2' ? 'classic' : null
+  if (fromUrl) {
+    try { localStorage.setItem(HOME_KEY, fromUrl) } catch { /* private mode */ }
+    return fromUrl
+  }
+  try { return localStorage.getItem(HOME_KEY) === 'new' ? 'new' : 'classic' } catch { return 'classic' }
+}
 import { ObservabilityView } from './views/ObservabilityView'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
 import { ReleaseNotesView } from './views/ReleaseNotesView'
@@ -33,6 +52,11 @@ const STANDALONE_APP = new URLSearchParams(window.location.search).get('app')
 
 function AppContent() {
   const { state } = useAppContext()
+  const [homeVersion, setHomeVersion] = useState(initialHome)
+  const switchHome = (v) => {
+    setHomeVersion(v)
+    try { localStorage.setItem(HOME_KEY, v) } catch { /* private mode */ }
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', state.isDark)
@@ -43,7 +67,13 @@ function AppContent() {
   // top bar and no MainLayout at all.
   if (STANDALONE_APP === 'briut') return <BriutStandalone />
 
-  if (state.activeView === 'home') return <HomeViewV2 />
+  if (state.activeView === 'home') {
+    return (
+      homeVersion === 'new'
+        ? <HomeView2027 homeSwitch={<HomeSwitch value={homeVersion} onChange={switchHome} isDark={state.isDark} />} />
+        : <HomeViewV2 homeSwitch={<HomeSwitch value={homeVersion} onChange={switchHome} isDark={state.isDark} />} />
+    )
+  }
   if (state.activeView === 'releaseNotes') return <ReleaseNotesView />
 
   const renderView = () => {
