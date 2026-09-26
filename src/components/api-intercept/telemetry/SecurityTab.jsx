@@ -6,8 +6,8 @@
  * load their report on demand.
  */
 import React, { useState, useEffect } from 'react'
-import { ShieldCheck, ShieldX, Loader2 } from 'lucide-react'
-import { Card, KV, Chip, IdValue, Note, Empty, FONT, LBL, fmtMs } from './primitives'
+import { ShieldCheck, ShieldX, Loader2, Bot, FileLock2, Syringe, Biohazard, Link2, Code2, Database, MessagesSquare, Anchor } from 'lucide-react'
+import { Card, KV, Chip, IdValue, Note, Empty, FONT, LBL, fmtMs, IconSquare, useLaunch } from './primitives'
 
 const SERVICE_NAME = {
   agent_security: 'Agent security',
@@ -20,6 +20,12 @@ const SERVICE_NAME = {
   topic_guardrails: 'Topic guardrails',
   ungrounded: 'Contextual grounding',
   contextual_grounding: 'Contextual grounding',
+}
+
+// Same icons as the evidence pane's service grid, for the launch look.
+const SERVICE_ICON = {
+  agent_security: Bot, dlp: FileLock2, pi: Syringe, tc: Biohazard, uf: Link2, malicious_code: Code2,
+  dbs: Database, topic_guardrails: MessagesSquare, ungrounded: Anchor, contextual_grounding: Anchor,
 }
 
 const DETECTOR_NAME = {
@@ -137,9 +143,12 @@ function ReportTable({ t, report, dir }) {
   const results = dir ? all.filter((r) => r.data_type === dir) : all
   const other = dir ? all.filter((r) => r.data_type !== dir) : []
   const fired = results.filter(isBad).length
+  const launch = useLaunch()
   return (
     <div>
-      <div style={{ ...LBL, fontSize: 8, color: fired ? t.block : t.pass, marginBottom: 4 }}>
+      <div style={launch
+        ? { fontFamily: FONT.prose, fontSize: 12, fontWeight: 600, color: fired ? t.block : t.pass, margin: '8px 0 4px' }
+        : { ...LBL, fontSize: 8, color: fired ? t.block : t.pass, marginBottom: 4 }}>
         {fired} of {results.length} detection services flagged the {dir ?? 'content'}
       </div>
       {other.length > 0 && (
@@ -150,6 +159,29 @@ function ReportTable({ t, report, dir }) {
       )}
       {results.map((r, i) => {
         const bad = isBad(r)
+        if (launch) {
+          const tone = bad ? t.block : t.pass
+          return (
+            <div key={i} className="flex items-start gap-3 py-2.5" style={{ borderTop: `1px solid ${t.hairline}` }}>
+              <IconSquare t={t} icon={SERVICE_ICON[r.detection_service] ?? ShieldCheck} tone={tone} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="truncate" style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: bad ? t.block : t.ink }}>
+                    {SERVICE_NAME[r.detection_service] ?? r.detection_service}
+                  </span>
+                  <span className="ml-auto flex-shrink-0 px-2 py-0.5 rounded-full"
+                        style={{ fontFamily: FONT.prose, fontSize: 11, fontWeight: 600, color: tone, background: `${tone}1a` }}>
+                    {bad ? 'blocked' : 'clean'}
+                  </span>
+                </div>
+                <div style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 1 }}>
+                  {r.data_type} · {r.verdict} · {r.action}
+                </div>
+                {(bad || r.detection_service === 'uf' || r.detection_service === 'dlp') && <div className="mt-1"><Evidence t={t} r={r} /></div>}
+              </div>
+            </div>
+          )
+        }
         return (
           <div key={i} className="flex gap-2.5 py-1.5" style={{ borderTop: `1px solid ${t.hairline}` }}>
             <span className="flex-shrink-0 mt-[3px]" style={{ width: 7, height: 7, borderRadius: 9, background: bad ? t.block : t.pass }} />

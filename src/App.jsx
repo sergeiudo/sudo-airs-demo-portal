@@ -3,12 +3,14 @@ import { AppProvider, useAppContext } from './context/AppContext'
 import { MainLayout } from './components/layout/MainLayout'
 import { ApiInterceptView } from './views/ApiInterceptView'
 import { ApiIntercept2027 } from './views/api-intercept-2027/ApiIntercept2027'
+import { RuntimeLaunch } from './views/runtime-launch/RuntimeLaunch'
 import { ModelScanningView } from './views/ModelScanningView'
 import { ModelScanning2027 } from './views/model-scanning-2027/ModelScanning2027'
 import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeViewV2 } from './views/HomeViewV2'
 import { HomeView2027 } from './views/home-2027/HomeView2027'
+import { HomeLauncher } from './views/home-2027/HomeLauncher'
 import { DesignSwitch } from './components/shared/DesignSwitch'
 import { ObservabilityView } from './views/ObservabilityView'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
@@ -23,6 +25,12 @@ import { BriutStandalone } from './views/moh/BriutApp'
 // query string instead: /?app=briut. Keeping the path at "/" means nothing
 // changes for the Vite dev server or the Express static build.
 const STANDALONE_APP = new URLSearchParams(window.location.search).get('app')
+// The New home is the launcher; the earlier landing-page version stays
+// reachable at /?home=hero so the two can be compared.
+const HOME_HERO = new URLSearchParams(window.location.search).get('home') === 'hero'
+// Same for the runtime console: the launcher-style one by default, the
+// previous New console at /?runtime=v1.
+const RUNTIME_V1 = new URLSearchParams(window.location.search).get('runtime') === 'v1'
 
 function AppContent() {
   const { state } = useAppContext()
@@ -43,7 +51,7 @@ function AppContent() {
   // Elements, not components defined here: a component created inside this
   // function would get a new identity every render and remount the console —
   // wiping its transcript on any context change, even an AIRS toggle.
-  const intercept = isNew ? <ApiIntercept2027 /> : <ApiInterceptView />
+  const intercept = !isNew ? <ApiInterceptView /> : RUNTIME_V1 ? <ApiIntercept2027 /> : <RuntimeLaunch />
   const modelScanning = isNew ? <ModelScanning2027 /> : <ModelScanningView />
 
   // Must come before every other branch: this window has no sidebar, no
@@ -51,7 +59,8 @@ function AppContent() {
   if (STANDALONE_APP === 'briut') return <BriutStandalone />
 
   if (state.activeView === 'home') {
-    return isNew ? <HomeView2027 homeSwitch={<DesignSwitch />} /> : <HomeViewV2 homeSwitch={<DesignSwitch />} />
+    if (!isNew) return <HomeViewV2 homeSwitch={<DesignSwitch />} />
+    return HOME_HERO ? <HomeView2027 homeSwitch={<DesignSwitch />} /> : <HomeLauncher homeSwitch={<DesignSwitch />} />
   }
   if (state.activeView === 'releaseNotes') return <ReleaseNotesView />
 
@@ -71,8 +80,12 @@ function AppContent() {
     }
   }
 
+  // Views that render their own unified header (PillarHeader) in the New
+  // design. One pillar so far; the rest follow.
+  const unifiedHeader = isNew && state.activeView === 'apiIntercept' && !RUNTIME_V1
+
   return (
-    <MainLayout viewKey={state.activeView}>
+    <MainLayout viewKey={state.activeView} hideTopBar={unifiedHeader}>
       {renderView()}
     </MainLayout>
   )

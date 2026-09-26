@@ -9,10 +9,11 @@
 // (or by pillars that do not record detail yet) get an honest fallback.
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, RefreshCw, Loader2 } from 'lucide-react'
+import { X, RefreshCw, Loader2, Activity, ShieldCheck, ShieldX, AlertTriangle } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, VERDICT_META } from '../../views/api-intercept-2027/tokens'
-import { FONT, LBL, CopyButton, Chip } from './telemetry/primitives'
+import { bandBg, bandDots, bandGlass } from '../../views/home-2027/band'
+import { FONT, LBL, CopyButton, Chip, TelemetryLook } from './telemetry/primitives'
 import { OverviewTab, TimelineTab, ModelTab, NetworkTab, RawTab, LegacyView, allHttp, guardrailErrors } from './telemetry/sections'
 import { SecurityTab } from './telemetry/SecurityTab'
 
@@ -51,7 +52,14 @@ function stamp(iso) {
   return { date, time: `${time}.${String(d.getMilliseconds()).padStart(3, '0')}`, tz, ms: d.getTime() }
 }
 
-export function PromptTelemetryDrawer({ traceId, onClose }) {
+/**
+ * `variant="band"` — the launcher design's header (RuntimeLaunch): the verdict
+ * as a coloured band with the time and the trace id on it, tabs as pills in
+ * the verdict colour. Classic and the Observability pillar keep the default.
+ */
+const BAND_TITLE = { PASSED: 'Passed', INTERCEPTED: 'Intercepted', UNSCANNED: 'Unscanned', 'NOT SCANNED': 'Not scanned' }
+
+export function PromptTelemetryDrawer({ traceId, onClose, variant = 'classic' }) {
   const { state } = useAppContext()
   const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
   const [trace, setTrace] = useState(null)
@@ -144,7 +152,77 @@ export function PromptTelemetryDrawer({ traceId, onClose }) {
             </div>
           </div>
 
-          {/* header */}
+          {variant === 'band' ? (
+            <header className="flex-shrink-0" style={{ background: t.panel, borderBottom: `1px solid ${t.hairline}` }}>
+              {(() => {
+                const color = !trace ? '#64748b' : vm === VERDICT_META.blocked ? t.block : vm === VERDICT_META.passed ? t.pass : t.warn
+                const Icon = !trace ? Activity : vm === VERDICT_META.blocked ? ShieldX : vm === VERDICT_META.passed ? ShieldCheck : AlertTriangle
+                const glassBtn = { width: 30, height: 30, color: '#fff', background: bandGlass.background, border: bandGlass.border }
+                return (
+                  <div className="relative overflow-hidden" style={{ background: bandBg(color) }}>
+                    <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={bandDots} />
+                    <Icon aria-hidden="true" strokeWidth={1.3}
+                          style={{ position: 'absolute', right: 70, bottom: -46, width: 160, height: 160, color: '#fff', opacity: 0.14, transform: 'rotate(-10deg)', pointerEvents: 'none' }} />
+                    <div className="relative flex items-start gap-3 px-5 pt-4 pb-4">
+                      <span className="grid place-items-center rounded-2xl flex-shrink-0"
+                            style={{ width: 46, height: 46, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.32)' }}>
+                        <Icon size={21} style={{ color: '#fff' }} aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap" style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>
+                          <span>Prompt telemetry</span>
+                          {trace && !detail && <span className="rounded-full px-2 py-0.5" style={{ ...bandGlass, fontSize: 8.5 }}>approximate · older trace</span>}
+                        </div>
+                        <div style={{ fontFamily: FONT.display, fontSize: 23, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.1, marginTop: 3 }}>
+                          {trace ? (BAND_TITLE[vm.label] ?? vm.label) : 'Loading trace…'}
+                        </div>
+                        {when && (
+                          <div className="flex flex-wrap items-baseline gap-x-2 mt-1" style={{ fontFamily: FONT.prose, fontSize: 12, color: 'rgba(255,255,255,0.92)' }}>
+                            <span style={{ fontWeight: 600 }}>{when.date}</span>
+                            <span style={{ fontFamily: FONT.mono }}>{when.time}</span>
+                            <span style={{ opacity: 0.8 }}>{when.tz} · {relative(now - when.ms)}</span>
+                          </div>
+                        )}
+                        <div className="inline-flex items-center gap-1 mt-2 rounded-full pl-2.5 pr-1 max-w-full" style={{ height: 24, ...bandGlass }}>
+                          <span className="truncate" dir="ltr" style={{ fontFamily: FONT.mono, fontSize: 10.5 }}>{traceId}</span>
+                          <CopyButton t={{ ...t, inkFaint: 'rgba(255,255,255,0.8)', inkDim: '#fff' }} text={traceId} size={10} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button type="button" onClick={load} title="Reload" aria-label="Reload" className="rounded-full grid place-items-center" style={glassBtn}>
+                          {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                        </button>
+                        <button type="button" onClick={onClose} title="Close (Esc)" aria-label="Close" className="rounded-full grid place-items-center" style={glassBtn}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+              {tabs.length > 0 && (
+                <nav className="flex gap-1.5 px-4 py-2.5 overflow-x-auto">
+                  {tabs.map((x) => {
+                    const on = tab === x.id
+                    const color = vm === VERDICT_META.blocked ? t.block : vm === VERDICT_META.passed ? t.pass : t.warn
+                    return (
+                      <button key={x.id} type="button" onClick={() => setTab(x.id)}
+                        className="px-3.5 rounded-full whitespace-nowrap inline-flex items-center gap-1.5"
+                        style={{
+                          height: 30, fontFamily: FONT.prose, fontSize: 12.5, fontWeight: on ? 700 : 500,
+                          color: on ? '#fff' : t.inkDim, background: on ? bandBg(color) : t.sunken,
+                          border: `1px solid ${on ? 'transparent' : t.hairline}`, boxShadow: on ? `0 4px 12px ${color}40` : 'none',
+                        }}>
+                        {x.alert && <span style={{ width: 6, height: 6, borderRadius: 6, background: on ? '#fff' : t.block }} />}
+                        {x.label}
+                        {x.count != null && <span style={{ opacity: 0.7, fontFamily: FONT.mono, fontSize: 11 }}>{x.count}</span>}
+                      </button>
+                    )
+                  })}
+                </nav>
+              )}
+            </header>
+          ) : (
           <header className="flex-shrink-0 px-5 pt-4 pb-3" style={{ background: t.panel, borderBottom: `1px solid ${t.hairline}` }}>
             <div className="flex items-center gap-2">
               <span style={{ ...LBL, fontSize: 9.5, color: t.inkDim }}>Prompt telemetry</span>
@@ -187,8 +265,11 @@ export function PromptTelemetryDrawer({ traceId, onClose }) {
               </nav>
             )}
           </header>
+          )}
 
-          {/* body */}
+          {/* body — the band header's cards (icon squares, prose titles) come
+              from TelemetryLook, so every tab switches with it */}
+          <TelemetryLook.Provider value={variant === 'band' ? 'launch' : 'classic'}>
           <div className="flex-1 overflow-y-auto px-5 py-4">
             {loading && !trace && (
               <div className="flex items-center justify-center gap-2 py-16" style={{ fontFamily: FONT.prose, fontSize: 12, color: t.inkFaint }}>
@@ -212,6 +293,7 @@ export function PromptTelemetryDrawer({ traceId, onClose }) {
               </>
             )}
           </div>
+          </TelemetryLook.Provider>
         </motion.aside>
       )}
     </AnimatePresence>

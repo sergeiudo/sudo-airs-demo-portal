@@ -94,7 +94,12 @@ const STATUS_DOT = {
   unknown:      'bg-slate-600',
 }
 
-export function ModelSelector({ backend, model, onBackendChange, onModelChange }) {
+/**
+ * `hideTabs` drops the provider tabs for a caller that draws its own target
+ * picker (the launcher-style runtime console); the model picker, notes and
+ * self-heal behave the same.
+ */
+export function ModelSelector({ backend, model, onBackendChange, onModelChange, hideTabs = false }) {
   const [tenantOpen, setTenantOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
   const [authCopied, setAuthCopied] = useState(false)
@@ -236,6 +241,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
       <div className="space-y-2">
 
         {/* ── Provider tabs ── */}
+        {!hideTabs && (
         <div className="grid grid-cols-4 gap-1.5">
           {TABS.map(tab => {
             const isActive = backend === tab.id
@@ -284,6 +290,7 @@ export function ModelSelector({ backend, model, onBackendChange, onModelChange }
             )
           })}
         </div>
+        )}
 
         {/* ── Model picker trigger ── */}
         <button

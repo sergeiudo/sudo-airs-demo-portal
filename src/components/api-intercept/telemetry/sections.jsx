@@ -4,8 +4,8 @@
  * server measured on the request; nothing here is a typed-in estimate.
  */
 import React, { useState } from 'react'
-import { ExternalLink, ChevronDown } from 'lucide-react'
-import { Card, KV, Chip, Stat, IdValue, Note, Empty, CopyButton, FONT, LBL, fmtMs, fmtNum, pct, modelColor } from './primitives'
+import { ExternalLink, ChevronDown, Route, ShieldX, ListChecks, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { Card, KV, Chip, Stat, IdValue, Note, Empty, CopyButton, FONT, LBL, fmtMs, fmtNum, pct, modelColor, IconSquare, useLaunch } from './primitives'
 import { Waterfall, Legend, coveredMs, kindMs } from './Waterfall'
 import { McpChainOfThought } from '../McpChainOfThought'
 
@@ -49,6 +49,19 @@ function decidingStage(d) {
   return st ? st.title : 'a guardrail stage'
 }
 
+/** A row in the launch look's verdict card: icon square, title, text. */
+function StoryRow({ t, icon, tone, title, children }) {
+  return (
+    <div className="flex items-start gap-3">
+      <IconSquare t={t} icon={icon} tone={tone} size={32} />
+      <div className="min-w-0 flex-1">
+        <div style={{ fontFamily: FONT.display, fontSize: 13.5, fontWeight: 700, color: t.ink }}>{title}</div>
+        <div style={{ fontFamily: FONT.prose, fontSize: 12.5, lineHeight: 1.5, color: t.inkDim, marginTop: 1 }}>{children}</div>
+      </div>
+    </div>
+  )
+}
+
 function TextBlock({ t, label, text, dir }) {
   const [open, setOpen] = useState(false)
   if (!text) return null
@@ -89,8 +102,42 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
   const tsg = detail.airs?.tsg
   const gwHeaders = detail.gateway?.headers || {}
 
+  const launch = useLaunch()
+  const errs = guardrailErrors(detail)
+
   return (
     <div className="space-y-3">
+      {/* Launch look: the drawer's band already says the verdict, so this card
+          explains it instead — how it was enforced, where it stopped, what
+          fired — as rows in the evidence pane's style. */}
+      {launch ? (
+        <Card t={t} tone={verdictMeta.color}>
+          <div className="space-y-3.5 pt-4">
+            <StoryRow t={t} icon={Route} title="How it was enforced">{ENFORCEMENT[detail.enforcement] ?? detail.enforcement}</StoryRow>
+            {blockedBy && (
+              <StoryRow t={t} icon={ShieldX} tone={t.block} title="Stopped at">
+                <span style={{ color: t.block, fontWeight: 600 }}>{blockedBy}</span>
+              </StoryRow>
+            )}
+            {!blockedBy && trace.verdict !== 'BLOCKED' && detail.airsEnabled && !errs.length && (
+              <StoryRow t={t} icon={ShieldCheck} tone={t.pass} title="Cleared">Every scan on the line allowed it{trace.category ? ` · ${trace.category}` : ''}.</StoryRow>
+            )}
+            {trace.threats_detected?.length > 0 && (
+              <StoryRow t={t} icon={ListChecks} tone={t.block} title="Detected">
+                <span className="flex flex-wrap gap-1 mt-0.5">
+                  {trace.threats_detected.map((x) => <Chip key={x} t={t} tone={t.block}>{String(x).replace(/_/g, ' ')}</Chip>)}
+                </span>
+              </StoryRow>
+            )}
+            {errs.length > 0 && (
+              <StoryRow t={t} icon={AlertTriangle} tone={t.warn} title="Not actually scanned">
+                The guardrail check errored ({[...new Set(errs.map((e) => e.message))].join('; ')})
+                {errs.some((e) => e.hookVerdict !== false) ? ' and failed open — the request went through without an AIRS verdict.' : '.'}
+              </StoryRow>
+            )}
+          </div>
+        </Card>
+      ) : (
       <Card t={t} tone={verdictMeta.color}>
         <div className="flex items-start gap-3 pt-3">
           <div className="flex-1 min-w-0">
@@ -117,6 +164,7 @@ export function OverviewTab({ t, trace, detail, verdictMeta }) {
           </div>
         </div>
       </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <Stat t={t} label="Server total · wall clock" value={fmtMs(total)} sub={`request in → response ready · ${spans.filter((s) => !s.parent).length} measured steps`} />

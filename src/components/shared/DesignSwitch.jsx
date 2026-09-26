@@ -20,10 +20,13 @@ const OPTIONS = [
   { id: 'new', label: 'New', icon: LayoutDashboard },
 ]
 
-export function DesignSwitch({ compact = false }) {
+/** `onBand` — sitting on a pillar's coloured header band: dark glass, white text. */
+export function DesignSwitch({ compact = false, onBand = false }) {
   const { state, dispatch } = useAppContext()
   const value = state.uiMode
-  const c = state.isDark
+  const c = onBand
+    ? { bg: 'rgba(0,0,0,0.22)', border: 'rgba(255,255,255,0.24)', text: 'rgba(255,255,255,0.82)', on: '#FFFFFF', onBg: 'rgba(255,255,255,0.22)' }
+    : state.isDark
     ? { bg: 'rgba(32,32,36,0.92)', border: 'rgba(255,255,255,0.12)', text: '#A0A0AA', on: '#F3F3F5', onBg: 'rgba(255,255,255,0.12)' }
     : { bg: 'rgba(255,255,255,0.94)', border: 'rgba(20,20,24,0.10)', text: '#55555D', on: '#131316', onBg: 'rgba(20,20,24,0.07)' }
 

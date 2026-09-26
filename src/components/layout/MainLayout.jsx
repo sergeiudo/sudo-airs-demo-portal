@@ -16,7 +16,11 @@ const pageTransition = {
   duration: 0.25,
 }
 
-export function MainLayout({ children, viewKey }) {
+/**
+ * `hideTopBar` — the view renders its own unified header (PillarHeader), which
+ * carries everything the TopBar did.
+ */
+export function MainLayout({ children, viewKey, hideTopBar = false }) {
   const isIframeView = viewKey === 'claudeHooks'
 
   return (
@@ -26,7 +30,7 @@ export function MainLayout({ children, viewKey }) {
 
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <TopBar />
+        {!hideTopBar && <TopBar />}
 
         {/* View content */}
         <main className="flex-1 overflow-hidden relative">

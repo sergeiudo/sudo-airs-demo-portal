@@ -1,9 +1,19 @@
-import React, { useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, ShieldX, AlertTriangle, ExternalLink, ChevronRight, Copy, Check, Radar, FileText,
          Bot, FileLock2, Syringe, Biohazard, Link2, Code2, Cpu, Wrench, Server, Globe,
-         Route, CornerDownRight } from 'lucide-react'
+         Route, CornerDownRight, ChevronDown, ListChecks, Network, Fingerprint, Braces, Activity, ArrowUpRight } from 'lucide-react'
 import { FONT, label as LBL, VERDICT_META, verdictOf, glass, bloom } from './tokens'
+import { bandBg, bandDots, shade } from '../home-2027/band'
+import { useModelLabel } from './useModelLabel'
+
+/**
+ * Two looks. 'classic' is the 2027 console's; 'band' is the launcher design
+ * (RuntimeLaunch): the verdict as a coloured band, the sections below as list
+ * rows with a tinted icon and a one-line summary. Same evidence, same logic —
+ * the look is read from context so every section switches together.
+ */
+const LookCtx = createContext('classic')
 
 /**
  * EvidencePane — proof for the selected turn.
@@ -29,9 +39,39 @@ export function Row({ t, label, value }) {
   )
 }
 
-export function Block({ t, title, children, count, accent, defaultOpen = true }) {
+export function Block({ t, title, children, count, accent, defaultOpen = true, icon: Icon, sub }) {
   const [open, setOpen] = useState(defaultOpen)
+  const look = useContext(LookCtx)
   const c = accent || t.inkDim
+  if (look === 'band') {
+    const tone = accent || t.live
+    return (
+      <div style={{ borderTop: `1px solid ${t.hairline}` }}>
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left">
+          <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 32, height: 32, background: `${tone}14`, color: tone }}>
+            {Icon ? <Icon size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />}
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block" style={{ fontFamily: FONT.display, fontSize: 13.5, fontWeight: 700, color: t.ink }}>{title}</span>
+            {sub && <span className="block truncate" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 1 }}>{sub}</span>}
+          </span>
+          {count != null && (
+            <span className="px-2 py-0.5 rounded-full flex-shrink-0" style={{ fontFamily: FONT.mono, fontSize: 10, color: tone, background: `${tone}14` }}>{count}</span>
+          )}
+          <ChevronDown size={14} className="flex-shrink-0" style={{ color: t.inkDim, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} aria-hidden="true" />
+        </button>
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18 }} className="overflow-hidden">
+              <div className="px-4 pb-4">{children}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
   return (
     <div className="mx-3 mb-2.5 overflow-hidden" style={{ background: t.panel, boxShadow: t.shadowSm, borderRadius: 20 }}>
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 px-3 py-2.5">
@@ -88,8 +128,40 @@ function parseModel(label) {
 /** The model, given the weight it deserves. */
 function ModelCard({ t, label, enforcement, lane, tokensIn, tokensOut }) {
   const m = parseModel(label)
+  const look = useContext(LookCtx)
+  // The band look shows the picker's name ("Claude Haiku 4.5"), not the id.
+  const pretty = useModelLabel(look === 'band' ? m?.backend : null, m ? (m.integration ? `${m.integration}/${m.id}` : m.id) : '')
   if (!m) return null
   const be = m.backend ? BACKEND_META[m.backend] : null
+  const band = look === 'band'
+  const note = enforcement === 'ai-gateway-guardrail'
+    ? 'Policy ran inside the gateway, before the request reached the model.'
+    : enforcement === 'none'
+    ? 'No enforcement on this turn — the call went straight to the model.'
+    : be?.note
+  if (band) {
+    // A row like the others in this look: the model is the title, the route
+    // and the token count the grey line under it.
+    const tokens = tokensIn != null || tokensOut != null ? `${tokensIn ?? '—'} in · ${tokensOut ?? '—'} out tokens` : null
+    return (
+      <div className="flex items-start gap-3 px-4 py-3" style={{ borderTop: `1px solid ${t.hairline}` }}>
+        <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 32, height: 32, background: `${t.live}14`, color: t.live }}>
+          <Cpu size={15} aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate" title={m.raw} style={{ fontFamily: FONT.display, fontSize: 13.5, fontWeight: 700, color: t.ink }}>{pretty}</div>
+          <div style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.45, color: t.inkDim, marginTop: 1 }}>
+            {[be ? `Answered via ${be.name}` : 'Answered by this model', m.integration, tokens].filter(Boolean).join(' · ')}
+          </div>
+          {note && (
+            <div style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.45, color: t.inkFaint, marginTop: 3 }}>
+              {note}{lane ? ` · lane ${lane}` : ''}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="mx-3 mt-3 px-3.5 py-3" style={{ background: t.panel, boxShadow: t.shadowSm, borderRadius: 18 }}>
       <div className="flex items-center gap-2">
@@ -131,14 +203,9 @@ function ModelCard({ t, label, enforcement, lane, tokensIn, tokensOut }) {
 
       {/* Which enforcement point produced the verdict — the AI-GW lane is a
           different architecture from the other three, not just another model. */}
-      {(enforcement || be) && (
+      {note && (
         <p style={{ fontFamily: FONT.prose, fontSize: 10.5, lineHeight: 1.45, color: t.inkFaint, marginTop: 7 }}>
-          {enforcement === 'ai-gateway-guardrail'
-            ? 'Policy ran inside the gateway, before the request reached the model.'
-            : enforcement === 'none'
-            ? 'No enforcement on this turn — the call went straight to the model.'
-            : be?.note}
-          {lane ? ` · lane ${lane}` : ''}
+          {note}{lane ? ` · lane ${lane}` : ''}
         </p>
       )}
     </div>
@@ -180,7 +247,8 @@ function McpBlock({ t, mcp }) {
   const toolsOffered = discovered.reduce((a, s) => a + (s.toolNames?.length ?? 0), 0)
 
   return (
-    <Block t={t} title="MCP tool calls" accent={stopped.length ? t.block : t.model}
+    <Block t={t} title="MCP tool calls" accent={stopped.length ? t.block : t.model} icon={Network}
+           sub={`${discovered.length} server${discovered.length === 1 ? '' : 's'} · ${toolsOffered} tools offered`}
            count={`${toolSteps.length} call${toolSteps.length === 1 ? '' : 's'}${stopped.length ? ` · ${stopped.length} stopped` : ''}`}>
 
       {/* the run, in four numbers */}
@@ -669,7 +737,95 @@ function DetailCard({ t, result }) {
   )
 }
 
-export function EvidencePane({ t, message, scmUrl }) {
+/**
+ * The verdict as a band — the launcher design's version of the verdict panel.
+ * Colour is the answer (green passed, vermilion intercepted, amber when AIRS
+ * was off or the call failed); the label says where it was decided and the
+ * line under the title says why. White text sits on the band's darkened end.
+ */
+const BAND_TITLE = { passed: 'Passed', blocked: 'Intercepted', unscanned: 'Unscanned', error: 'Fault' }
+
+function BandVerdict({ t, v, message, inScan, outScan, upload, fired }) {
+  const color = v === 'blocked' ? t.block : v === 'passed' ? t.pass : t.warn
+  const Icon = v === 'blocked' ? ShieldX : v === 'passed' ? ShieldCheck : AlertTriangle
+  const gateway = message?.telemetry?.summary?.enforcement === 'ai-gateway-guardrail'
+  const where = v === 'blocked'
+    ? (upload ? 'on upload' : outScan?.action === 'block' ? 'at the output scan' : gateway ? 'inside the AI Gateway' : 'at the input scan')
+    : v === 'passed' ? (upload ? 'cleared on upload' : 'cleared every scan')
+    : v === 'unscanned' ? 'AIRS was off'
+    : 'the call did not complete'
+  const why = v === 'blocked'
+    ? (fired.length ? fired.join(' · ') : String(inScan?.category ?? outScan?.category ?? 'blocked by policy'))
+    : v === 'passed' ? `${inScan?.category ?? 'benign'} · ${inScan?.action ?? 'allow'}`
+    : v === 'unscanned' ? 'Nothing was inspected'
+    : 'See the fault in the transcript'
+  return (
+    <div className="relative flex-shrink-0 overflow-hidden" style={{ minHeight: 100, background: bandBg(color) }}>
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={bandDots} />
+      {v === 'blocked' && (
+        <motion.div key={message?.id} aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.22)' }}
+                    initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0] }} transition={{ duration: 0.8 }} />
+      )}
+      <Icon aria-hidden="true" strokeWidth={1.3}
+            style={{ position: 'absolute', right: -24, bottom: -40, width: 150, height: 150, color: '#fff', opacity: 0.15, transform: 'rotate(-10deg)' }} />
+      <div className="relative flex items-center gap-3 px-4 py-4">
+        <motion.span key={message?.id} className="grid place-items-center rounded-2xl flex-shrink-0"
+                     initial={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                     style={{ width: 46, height: 46, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.32)' }}>
+          <Icon size={21} style={{ color: '#fff' }} aria-hidden="true" />
+        </motion.span>
+        <div className="min-w-0">
+          <div className="truncate" style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>Verdict · {where}</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 23, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.1, marginTop: 3 }}>
+            {BAND_TITLE[v] ?? 'Verdict'}
+          </div>
+          <div className="truncate" style={{ fontFamily: FONT.prose, fontSize: 12, color: 'rgba(255,255,255,0.92)', marginTop: 2 }}>{why}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The way into the full trace, where everyone can see it.
+ *
+ * The transcript's own "Telemetry" action only appears on hover or on the
+ * selected record, so in practice only the presenter knew it existed. This is
+ * the same drawer, as a card at the top of the evidence — blue, the colour the
+ * transcript action already uses, so the two read as one feature.
+ */
+function TelemetryCta({ t, traceId, onOpen }) {
+  const [hot, setHot] = useState(false)
+  const tone = t.live
+  return (
+    <button type="button" onClick={() => onOpen(traceId)}
+            onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)}
+            className="w-full flex items-center gap-3 rounded-2xl text-left mt-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+            style={{
+              padding: '10px 10px 10px 11px', background: t.panel,
+              border: `1px solid ${hot ? `${tone}88` : `${tone}40`}`,
+              boxShadow: hot ? `0 10px 24px ${tone}2e` : `0 6px 16px ${tone}17`,
+              transition: 'border-color 160ms ease, box-shadow 200ms ease',
+            }}>
+      <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 36, height: 36, background: bandBg(tone), boxShadow: `0 5px 12px ${tone}55` }}>
+        <Activity size={16} style={{ color: '#fff' }} aria-hidden="true" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block" style={{ fontFamily: FONT.display, fontSize: 13.5, fontWeight: 700, color: t.ink }}>Open full telemetry</span>
+        <span className="block truncate" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 1 }}>
+          Timeline · scans · model · raw
+        </span>
+      </span>
+      <span className="grid place-items-center rounded-full flex-shrink-0" aria-hidden="true"
+            style={{ width: 28, height: 28, color: hot ? '#fff' : tone, background: hot ? shade(tone) : `${tone}14`, transition: 'background 140ms ease, color 140ms ease' }}>
+        <ArrowUpRight size={14} />
+      </span>
+    </button>
+  )
+}
+
+/** `empty` replaces the standing-by card when a console brings its own. */
+export function EvidencePane({ t, message, scmUrl, empty, variant = 'classic', onOpenTrace }) {
   const v = verdictOf(message)
   const meta = VERDICT_META[v]
   const up = message?.upload
@@ -677,6 +833,7 @@ export function EvidencePane({ t, message, scmUrl }) {
   const inScan = tel?.inputScan
   const outScan = tel?.outputScan
 
+  if (!message && empty) return empty
   if (!message) {
     return (
       <div className="flex flex-col h-full items-center justify-center px-7 text-center" style={glass(t, { radius: 18 })}>
@@ -716,38 +873,20 @@ export function EvidencePane({ t, message, scmUrl }) {
     .filter(Boolean)
     .concat('dlp')
 
-  return (
-    <div className="h-full overflow-y-auto" style={glass(t, { radius: 18 })}>
-      {/* Verdict — the loudest thing in this column */}
-      <div className="relative px-4 pt-4 pb-4 flex-shrink-0 overflow-hidden" style={{ borderBottom: `1px solid ${t.hairline}` }}>
-        <div className="absolute inset-0 pointer-events-none"
-             style={{ background: `radial-gradient(120% 90% at 50% 0%, ${meta.color}26, transparent 70%)` }} />
-        {v === 'blocked' && (
-          <motion.div className="absolute inset-0 pointer-events-none"
-                      style={{ background: `${t.block}18` }}
-                      initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0] }} transition={{ duration: 0.8 }} />
-        )}
-        <div className="relative">
-          <div style={{ ...LBL, fontSize: 8.5, color: t.inkFaint }}>Verdict</div>
-          <div className="flex items-center gap-2.5 mt-2">
-            <motion.span className="flex items-center justify-center rounded-xl flex-shrink-0"
-                         style={{
-                           width: 38, height: 38, background: `${meta.color}1f`,
-                           border: `1.5px solid ${meta.color}77`, boxShadow: bloom(meta.color, 0.9),
-                         }}
-                         initial={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}>
-              {v === 'blocked' ? <ShieldX size={19} style={{ color: meta.color }} />
-                : v === 'passed' ? <ShieldCheck size={19} style={{ color: meta.color }} />
-                : <AlertTriangle size={19} style={{ color: meta.color }} />}
-            </motion.span>
-            <span style={{
-              fontFamily: FONT.display, fontSize: 25, fontWeight: 700, letterSpacing: '-0.02em',
-              color: meta.color, lineHeight: 1, textShadow: `0 0 24px ${meta.color}66`,
-            }}>
-              {meta.label}
-            </span>
-          </div>
-          {up && (
+  const noteText = up
+              ? (v === 'blocked'
+                  ? 'Blocked on upload. The document was never attached, never sent to the model and is not stored anywhere — only this scan record exists.'
+                  : v === 'unscanned'
+                  ? 'AIRS was off. The file was not inspected before it became chat context.'
+                  : 'Cleared on upload. The extracted text can be attached to a prompt.')
+              : v === 'blocked'
+              ? `Blocked by Prisma AIRS at the ${outScan?.action === 'block' ? 'output' : 'input'} scan. Nothing reached the user.`
+              : v === 'unscanned'
+              ? 'AIRS was off. Nothing was inspected — the clean look means nothing.'
+              : v === 'error'
+              ? (message.content || 'The call did not complete.')
+              : 'Allowed by Prisma AIRS — cleared every scan on the line.'
+  const uploadCard = up ? (
             <div className="flex items-center gap-2 mt-2.5 px-2.5 py-2" style={{ background: t.sunken, borderRadius: 14 }}>
               <FileText size={13} style={{ color: v === 'blocked' ? t.block : t.pass, flexShrink: 0 }} />
               <span className="min-w-0">
@@ -761,26 +900,12 @@ export function EvidencePane({ t, message, scmUrl }) {
                 </span>
               </span>
             </div>
-          )}
-
-          <p style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 8, lineHeight: 1.5 }}>
-            {up
-              ? (v === 'blocked'
-                  ? 'Blocked on upload. The document was never attached, never sent to the model and is not stored anywhere — only this scan record exists.'
-                  : v === 'unscanned'
-                  ? 'AIRS was off. The file was not inspected before it became chat context.'
-                  : 'Cleared on upload. The extracted text can be attached to a prompt.')
-              : v === 'blocked'
-              ? `Blocked by Prisma AIRS at the ${outScan?.action === 'block' ? 'output' : 'input'} scan. Nothing reached the user.`
-              : v === 'unscanned'
-              ? 'AIRS was off. Nothing was inspected — the clean look means nothing.'
-              : v === 'error'
-              ? (message.content || 'The call did not complete.')
-              : 'Allowed by Prisma AIRS — cleared every scan on the line.'}
-          </p>
-        </div>
-      </div>
-
+  ) : null
+  const firedNames = allResults
+    .filter((r) => r.action === 'block' || r.verdict === 'malicious')
+    .map((r) => SERVICE_META[r.detection_service]?.full ?? r.detection_service)
+  const sectionList = (
+    <>
       {up && (up.truncated || up.scanIncomplete) && (
         <div className="mx-3 mt-3 px-3 py-2.5 flex items-start gap-2"
              style={{ background: `${t.warn}14`, borderRadius: 16 }}>
@@ -800,7 +925,8 @@ export function EvidencePane({ t, message, scmUrl }) {
       )}
 
       <Block t={t} title="Detection" count={`${firedCount} of ${allResults.length || 6}`}
-             accent={firedCount ? t.block : t.pass}>
+             accent={firedCount ? t.block : t.pass} icon={ListChecks}
+             sub={firedCount ? firedNames.join(' · ') : `${inScan?.category ?? 'no verdict'} · ${inScan?.action ?? '—'}`}>
 
         {/* category — the headline decision */}
         <div className="flex items-center gap-2.5 px-3 py-2.5 mb-2.5"
@@ -911,7 +1037,7 @@ export function EvidencePane({ t, message, scmUrl }) {
       {message.mcp?.steps?.length > 0 && <McpBlock t={t} mcp={message.mcp} />}
 
       {up?.blockedChunk && (
-        <Block t={t} title="Where it tripped" accent={t.block}>
+        <Block t={t} title="Where it tripped" accent={t.block} icon={FileText} sub={`chunk ${up.blockedChunk.index + 1} of ${up.chunks}`}>
           <p style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.inkDim, marginBottom: 6 }}>
             Chunk {up.blockedChunk.index + 1} of {up.chunks}, from character {up.blockedChunk.start?.toLocaleString()}.
           </p>
@@ -923,7 +1049,7 @@ export function EvidencePane({ t, message, scmUrl }) {
       )}
 
       {inScan && (
-        <Block t={t} title="Identifiers" defaultOpen={false}>
+        <Block t={t} title="Identifiers" defaultOpen={false} icon={Fingerprint} sub="scan · report · tr_id · profile">
           <Row t={t} label="scan_id" value={inScan.scan_id} />
           <Row t={t} label="report" value={inScan.report_id} />
           <Row t={t} label="tr_id" value={inScan.tr_id} />
@@ -947,13 +1073,76 @@ export function EvidencePane({ t, message, scmUrl }) {
       )}
 
       {inScan?.rawResponse && (
-        <Block t={t} title="Raw AIRS response" defaultOpen={false}>
+        <Block t={t} title="Raw AIRS response" defaultOpen={false} icon={Braces} sub="the JSON AIRS returned">
           <pre className="px-2.5 py-2 rounded-lg overflow-auto whitespace-pre-wrap break-all"
                style={{ background: t.codeBg, fontFamily: FONT.mono, fontSize: 9.5, color: t.inkDim, maxHeight: 300, direction: 'ltr' }}>
             {JSON.stringify(outScan?.rawResponse ?? inScan.rawResponse, null, 2)}
           </pre>
         </Block>
       )}
+    </>
+  )
+
+  if (variant === 'band') {
+    return (
+      <LookCtx.Provider value="band">
+        <div className="h-full flex flex-col overflow-hidden" style={glass(t, { radius: 22 })}>
+          <BandVerdict t={t} v={v} message={message} inScan={inScan} outScan={outScan} upload={!!up}
+                       fired={firedNames} />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="px-4 pt-3 pb-3">
+              <p style={{ fontFamily: FONT.prose, fontSize: 12.5, lineHeight: 1.5, color: t.inkDim }}>{noteText}</p>
+              {uploadCard}
+              {message.traceId && onOpenTrace && <TelemetryCta t={t} traceId={message.traceId} onOpen={onOpenTrace} />}
+            </div>
+            {sectionList}
+          </div>
+        </div>
+      </LookCtx.Provider>
+    )
+  }
+
+  return (
+    <div className="h-full overflow-y-auto" style={glass(t, { radius: 18 })}>
+      {/* Verdict — the loudest thing in this column */}
+      <div className="relative px-4 pt-4 pb-4 flex-shrink-0 overflow-hidden" style={{ borderBottom: `1px solid ${t.hairline}` }}>
+        <div className="absolute inset-0 pointer-events-none"
+             style={{ background: `radial-gradient(120% 90% at 50% 0%, ${meta.color}26, transparent 70%)` }} />
+        {v === 'blocked' && (
+          <motion.div className="absolute inset-0 pointer-events-none"
+                      style={{ background: `${t.block}18` }}
+                      initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0] }} transition={{ duration: 0.8 }} />
+        )}
+        <div className="relative">
+          <div style={{ ...LBL, fontSize: 8.5, color: t.inkFaint }}>Verdict</div>
+          <div className="flex items-center gap-2.5 mt-2">
+            <motion.span className="flex items-center justify-center rounded-xl flex-shrink-0"
+                         style={{
+                           width: 38, height: 38, background: `${meta.color}1f`,
+                           border: `1.5px solid ${meta.color}77`, boxShadow: bloom(meta.color, 0.9),
+                         }}
+                         initial={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}>
+              {v === 'blocked' ? <ShieldX size={19} style={{ color: meta.color }} />
+                : v === 'passed' ? <ShieldCheck size={19} style={{ color: meta.color }} />
+                : <AlertTriangle size={19} style={{ color: meta.color }} />}
+            </motion.span>
+            <span style={{
+              fontFamily: FONT.display, fontSize: 25, fontWeight: 700, letterSpacing: '-0.02em',
+              color: meta.color, lineHeight: 1, textShadow: `0 0 24px ${meta.color}66`,
+            }}>
+              {meta.label}
+            </span>
+          </div>
+          {uploadCard}
+
+          <p style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 8, lineHeight: 1.5 }}>
+            {noteText}
+          </p>
+          {message.traceId && onOpenTrace && <TelemetryCta t={t} traceId={message.traceId} onOpen={onOpenTrace} />}
+        </div>
+      </div>
+
+      {sectionList}
     </div>
   )
 }

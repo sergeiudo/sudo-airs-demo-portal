@@ -1,18 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus } from 'lucide-react'
-import { useAttackSimulator } from '../../hooks/useAttackSimulator'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { useAppContext } from '../../context/AppContext'
 import { PromptTelemetryDrawer } from '../../components/api-intercept/PromptTelemetryDrawer'
-import { tokens, FONT, label as LBL, glass, bloom, verdictOf } from './tokens'
+import { tokens, label as LBL, glass, bloom } from './tokens'
 import { InterceptLine } from './InterceptLine'
 import { AttackLibrary } from '../../components/api-intercept/AttackLibrary'
 import { RecordStream } from './RecordStream'
 import { EvidencePane } from './EvidencePane'
 import { Composer } from './Composer'
 import { SessionArchitecture } from './SessionArchitecture'
-import { useModelLabel } from './useModelLabel'
+import { Handle } from './PaneHandle'
+import { useInterceptSession } from './useInterceptSession'
 
 /**
  * ApiIntercept2027 — the console shell.
@@ -23,211 +23,24 @@ import { useModelLabel } from './useModelLabel'
  * the current view rather than instead of it.
  */
 
-const DEFAULT_MODELS = {
-  // Note the `google/` prefix and that this is a global-region model — it is
-  // reached through the OpenAI-compatible endpoint, not the Vertex SDK, so the
-  // catalogue id is not interchangeable with a bare `gemini-…` one.
-  vertex:  'google/gemini-3.5-flash',
-  bedrock: 'anthropic.claude-haiku-4-5-20251001-v1:0',
-  azure:   'gpt-5.4-nano',
-  aigw:    '@sudo-bedrock/us.anthropic.claude-sonnet-5',
-}
-
-const LIMITS = { left: [264, 572], right: [286, 616] }
-
-/** Draggable pane edge. Wide invisible hit area, 1px visible track. */
-function Handle({ t, onDrag, dragging, side }) {
-  const startX = useRef(0)
-  const startW = useRef(0)
-
-  const down = (e) => {
-    e.preventDefault()
-    startX.current = e.clientX
-    startW.current = onDrag.width
-    onDrag.setDragging(true)
-  }
-
-  useEffect(() => {
-    if (!dragging) return
-    const move = (e) => {
-      const delta = side === 'left' ? e.clientX - startX.current : startX.current - e.clientX
-      const [min, max] = LIMITS[side]
-      onDrag.setWidth(Math.min(max, Math.max(min, startW.current + delta)))
-    }
-    const up = () => onDrag.setDragging(false)
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
-  }, [dragging, side, onDrag])
-
-  return (
-    <div onMouseDown={down} className="relative flex-shrink-0 group" style={{ width: 1, cursor: 'col-resize' }}>
-      <div className="absolute inset-y-0 -left-2 -right-2 z-10" />
-      <div className="h-full w-full transition-colors"
-           style={{ background: dragging ? t.block : t.hairline }} />
-      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col justify-center gap-1 pointer-events-none">
-        {[0, 1, 2].map((i) => (
-          <span key={i} className="rounded-full" style={{ width: 2, height: 2, background: dragging ? t.block : t.inkFaint, opacity: dragging ? 1 : 0.5 }} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
 export function ApiIntercept2027() {
-  const { state, dispatch } = useAppContext()
+  const { state } = useAppContext()
   const theme = useProtectionTheme()
   const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
   const isProtected = theme.isProtected
-
-  const [backend, setBackend] = useState('bedrock')
-  const [model, setModel] = useState(DEFAULT_MODELS.bedrock)
-  const [mcp, setMcp] = useState({ enabled: true, server: 'auto' })
-  const [selectedId, setSelectedId] = useState(null)
-  const [traceDrawer, setTraceDrawer] = useState(null)
 
   const [leftW, setLeftW] = useState(330)
   const [rightW, setRightW] = useState(352)
   const [dragL, setDragL] = useState(false)
   const [dragR, setDragR] = useState(false)
 
-  const { messages, isLoading, sendAttack, sendMessage, clearChat } = useAttackSimulator()
-
-  const mcpActive = backend === 'aigw' && mcp.enabled ? mcp : null
-  // The picker's label, not the routing id — see useModelLabel.
-  const modelLabel = useModelLabel(backend, model)
-
-  /**
-   * Every backend opens protected.
-   *
-   * This used to be AI-GW only, on the argument that the API-layer lanes are
-   * best demoed by watching an attack land first. In practice the console was
-   * opening on VULNERABLE and a payload that sailed through read as a broken
-   * demo rather than as the point. Protected is the honest default state of
-   * the product; turning AIRS off is now the deliberate move, in either
-   * direction, from the pill in the top bar or the sidebar toggle.
-   */
-  useEffect(() => { dispatch({ type: 'SET_PROTECTION', payload: true }) }, [dispatch])
-
-  /**
-   * Changing target starts a fresh session.
-   *
-   * A transcript belongs to the thing that produced it. Carrying records across
-   * a switch left the column holding answers from a target that is no longer
-   * selected, the SCM deep link pointing at the previous tenant's console, and
-   * the diagram describing a route none of the visible records took. Clearing
-   * also puts the architecture back on screen, which is the right moment to
-   * explain the new shape.
-   *
-   * Re-clicking the target already selected is not a switch and leaves the
-   * session alone.
-   */
-  const changeBackend = (b) => {
-    if (b === backend) return
-    clearChat()
-    setSelectedId(null)
-    setUploadScan(null)
-    dispatch({ type: 'SET_SCM_URL', payload: null })
-    setBackend(b)
-    setModel(DEFAULT_MODELS[b])
-    dispatch({ type: 'SET_PROTECTION', payload: true })
-  }
-
-  const [translating, setTranslating] = useState(null)
-  const [uploadScan, setUploadScan] = useState(null)
-
-  const fire = useCallback((attack) => sendAttack(attack, backend, model, mcpActive), [sendAttack, backend, model, mcpActive])
-  const send = useCallback((text, doc) => sendMessage(text, backend, model, doc, mcpActive), [sendMessage, backend, model, mcpActive])
-
-  const resend = useCallback((text) => sendMessage(text, backend, model, null, mcpActive), [sendMessage, backend, model, mcpActive])
-
-  /**
-   * Translate a payload for a non-English audience. Deliberately unprotected:
-   * the point is to read the payload, and scanning the translation request
-   * itself would just block it and teach the room nothing.
-   */
-  const translate = useCallback(async (text, language) => {
-    setTranslating(text)
-    try {
-      const r = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `Translate the following text to ${language}. Return ONLY the translated text, nothing else:\n\n${text}`,
-          airsEnabled: false, backend, modelId: model,
-        }),
-      })
-      const d = await r.json()
-      // Fire the translation as a new payload, the way the original console
-      // did. The point of translating an attack is to see whether the
-      // detectors hold in that language — dropping the text into an alert box
-      // ends the demo one step early.
-      const translated = d.chatResponse?.content?.trim() || text
-      send(translated)
-    } catch {
-      // The translation hop is unprotected and off to the side; if it fails,
-      // fire the original rather than stalling on an error dialog.
-      send(text)
-    } finally {
-      setTranslating(null)
-    }
-  }, [backend, model, send])
-
-  // The rail follows the newest turn unless the operator has pinned an older
-  // one by clicking it.
-  const lastAssistant = useMemo(() => [...messages].reverse().find((m) => m.role === 'assistant'), [messages])
-  const selected = useMemo(
-    () => messages.find((m) => m.id === selectedId) ?? lastAssistant ?? null,
-    [messages, selectedId, lastAssistant]
-  )
-  useEffect(() => { setSelectedId(null) }, [messages.length])
-
-  // A file scan is shown in the telemetry pane as its own turn, using the same
-  // renderers as a chat turn, until the next message supersedes it.
-  const uploadTurn = useMemo(() => {
-    if (!uploadScan?.scanDetail) return null
-    const d = uploadScan.scanDetail
-    return {
-      id: 'upload-scan',
-      blocked: !!uploadScan.blocked,
-      verdict: uploadScan.blocked ? 'BLOCKED' : uploadScan.airsEnabled === false ? 'DIRECT' : 'ALLOWED',
-      content: uploadScan.blockReason ?? null,
-      upload: uploadScan,
-      telemetry: {
-        summary: { model: `upload · ${uploadScan.name}` },
-        inputScan: d,
-        outputScan: null,
-        timing: { airs_input_scan_ms: d.latency_ms ?? uploadScan.latencyMs, llm_ms: null, airs_output_scan_ms: null, total_ms: uploadScan.latencyMs },
-        llm: {},
-      },
-    }
-  }, [uploadScan])
-
-  useEffect(() => { setUploadScan(null) }, [messages.length])
-
-  // The upload route answers before the deciding chunk's AIRS report is
-  // fetched; pull it in when it lands so the pane gets its per-service detail.
-  // The server joins its own in-flight fetch — AIRS is not called twice.
-  useEffect(() => {
-    const d = uploadScan?.scanDetail
-    if (!d?.reportPending || !d.report_id) return
-    let live = true
-    fetch(`/api/airs/report?id=${encodeURIComponent(d.report_id)}`)
-      .then((r) => r.json())
-      .catch((err) => ({ data: null, error: err.message }))
-      .then((report) => {
-        if (!live) return
-        setUploadScan((cur) => (cur?.scanDetail?.report_id === d.report_id
-          ? { ...cur, scanDetail: { ...cur.scanDetail, report, reportPending: false } }
-          : cur))
-      })
-    return () => { live = false }
-  }, [uploadScan?.scanDetail?.report_id, uploadScan?.scanDetail?.reportPending])
-
-  const paneMessage = uploadTurn ?? selected
-  const phase = isLoading ? 'inflight' : selected ? 'resolved' : 'idle'
-  const verdict = verdictOf(selected)
-  const blockedStage = selected?.telemetry?.outputScan?.action === 'block' ? 'output' : 'input'
-  const hasRecords = messages.some((m) => m.role === 'user')
+  const {
+    backend, model, setModel, mcp, setMcp, modelLabel,
+    messages, isLoading, clearChat,
+    changeBackend, fire, send, resend, translate, translating,
+    setUploadScan, selected, setSelectedId, traceDrawer, setTraceDrawer,
+    paneMessage, phase, verdict, blockedStage, hasRecords,
+  } = useInterceptSession()
 
   return (
     <div className="relative flex h-full overflow-hidden"

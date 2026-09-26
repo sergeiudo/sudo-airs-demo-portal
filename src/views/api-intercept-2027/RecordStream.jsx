@@ -1,13 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronRight, FileText, ShieldCheck, ShieldX, AlertTriangle, Brain, Wrench,
-  Route, ListTree, Server, Globe, Copy, Check, Activity, Ban, Crosshair,
+  Route, ListTree, Server, Globe, Copy, Check, Activity, Ban, Crosshair, ChevronDown,
 } from 'lucide-react'
 import { Languages, RotateCcw, Loader2 } from 'lucide-react'
 import { FONT, label as LBL, SEVERITY, VERDICT_META, verdictOf, glass, bloom } from './tokens'
 import { SecurityAnalysis } from './SecurityAnalysis'
+import { bandBg, bandDots } from '../home-2027/band'
 import { Markdown } from './Markdown'
+
+/**
+ * Two looks, like the evidence pane: 'classic' (the v1 console) and 'band'
+ * (RuntimeLaunch) — disclosures become cards with a gradient icon, the block
+ * notice takes the verdict band's gradient, labels drop their capitals.
+ */
+const StreamLook = createContext('classic')
+const useBand = () => useContext(StreamLook) === 'band'
 
 // The original console's list, kept verbatim — this is a demo prop for a
 // multilingual room, and a shorter list quietly drops languages someone came
@@ -173,18 +182,30 @@ function FaultNotice({ t, reason }) {
     && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname)
   const hit = FAULT_REMEDIES.find((r) => r.match.test(text))
   const fix = hit && (isLocal ? hit.local : hit.remote)
+  const band = useBand()
 
   return (
     <div className="px-4 py-3 w-full" style={{
       background: `${t.warn}0f`, border: `1px solid ${t.warn}44`,
       borderRadius: 20, borderBottomLeftRadius: 6,
     }}>
+      {band ? (
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 30, height: 30, background: bandBg(t.warn) }}>
+            <AlertTriangle size={14} style={{ color: '#fff' }} aria-hidden="true" />
+          </span>
+          <span style={{ fontFamily: FONT.display, fontSize: 14, fontWeight: 700, color: t.ink }}>
+            {hit ? hit.title : 'The call did not complete'}
+          </span>
+        </div>
+      ) : (
       <div className="flex items-center gap-2 mb-1.5">
         <AlertTriangle size={13} style={{ color: t.warn }} />
         <span style={{ ...LBL, fontSize: 9, color: t.warn }}>
           {hit ? hit.title : 'The call did not complete'}
         </span>
       </div>
+      )}
 
       {text && (
         <p style={{
@@ -219,9 +240,42 @@ function FaultNotice({ t, reason }) {
   )
 }
 
-export function Reveal({ t, icon: Icon, title, count, accent, children, defaultOpen = false }) {
+export function Reveal({ t, icon: Icon, title, count, accent, children, defaultOpen = false, sub }) {
   const [open, setOpen] = useState(defaultOpen)
+  const band = useBand()
   const c = accent || t.inkDim
+  if (band) {
+    // Closed, two cards share a row; open, one takes the full width.
+    return (
+      <div className="rounded-2xl overflow-hidden"
+           style={{
+             flex: open ? '1 1 100%' : '1 1 250px', maxWidth: '100%',
+             background: t.panel, border: `1px solid ${open ? `${c}55` : t.hairline}`,
+             boxShadow: open ? `0 10px 24px ${c}1a` : t.shadowSm,
+             transition: 'border-color 160ms ease, box-shadow 200ms ease',
+           }}>
+        <button onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }} aria-expanded={open}
+                className="w-full flex items-center gap-3 text-left" style={{ padding: '9px 10px' }}>
+          <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 32, height: 32, background: bandBg(c), boxShadow: `0 4px 10px ${c}40` }}>
+            {Icon && <Icon size={15} style={{ color: '#fff' }} aria-hidden="true" />}
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block" style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: t.ink }}>{title}</span>
+            {(sub ?? count) && <span className="block truncate" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 1 }}>{sub ?? count}</span>}
+          </span>
+          <ChevronDown size={14} className="flex-shrink-0" style={{ color: t.inkDim, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} aria-hidden="true" />
+        </button>
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3.5 pb-3">{children}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
   return (
     <div className="rounded-xl overflow-hidden transition-all"
          style={{
@@ -321,7 +375,7 @@ function Reasoning({ t, mcp }) {
   const stopped = mcp.steps.filter((s) => s.blocked || s.kind === 'blocked').length
 
   return (
-    <Reveal t={t} icon={Brain} accent={t.model}
+    <Reveal t={t} icon={Brain} accent={stopped ? t.block : t.model}
             title="Chain of thought"
             count={`${mcp.steps.length} steps · ${tools} tools${stopped ? ` · ${stopped} stopped` : ''}`}>
       <div className="relative pl-4">
@@ -413,6 +467,7 @@ function Reasoning({ t, mcp }) {
  * pillar uses: Heebo, RTL, and the copy translated rather than transliterated.
  */
 function BlockedNotice({ t, backend, stage, telemetry, he }) {
+  const band = useBand()
   const isAigw = backend === 'aigw'
   const heFont = 'Heebo, Inter, sans-serif'
   const stageHe = stage === 'output gate' ? 'שער היציאה' : 'שער הכניסה'
@@ -460,21 +515,33 @@ function BlockedNotice({ t, backend, stage, telemetry, he }) {
       dir={he ? 'rtl' : 'ltr'}
       className="relative overflow-hidden px-5 py-4"
       style={{
-        background: t.block,
+        background: band ? bandBg(t.block) : t.block,
         borderRadius: 26,
         [he ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: 8,
         boxShadow: `0 14px 34px ${t.block}55`,
       }}
     >
-      {/* the reference's faint concentric rings in the corner */}
-      <span className="absolute pointer-events-none" style={{
-        right: -40, top: -40, width: 150, height: 150, borderRadius: '50%',
-        border: '1px solid rgba(255,255,255,0.16)',
-      }} />
-      <span className="absolute pointer-events-none" style={{
-        right: -14, top: -58, width: 150, height: 150, borderRadius: '50%',
-        border: '1px solid rgba(255,255,255,0.12)',
-      }} />
+      {band ? (
+        /* the verdict band's texture and watermark, so the notice and the
+           evidence pane read as the same event */
+        <>
+          <span aria-hidden="true" className="absolute inset-0 pointer-events-none" style={bandDots} />
+          <ShieldX aria-hidden="true" strokeWidth={1.3} className="pointer-events-none"
+                   style={{ position: 'absolute', [he ? 'left' : 'right']: -26, bottom: -46, width: 170, height: 170, color: '#fff', opacity: 0.13, transform: 'rotate(-10deg)' }} />
+        </>
+      ) : (
+        <>
+          {/* the reference's faint concentric rings in the corner */}
+          <span className="absolute pointer-events-none" style={{
+            right: -40, top: -40, width: 150, height: 150, borderRadius: '50%',
+            border: '1px solid rgba(255,255,255,0.16)',
+          }} />
+          <span className="absolute pointer-events-none" style={{
+            right: -14, top: -58, width: 150, height: 150, borderRadius: '50%',
+            border: '1px solid rgba(255,255,255,0.12)',
+          }} />
+        </>
+      )}
 
       <div className="relative flex items-start gap-3">
         <span className="flex items-center justify-center rounded-full flex-shrink-0"
@@ -494,6 +561,8 @@ function BlockedNotice({ t, backend, stage, telemetry, he }) {
                 for Hebrew, so the label drops to Heebo at its natural case. */}
             <div style={he
               ? { fontFamily: heFont, fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }
+              : band
+              ? { fontFamily: FONT.prose, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)', marginBottom: 6 }
               : { ...LBL, fontSize: 8, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>
               {contextLabel}
             </div>
@@ -529,6 +598,7 @@ function Record({ t, user, assistant, onSelect, selected, onOpenTrace, onResend,
   const heOut = hasHebrew(assistant?.content)
   const detected = detectorKeys(assistant?.telemetry?.summary?.threats_detected ?? assistant?.telemetry?.inputScan?.prompt_detected)
   const time = new Date(user?.timestamp ?? Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const band = useBand()
 
   return (
     <motion.div
@@ -640,7 +710,11 @@ function Record({ t, user, assistant, onSelect, selected, onOpenTrace, onResend,
                       style={{ background: `${meta.color}1a`, border: `1px solid ${meta.color}55` }}>
                   {v === 'passed' ? <ShieldCheck size={10} style={{ color: meta.color }} />
                     : <AlertTriangle size={10} style={{ color: meta.color }} />}
-                  <span style={{ ...LBL, fontSize: 8.5, color: meta.color }}>{meta.label}</span>
+                  <span style={band
+                    ? { fontFamily: FONT.prose, fontSize: 11, fontWeight: 700, color: meta.color }
+                    : { ...LBL, fontSize: 8.5, color: meta.color }}>
+                    {band ? meta.label.charAt(0) + meta.label.slice(1).toLowerCase() : meta.label}
+                  </span>
                 </span>
               )}
               {/* Which target answered. A session can legitimately hold several
@@ -648,7 +722,7 @@ function Record({ t, user, assistant, onSelect, selected, onOpenTrace, onResend,
                   the pillar — but then each record has to say which it was. */}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
                     style={{
-                      fontFamily: FONT.mono, fontSize: 9, color: t.inkDim,
+                      fontFamily: band ? FONT.prose : FONT.mono, fontSize: band ? 11 : 9, color: t.inkDim,
                       background: t.sunken, border: `1px solid ${t.hairline}`,
                     }}>
                 <Crosshair size={9} style={{ color: t.inkFaint }} />
@@ -661,9 +735,11 @@ function Record({ t, user, assistant, onSelect, selected, onOpenTrace, onResend,
               )}
             </div>
 
-            {/* evidence, folded away */}
+            {/* evidence, folded away. The band look drops Security analysis:
+                the evidence pane beside the transcript and the telemetry drawer
+                already carry all of it, so under every reply it was a third copy. */}
             <div className="w-full mt-2 flex flex-wrap items-start gap-1.5">
-              {assistant.telemetry?.inputScan && (
+              {!band && assistant.telemetry?.inputScan && (
                 <Reveal t={t} icon={ShieldCheck} title="Security analysis" accent={meta.color}
                         count={assistant.telemetry.inputScan.profile_name}>
                   <SecurityAnalysis t={t} telemetry={assistant.telemetry}
@@ -679,7 +755,15 @@ function Record({ t, user, assistant, onSelect, selected, onOpenTrace, onResend,
   )
 }
 
-export function RecordStream({ t, messages, isLoading, onSelect, selectedId, onOpenTrace, empty, onResend, onTranslate, translating, backend }) {
+export function RecordStream({ variant = 'classic', ...props }) {
+  return (
+    <StreamLook.Provider value={variant}>
+      <Stream {...props} band={variant === 'band'} />
+    </StreamLook.Provider>
+  )
+}
+
+function Stream({ t, messages, isLoading, onSelect, selectedId, onOpenTrace, empty, onResend, onTranslate, translating, backend, band }) {
   const endRef = useRef(null)
 
   const records = useMemo(() => {
@@ -732,7 +816,9 @@ export function RecordStream({ t, messages, isLoading, onSelect, selectedId, onO
                          animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
                          transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }} />
           ))}
-          <span style={{ ...LBL, fontSize: 9.5, color: t.live }}>On the line</span>
+          <span style={band ? { fontFamily: FONT.prose, fontSize: 12, fontWeight: 600, color: t.live } : { ...LBL, fontSize: 9.5, color: t.live }}>
+            {band ? 'On the line…' : 'On the line'}
+          </span>
         </div>
       )}
       <div ref={endRef} />

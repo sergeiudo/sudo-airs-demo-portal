@@ -1,8 +1,9 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Paperclip, X, Loader2, ShieldCheck, ShieldX, AlertTriangle, Zap, Shuffle } from 'lucide-react'
 import { FileDropModal, DropOverlay, useDropTarget } from '../../components/upload/FileDropZone'
 import { FONT, label as LBL, glass, bloom } from './tokens'
+import { useAttachment } from './useAttachment'
 
 /**
  * Quick prompts. Two pools rather than one flat list, because a draw that comes
@@ -45,7 +46,7 @@ const PAYLOAD_PROMPTS = [
  * Deliberately a tint and a dot rather than the full accent: nothing has been
  * intercepted yet, and vermilion at full strength belongs to a real verdict.
  */
-function drawSuggestions() {
+export function drawSuggestions() {
   const pick = (arr, n) => [...arr].sort(() => Math.random() - 0.5).slice(0, n)
   const drawn = [
     ...pick(BENIGN_PROMPTS, 1).map((text) => ({ text, kind: 'benign' })),
@@ -64,55 +65,20 @@ function drawSuggestions() {
  */
 export function Composer({ t, isProtected, isLoading, onSend, backend, model, onScan }) {
   const [text, setText] = useState('')
-  const [attachment, setAttachment] = useState(null)
-  const [busy, setBusy] = useState(false)
   const [dropOpen, setDropOpen] = useState(false)
   const [focus, setFocus] = useState(false)
   const taRef = useRef(null)
-
-  const uploadFile = useCallback(async (file) => {
-    setBusy(true)
-    setAttachment({ name: file.name, status: 'scanning' })
-    try {
-      const b64 = await new Promise((res, rej) => {
-        const fr = new FileReader()
-        fr.onload = () => res(String(fr.result).split(',')[1])
-        fr.onerror = rej
-        fr.readAsDataURL(file)
-      })
-      const r = await fetch('/api/upload/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name, dataBase64: b64, airsEnabled: isProtected }),
-      })
-      const d = await r.json()
-      setAttachment({ ...d, status: d.error ? 'error' : d.blocked ? 'blocked' : d.airsEnabled === false ? 'unscanned' : 'clean' })
-      // A file scan is a real AIRS verdict — push it to the telemetry pane so a
-      // blocked upload is as inspectable as a blocked prompt.
-      onScan?.(d)
-    } catch (e) {
-      setAttachment({ name: file.name, status: 'error', error: String(e?.message || e).slice(0, 120) })
-    } finally {
-      setBusy(false)
-    }
-  }, [isProtected])
+  const { attachment, busy, pending, doc, uploadFile, clear } = useAttachment({ isProtected, onScan })
 
   const { dragging, handlers } = useDropTarget(uploadFile, { enabled: !isLoading && !busy })
-  const pending = busy || attachment?.status === 'scanning'
   const canSend = text.trim() && !isLoading && !pending
 
   const submit = (e) => {
     e?.preventDefault()
     if (!canSend) return
-    const doc = (attachment?.status === 'clean' || attachment?.status === 'unscanned') && attachment.text
-      ? {
-          name: attachment.name, text: attachment.text, kind: attachment.kind,
-          pages: attachment.pages, chars: attachment.chars,
-          scanned: attachment.status === 'clean', scanId: attachment.scanId ?? null,
-        }
-      : null
     onSend(text.trim(), doc)
     setText('')
-    setAttachment(null)
+    clear()
     if (taRef.current) taRef.current.style.height = 'auto'
   }
 
@@ -142,7 +108,7 @@ export function Composer({ t, isProtected, isLoading, onSend, backend, model, on
                 style={{ ...LBL, fontSize: 8, color: t.inkDim }} title="Show this scan in telemetry">
           Details
         </button>
-        <button onClick={() => { setAttachment(null); onScan?.(null) }} style={{ color: t.inkFaint }} title="Remove">
+        <button onClick={() => { clear(); onScan?.(null) }} style={{ color: t.inkFaint }} title="Remove">
           <X size={12} />
         </button>
       </motion.div>
