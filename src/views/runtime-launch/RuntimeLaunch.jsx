@@ -7,7 +7,7 @@ import { tokens, glass } from '../api-intercept-2027/tokens'
 import { InterceptLine } from '../api-intercept-2027/InterceptLine'
 import { RecordStream } from '../api-intercept-2027/RecordStream'
 import { EvidencePane } from '../api-intercept-2027/EvidencePane'
-import { SessionArchitecture } from '../api-intercept-2027/SessionArchitecture'
+import { LaunchArchitecture } from './LaunchArchitecture'
 import { Handle } from '../api-intercept-2027/PaneHandle'
 import { useInterceptSession } from '../api-intercept-2027/useInterceptSession'
 import { HOME_PILLARS } from '../home-2027/homeData'
@@ -117,8 +117,8 @@ export function RuntimeLaunch() {
             translating={translating}
             backend={backend}
             variant="band"
-            empty={<SessionArchitecture t={t} backend={backend} model={modelLabel} modelId={model}
-                                        isProtected={isProtected} mcpEnabled={mcp.enabled} />}
+            empty={<LaunchArchitecture t={t} backend={backend} model={modelLabel} modelId={model}
+                                       isProtected={isProtected} mcpEnabled={mcp.enabled} />}
           />
 
           <LaunchComposer
