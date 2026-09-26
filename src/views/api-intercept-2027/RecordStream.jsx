@@ -15,7 +15,7 @@ import { Markdown } from './Markdown'
  * (RuntimeLaunch) — disclosures become cards with a gradient icon, the block
  * notice takes the verdict band's gradient, labels drop their capitals.
  */
-const StreamLook = createContext('classic')
+export const StreamLook = createContext('classic')
 const useBand = () => useContext(StreamLook) === 'band'
 
 // The original console's list, kept verbatim — this is a demo prop for a

@@ -177,7 +177,7 @@ function GroupCard({ t, group, open, onToggle, inUse, children }) {
  * A footnote row under the picker — collapsed to one line, because it is a
  * footnote until the moment it is the whole problem.
  */
-function Footnote({ t, icon: Icon, tone, title, children }) {
+export function Footnote({ t, icon: Icon, tone, title, children }) {
   const [open, setOpen] = useState(false)
   const ink = t.isLight ? shade(tone, 0.3) : tone
   return (
@@ -202,7 +202,7 @@ function Footnote({ t, icon: Icon, tone, title, children }) {
   )
 }
 
-function CopyCmd({ t, cmd }) {
+export function CopyCmd({ t, cmd }) {
   const [done, setDone] = useState(false)
   return (
     <div className="flex items-center gap-2 mt-1.5 rounded-lg px-2.5 py-1.5" style={{ background: t.codeBg, border: `1px solid ${t.hairline}` }}>

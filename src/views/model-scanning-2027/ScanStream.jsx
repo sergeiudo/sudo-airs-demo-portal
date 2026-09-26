@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Ban, ShieldCheck, AlertTriangle, Biohazard, Scale, Link2, FileBox, Copy, Check, RotateCcw,
-  ExternalLink, ListChecks, BookOpen, ChevronRight, Crosshair, History,
+  ExternalLink, ListChecks, BookOpen, ChevronRight, Crosshair, History, ShieldX,
 } from 'lucide-react'
 import { FONT, label as LBL, bloom } from '../api-intercept-2027/tokens'
 import { Reveal, Chip, Copyable } from '../api-intercept-2027/RecordStream'
 import { Markdown } from '../api-intercept-2027/Markdown'
+import { bandBg, bandDots, shade } from '../home-2027/band'
 import {
   LIBRARY, KIND_TONE, SCAN_META, scanVerdict, ruleCounts, groupViolations, threatSignals,
   scanFault, fmtBytes, isTempCopy,
@@ -24,6 +25,15 @@ import {
  */
 
 const basename = (p) => String(p ?? '').split('/').pop()
+
+/**
+ * `variant="band"` — the launch design (SupplyChainLaunch): the block notice on
+ * the verdict band's gradient, prose instead of capitals, and no "Rule findings"
+ * under each scan — that detail lives in the launch evidence pane now (one home
+ * per piece of evidence). The v1 console passes nothing and is unchanged.
+ */
+const ScanLook = createContext('classic')
+const useBand = () => useContext(ScanLook) === 'band'
 
 function Action({ t, icon: Icon, children, onClick, href, tone, title }) {
   const style = { fontFamily: FONT.prose, fontSize: 10, fontWeight: 500, color: tone || t.inkFaint, opacity: tone ? 1 : 0.8 }
@@ -66,6 +76,7 @@ function Actions({ t, rec, onRescan, busy }) {
 
 /** Blocked: an incident note from the control, not an error from the app. */
 function BlockedNotice({ t, result, groups, uploadName }) {
+  const band = useBand()
   const { total, failed } = ruleCounts(result)
   const threats = groups.filter((g) => g.kind === 'threat')
   const policy = groups.filter((g) => g.kind === 'policy')
@@ -94,9 +105,21 @@ function BlockedNotice({ t, result, groups, uploadName }) {
     <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 340, damping: 26 }}
                 className="relative overflow-hidden px-5 py-4 w-full"
-                style={{ background: t.block, borderRadius: 26, borderBottomLeftRadius: 8, boxShadow: `0 14px 34px ${t.block}55` }}>
-      <span className="absolute pointer-events-none" style={{ right: -40, top: -40, width: 150, height: 150, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.16)' }} />
-      <span className="absolute pointer-events-none" style={{ right: -14, top: -58, width: 150, height: 150, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)' }} />
+                style={{ background: band ? bandBg(t.block) : t.block, borderRadius: 26, borderBottomLeftRadius: 8, boxShadow: `0 14px 34px ${t.block}55` }}>
+      {band ? (
+        <>
+          <span aria-hidden="true" className="absolute inset-0 pointer-events-none" style={bandDots} />
+          {React.createElement(threats.length ? Biohazard : ShieldX, {
+            'aria-hidden': true, strokeWidth: 1.3, className: 'pointer-events-none',
+            style: { position: 'absolute', right: -26, bottom: -46, width: 170, height: 170, color: '#fff', opacity: 0.13, transform: 'rotate(-10deg)' },
+          })}
+        </>
+      ) : (
+        <>
+          <span className="absolute pointer-events-none" style={{ right: -40, top: -40, width: 150, height: 150, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.16)' }} />
+          <span className="absolute pointer-events-none" style={{ right: -14, top: -58, width: 150, height: 150, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)' }} />
+        </>
+      )}
       <div className="relative flex items-start gap-3">
         <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 30, height: 30, background: 'rgba(255,255,255,0.18)' }}>
           <Ban size={16} color="#fff" />
@@ -104,7 +127,9 @@ function BlockedNotice({ t, result, groups, uploadName }) {
         <div className="min-w-0">
           <p style={{ fontFamily: FONT.display, fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: '#fff' }}>{headline}</p>
           <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.22)' }}>
-            <div style={{ ...LBL, fontSize: 8, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>Model security · scan context</div>
+            <div style={band
+              ? { fontFamily: FONT.prose, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)', marginBottom: 6 }
+              : { ...LBL, fontSize: 8, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>Model security · scan context</div>
             <ul className="space-y-1.5">
               {facts.map((f) => (
                 <li key={f} className="flex items-start gap-2"
@@ -121,11 +146,21 @@ function BlockedNotice({ t, result, groups, uploadName }) {
 }
 
 function AllowedNotice({ t, result }) {
+  const band = useBand()
   const { total } = ruleCounts(result)
   return (
     <div className="px-4 py-3 w-full"
-         style={{ background: t.sunken, border: `1px solid ${t.pass}44`, borderRadius: 20, borderBottomLeftRadius: 6 }}>
+         style={{ background: band ? t.panel : t.sunken, border: `1px solid ${t.pass}44`, borderRadius: 20, borderBottomLeftRadius: 6, boxShadow: band ? `0 8px 20px ${t.pass}17` : 'none' }}>
+      {band ? (
+        <div className="flex items-center gap-2.5">
+          <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 30, height: 30, background: bandBg(t.pass), boxShadow: `0 4px 10px ${t.pass}45` }}>
+            <ShieldCheck size={15} style={{ color: '#fff' }} aria-hidden="true" />
+          </span>
+          <p style={{ fontFamily: FONT.display, fontSize: 14, fontWeight: 700, color: t.ink }}>Cleared — safe to load.</p>
+        </div>
+      ) : (
       <p style={{ fontFamily: FONT.display, fontSize: 14, fontWeight: 700, color: t.ink }}>Cleared — safe to load.</p>
+      )}
       <p style={{ fontFamily: FONT.prose, fontSize: 12.5, lineHeight: 1.6, color: t.inkDim, marginTop: 3 }}>
         All {total} rules in <span style={{ fontFamily: FONT.mono, fontSize: 11.5 }}>{result.security_group_name ?? 'the security group'}</span> passed
         across {result.total_files_scanned ?? '—'} file{result.total_files_scanned === 1 ? '' : 's'}. No threat signatures, and license,
@@ -153,7 +188,7 @@ function InFlight({ t, rec }) {
                      transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }} />
       ))}
       <div className="min-w-0">
-        <div style={{ ...LBL, fontSize: 9.5, color: t.live }}>Scanning</div>
+        <div style={useBand() ? { fontFamily: FONT.prose, fontSize: 12, fontWeight: 700, color: t.live } : { ...LBL, fontSize: 9.5, color: t.live }}>Scanning</div>
         <div style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkFaint }}>
           {rec.source === 'local' ? 'Scanning on this host, then evaluating the findings against the security group…'
                                   : 'Prisma AIRS is reading the repo and evaluating every rule in the security group…'}
@@ -166,12 +201,24 @@ function InFlight({ t, rec }) {
 /** A failed scan diagnoses itself, like the runtime console's FaultNotice. */
 function FaultNotice({ t, error }) {
   const f = scanFault(error)
+  const band = useBand()
   return (
     <div className="px-4 py-3 w-full" style={{ background: `${t.warn}0f`, border: `1px solid ${t.warn}44`, borderRadius: 20, borderBottomLeftRadius: 6 }}>
+      {band ? (
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 30, height: 30, background: bandBg(t.warn) }}>
+            <AlertTriangle size={14} style={{ color: '#fff' }} aria-hidden="true" />
+          </span>
+          <span style={{ fontFamily: FONT.display, fontSize: 14, fontWeight: 700, color: t.ink }}>
+            {f.title}{error?.status ? <span style={{ fontFamily: FONT.mono, fontSize: 11, fontWeight: 500, color: t.inkDim }}> · HTTP {error.status}</span> : ''}
+          </span>
+        </div>
+      ) : (
       <div className="flex items-center gap-2 mb-1.5">
         <AlertTriangle size={13} style={{ color: t.warn }} />
         <span style={{ ...LBL, fontSize: 9, color: t.warn }}>{f.title}{error?.status ? ` · HTTP ${error.status}` : ''}</span>
       </div>
+      )}
       {error?.message && (
         <p style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: 1.5, color: t.inkDim, overflowWrap: 'anywhere' }}>{error.message}</p>
       )}
@@ -316,6 +363,10 @@ function Record({ t, rec, selected, onSelect, onRescan, busy }) {
   // The library's verdicts are predictions. When a scan disagrees, say so —
   // that is exactly how the old "Clean Demo" went stale unnoticed.
   const drift = preset && (v === 'allowed' || v === 'blocked') && v.toUpperCase() !== preset.expect
+  const band = useBand()
+  const pill = (tone) => (band
+    ? { fontFamily: FONT.prose, fontSize: 10.5, fontWeight: 600, lineHeight: '18px', color: t.isLight ? shade(tone, 0.25) : tone, background: `${tone}17`, padding: '0 8px' }
+    : { ...LBL, fontSize: 7.5, color: tone, background: `${tone}1c`, border: `1px solid ${tone}44` })
 
   return (
     <motion.div layout
@@ -331,17 +382,15 @@ function Record({ t, rec, selected, onSelect, onRescan, busy }) {
         <div className="flex flex-col items-end" style={{ maxWidth: '74%' }}>
           {rec.fromScm && (
             <div className="flex items-center gap-1.5 mb-1">
-              <span className="px-1.5 rounded-full inline-flex items-center gap-1"
-                    style={{ ...LBL, fontSize: 7.5, color: t.live, background: `${t.live}14`, border: `1px solid ${t.live}40` }}>
-                <History size={8} /> from SCM history
+              <span className="px-1.5 rounded-full inline-flex items-center gap-1" style={pill(t.live)}>
+                <History size={band ? 10 : 8} /> from SCM history
               </span>
             </div>
           )}
           {preset && (
             <div className="flex items-center gap-1.5 mb-1">
-              <span style={{ fontFamily: FONT.display, fontSize: 10.5, fontWeight: 700, color: t.inkDim }}>{preset.title}</span>
-              <span className="px-1.5 rounded-full"
-                    style={{ ...LBL, fontSize: 7.5, color: expectTone, background: `${expectTone}1c`, border: `1px solid ${expectTone}44` }}>
+              <span style={{ fontFamily: FONT.display, fontSize: band ? 11.5 : 10.5, fontWeight: 700, color: t.inkDim }}>{preset.title}</span>
+              <span className="px-1.5 rounded-full" style={pill(expectTone)}>
                 expect {preset.expect.toLowerCase()}
               </span>
             </div>
@@ -382,11 +431,13 @@ function Record({ t, rec, selected, onSelect, onRescan, busy }) {
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full"
                       style={{ background: `${meta.color}1a`, border: `1px solid ${meta.color}55` }}>
                   {v === 'allowed' ? <ShieldCheck size={10} style={{ color: meta.color }} /> : <AlertTriangle size={10} style={{ color: meta.color }} />}
-                  <span style={{ ...LBL, fontSize: 8.5, color: meta.color }}>{meta.label}</span>
+                  <span style={band ? { fontFamily: FONT.prose, fontSize: 11, fontWeight: 700, color: meta.color } : { ...LBL, fontSize: 8.5, color: meta.color }}>
+                    {band ? meta.label.charAt(0) + meta.label.slice(1).toLowerCase() : meta.label}
+                  </span>
                 </span>
               )}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
-                    style={{ fontFamily: FONT.mono, fontSize: 9, color: t.inkDim, background: t.sunken, border: `1px solid ${t.hairline}` }}>
+                    style={{ fontFamily: band ? FONT.prose : FONT.mono, fontSize: band ? 11 : 9, color: t.inkDim, background: t.sunken, border: `1px solid ${t.hairline}` }}>
                 <Crosshair size={9} style={{ color: t.inkFaint }} />
                 {isHf ? 'Hugging Face' : 'local file'}
               </span>
@@ -407,7 +458,7 @@ function Record({ t, rec, selected, onSelect, onRescan, busy }) {
             </p>
           )}
 
-          {groups.length > 0 && (
+          {!band && groups.length > 0 && (
             <div className="w-full mt-2">
               <Reveal t={t} icon={ListChecks} title="Rule findings" accent={meta.color}
                       count={`${groups.length} rule${groups.length === 1 ? '' : 's'} · ${findings} finding${findings === 1 ? '' : 's'}`}>
@@ -416,7 +467,7 @@ function Record({ t, rec, selected, onSelect, onRescan, busy }) {
             </div>
           )}
 
-          {r?.violations_error && (
+          {!band && r?.violations_error && (
             <p className="mt-2 px-3 py-2 rounded-xl" style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.inkDim, background: `${t.warn}12` }}>
               The verdict is real, but the rule details could not be fetched: <span style={{ fontFamily: FONT.mono }}>{r.violations_error}</span>
             </p>
@@ -427,7 +478,15 @@ function Record({ t, rec, selected, onSelect, onRescan, busy }) {
   )
 }
 
-export function ScanStream({ t, records, selectedId, onSelect, onRescan, busy, empty }) {
+export function ScanStream({ variant = 'classic', ...props }) {
+  return (
+    <ScanLook.Provider value={variant}>
+      <Stream {...props} />
+    </ScanLook.Provider>
+  )
+}
+
+function Stream({ t, records, selectedId, onSelect, onRescan, busy, empty }) {
   const endRef = useRef(null)
   const statusKey = records.map((r) => r.status).join()
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [records.length, statusKey])

@@ -14,6 +14,8 @@ import { useModelLabel } from './useModelLabel'
  * the look is read from context so every section switches together.
  */
 const LookCtx = createContext('classic')
+// Exported so another pillar's evidence pane can render these Blocks in the band look.
+export { LookCtx as EvidenceLook }
 
 /**
  * EvidencePane — proof for the selected turn.

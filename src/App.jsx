@@ -6,6 +6,7 @@ import { ApiIntercept2027 } from './views/api-intercept-2027/ApiIntercept2027'
 import { RuntimeLaunch } from './views/runtime-launch/RuntimeLaunch'
 import { ModelScanningView } from './views/ModelScanningView'
 import { ModelScanning2027 } from './views/model-scanning-2027/ModelScanning2027'
+import { SupplyChainLaunch } from './views/supply-chain-launch/SupplyChainLaunch'
 import { RedTeamingView } from './views/RedTeamingView'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeViewV2 } from './views/HomeViewV2'
@@ -31,6 +32,9 @@ const HOME_HERO = new URLSearchParams(window.location.search).get('home') === 'h
 // Same for the runtime console: the launcher-style one by default, the
 // previous New console at /?runtime=v1.
 const RUNTIME_V1 = new URLSearchParams(window.location.search).get('runtime') === 'v1'
+// And the AI Supply Chain console: launch design by default, the previous New
+// console at /?scan=v1.
+const SCAN_V1 = new URLSearchParams(window.location.search).get('scan') === 'v1'
 
 function AppContent() {
   const { state } = useAppContext()
@@ -52,7 +56,7 @@ function AppContent() {
   // function would get a new identity every render and remount the console —
   // wiping its transcript on any context change, even an AIRS toggle.
   const intercept = !isNew ? <ApiInterceptView /> : RUNTIME_V1 ? <ApiIntercept2027 /> : <RuntimeLaunch />
-  const modelScanning = isNew ? <ModelScanning2027 /> : <ModelScanningView />
+  const modelScanning = !isNew ? <ModelScanningView /> : SCAN_V1 ? <ModelScanning2027 /> : <SupplyChainLaunch />
 
   // Must come before every other branch: this window has no sidebar, no
   // top bar and no MainLayout at all.
@@ -81,8 +85,11 @@ function AppContent() {
   }
 
   // Views that render their own unified header (PillarHeader) in the New
-  // design. One pillar so far; the rest follow.
-  const unifiedHeader = isNew && state.activeView === 'apiIntercept' && !RUNTIME_V1
+  // design. Add a pillar here when its launch-design console lands.
+  const unifiedHeader = isNew && (
+    (state.activeView === 'apiIntercept' && !RUNTIME_V1) ||
+    (state.activeView === 'modelScanning' && !SCAN_V1)
+  )
 
   return (
     <MainLayout viewKey={state.activeView} hideTopBar={unifiedHeader}>
