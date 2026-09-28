@@ -40,12 +40,17 @@ import { shade, bandBg, bandDots, bandGlass } from './band'
  * two states. Collapsed, a click anywhere on the label expands it again;
  * expanded, the label opens the release sheet as before. Collapsing never
  * hides news — the refresh tile's ping and "N new since your last visit"
- * stay on the band. The choice is remembered per browser, and the ticker
+ * stay on the band. It starts collapsed; an explicit expand or collapse is
+ * remembered per browser (never written on load), and the ticker
  * stops while it is hidden.
  */
 
-const COLLAPSED_KEY = 'sudo-airs.home.wireCollapsed'
-const readCollapsed = () => { try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false } }
+// Collapsed by default. Only a click writes the key — and it is a new key: the
+// first version wrote its state on every load, so every earlier visitor has a
+// stored "expanded" that was never a choice.
+const WIRE_KEY = 'sudo-airs.home.wireState'
+const readCollapsed = () => { try { return localStorage.getItem(WIRE_KEY) !== 'expanded' } catch { return true } }
+const rememberWire = (collapsed) => { try { localStorage.setItem(WIRE_KEY, collapsed ? 'collapsed' : 'expanded') } catch { /* private mode */ } }
 
 const SPEED = 36          // px per second
 const PREVIEW_W = 384
@@ -308,7 +313,6 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const bandRef = useRef(null)
   const [bandW, setBandW] = useState(0)
-  useEffect(() => { try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0') } catch { /* private mode */ } }, [collapsed])
   // The collapsed width is the band's own — measured, since the label hides on small screens.
   useLayoutEffect(() => {
     const el = bandRef.current
@@ -319,7 +323,8 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  const toggle = () => { setPreview(null); onSpot(null); setCollapsed((c) => !c) }
+  const setWire = (next) => { rememberWire(next); setCollapsed(next) }
+  const toggle = () => { setPreview(null); onSpot(null); setWire(!collapsed) }
   const peekAt = (el) => {
     if (!el) { setPeek(null); return }
     const root = rootRef.current?.getBoundingClientRect()
@@ -411,7 +416,7 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
                          refreshError={refreshError} done={justRefreshed} fresh={feed.fresh} reduce={reduce} onRefresh={onRefresh} onPeek={peekAt} />
           )}
 
-          <button type="button" onClick={() => (collapsed ? setCollapsed(false) : open(0))}
+          <button type="button" onClick={() => (collapsed ? setWire(false) : open(0))}
                   aria-label={`What's new in Prisma AIRS: ${feed.total} releases, ${spanLabel(feed)}${feed.fresh ? `, ${feed.fresh} new since your last visit` : ''}. ${collapsed ? 'Show the release wire.' : 'Open to browse.'}`}
                   onFocus={(e) => { e.currentTarget.style.outline = '2px solid #fff'; e.currentTarget.style.outlineOffset = '4px' }}
                   onBlur={(e) => { e.currentTarget.style.outline = 'none' }}
