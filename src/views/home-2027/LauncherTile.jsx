@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, Archive } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { ago } from './homeData'
 import { shade, bandBg, bandDots } from './band'
@@ -20,6 +20,11 @@ import { shade, bandBg, bandDots } from './band'
  *
  * The band itself (colour, texture, contrast rule) lives in band.js, shared
  * with the pillar consoles.
+ *
+ * `spotlight` lifts a tile from outside — the release wire sets it while a
+ * release in that pillar's product area is under the pointer. It lights the
+ * tile like hover does, but leaves the Launch button at rest: nothing here is
+ * about to be launched.
  */
 
 const focusRing = (t) => `0 0 0 2px ${t.panel}, 0 0 0 4px ${t.live}`
@@ -53,9 +58,25 @@ function BandPill({ children, color, solid }) {
   )
 }
 
-export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpened }) {
+/**
+ * The legacy stamp. Still grey — colour on this portal means "the live thing",
+ * the one claim a superseded pillar must not make — but solid and a size up,
+ * with an icon, so it reads on a grey band from the back of the room. The
+ * glass pill it replaced all but disappeared there.
+ */
+function LegacyStamp({ ink }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full"
+          style={{ ...LBL, fontSize: 10, padding: '4px 10px 4px 8px', color: ink, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.22)' }}>
+      <Archive size={12} strokeWidth={2.4} aria-hidden="true" /> Legacy
+    </span>
+  )
+}
+
+export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpened, spotlight = false }) {
   const reduce = useReducedMotion()
   const [hot, hotProps] = useHot()
+  const lit = hot || spotlight
   const Icon = pillar.icon
   const legacy = !!pillar.legacy
   const tone = legacy ? '#94a3b8' : pillar.accent
@@ -66,7 +87,7 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
   return (
     <motion.article
       initial={reduce ? false : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: hot && !reduce ? -6 : 0 }}
+      animate={{ opacity: 1, y: lit && !reduce ? -6 : 0 }}
       transition={{
         opacity: { delay: reduce ? 0 : 0.05 * index, duration: 0.35, ease: [0.22, 1, 0.36, 1] },
         y: { type: 'spring', stiffness: 380, damping: 28 },
@@ -75,10 +96,10 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
       className="relative flex flex-col overflow-hidden h-full"
       style={{
         background: t.panel, borderRadius: 24,
-        border: `1px solid ${hot ? `${tone}70` : t.glassEdge}`,
-        boxShadow: hot ? `0 24px 50px ${tone}3a, 0 0 0 1px ${tone}2e, ${t.shadowSm}` : t.shadow,
+        border: `1px solid ${lit ? `${tone}70` : t.glassEdge}`,
+        boxShadow: lit ? `0 24px 50px ${tone}3a, 0 0 0 1px ${tone}2e, ${t.shadowSm}` : t.shadow,
         transition: 'border-color 200ms ease, box-shadow 220ms ease',
-        zIndex: hot ? 3 : 'auto',
+        zIndex: lit ? 3 : 'auto',
       }}
     >
       <DetailsButton t={t} pillar={pillar} onOpen={onOpen} />
@@ -89,11 +110,11 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
       <div className="relative flex-shrink-0 overflow-hidden pointer-events-none" style={{ height: 'clamp(138px, 17vh, 196px)', background: bandBg(tone) }}>
         <div aria-hidden="true" className="absolute inset-0" style={bandDots} />
         <div aria-hidden="true" className="absolute inset-0"
-             style={{ background: 'radial-gradient(circle at 85% 10%, rgba(255,255,255,0.28), transparent 60%)', opacity: hot ? 1 : 0.35, transition: 'opacity 240ms ease' }} />
+             style={{ background: 'radial-gradient(circle at 85% 10%, rgba(255,255,255,0.28), transparent 60%)', opacity: lit ? 1 : 0.35, transition: 'opacity 240ms ease' }} />
         <Icon aria-hidden="true" strokeWidth={1.4}
               style={{
                 position: 'absolute', right: -26, bottom: -34, width: 'clamp(150px, 19vh, 210px)', height: 'clamp(150px, 19vh, 210px)', color: '#fff', opacity: 0.17,
-                transform: hot && !reduce ? 'rotate(-4deg) scale(1.07)' : 'rotate(-10deg)', transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+                transform: lit && !reduce ? 'rotate(-4deg) scale(1.07)' : 'rotate(-10deg)', transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
               }} />
 
         <div className="relative h-full flex flex-col p-4">
@@ -107,7 +128,7 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
               </div>
             )}
             <div className="ml-auto flex items-center gap-1.5">
-              {legacy && <BandPill>Legacy</BandPill>}
+              {legacy && <LegacyStamp ink={shade(tone, 0.55)} />}
               {pillar.news.length > 0 && <BandPill solid color={sh}>{pillar.news.length} new</BandPill>}
             </div>
           </div>

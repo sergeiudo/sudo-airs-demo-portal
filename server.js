@@ -2524,7 +2524,7 @@ const RN_INDEX_URL   = RN_BYDATE_BASE
 const RN_MAX_MONTHS  = 6 // how many months of history to surface in the feed
 const RN_MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december']
 const RN_CACHE = { data: null, fetchedAt: 0 }
-const RN_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const RN_TTL_MS = 24 * 60 * 60 * 1000 // a day — the home page's release wire has a refresh button for anything newer
 
 function stripTags(html) {
   return html
@@ -2594,8 +2594,10 @@ function parseMonthFeatures(html) {
     const category = withSub ? withSub[1] : 'General'
 
     // Description: paragraphs inside the excerpts block (PA nests <p> inside <p>).
+    // The excerpts end at their </section>; without that cut, the last card on
+    // a page ran on into the site footer and picked up its nav and copyright.
     const excM = block.match(/class="[^"]*\bcoveo-results-content-excerpts\b[^"]*"[^>]*>([\s\S]*)$/i)
-    const exc = excM ? excM[1] : block
+    const exc = excM ? excM[1].split(/<\/section>/i)[0] : block
     const paragraphs = []
     const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
     let pm
@@ -2606,13 +2608,52 @@ function parseMonthFeatures(html) {
     }
     const summary = paragraphs[0] || ''
 
-    features.push({ title, category, tags, releaseDate, lastUpdated, summary, paragraphs })
+    features.push({ title, category, tags, releaseDate, lastUpdated, summary, paragraphs, url: rnFeatureUrl(exc, title) })
   }
   return features
 }
 
-function rnFetch(url) {
-  return fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
+// The feature's own docs page. PA links the feature name inside its excerpt, so
+// pick the in-body link whose text shares the most words with the title (else
+// the first). Only docs.paloaltonetworks.com hrefs are kept — the browser
+// renders this as a link, and scraped markup is not trusted to pick a scheme.
+function rnFeatureUrl(block, title) {
+  const words = new Set(title.toLowerCase().match(/[a-z0-9]{3,}/g) || [])
+  const aRe = /<a[^>]+href="(https:\/\/docs\.paloaltonetworks\.com\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
+  let best = null, bestScore = -1, a
+  while ((a = aRe.exec(block)) !== null) {
+    if (a[1].includes('platform-explorer')) continue
+    const score = (stripTags(a[2]).toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(w => words.has(w)).length
+    if (score > bestScore) { best = a[1].replace(/&amp;/g, '&'); bestScore = score }
+  }
+  return best
+}
+
+// Retries a network error, timeout, 429 or 5xx (twice, backing off); any other
+// status is an answer and is returned as is. A docs page that times out once
+// used to read as "no releases that month" and silently drop the month.
+async function rnFetch(url, tries = 3) {
+  let last
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
+      if (r.ok || (r.status < 500 && r.status !== 429)) return r
+      last = new Error(`HTTP ${r.status}`)
+    } catch (e) { last = e }
+    if (i < tries - 1) await new Promise((res) => setTimeout(res, 600 * (i + 1) ** 2))
+  }
+  throw last
+}
+
+/** One month page: its features, or `failed` when the page never answered. */
+async function rnLoadMonth(slug) {
+  const url = `${RN_BYDATE_BASE}/${slug}`
+  try {
+    const r = await rnFetch(url)
+    return { url, features: r.ok ? parseMonthFeatures(await r.text()) : [], failed: false }
+  } catch (e) {
+    return { url, features: [], failed: true, error: String(e?.message || e) }
+  }
 }
 
 // "april-2026" → "may-2026" (the month after the given slug)
@@ -2637,19 +2678,25 @@ async function fetchReleaseNotes() {
   let latestSlug = latestUrl.split('/').pop()
   let latestFeatures = parseMonthFeatures(await first.text())
 
+  // A month that never answered is not an empty month: it is neither a miss
+  // nor a result. It is recorded, the walk carries on, and the scrape comes
+  // back marked partial.
+  const failed = new Set()
+  // Both walks are capped: a failed month is not a miss, so without a cap a
+  // docs outage mid-walk would walk forever.
   let cur = latestSlug
   let fwdMisses = 0
-  while (true) {
+  let fwdFails = 0
+  for (let probes = 0; probes < 14; probes++) {
     const nxt = rnNextSlug(cur)
     if (!nxt) break
-    const url = `${RN_BYDATE_BASE}/${nxt}`
-    let feats = []
-    try {
-      const r = await rnFetch(url)
-      feats = r.ok ? parseMonthFeatures(await r.text()) : []
-    } catch { feats = [] }
-    if (feats.length > 0) {
-      latestSlug = nxt; latestUrl = url; latestFeatures = feats; fwdMisses = 0
+    const m = await rnLoadMonth(nxt)
+    if (m.failed) {
+      failed.add(nxt)
+      if (++fwdFails >= 3) break
+    } else if (m.features.length > 0) {
+      latestSlug = nxt; latestUrl = m.url; latestFeatures = m.features; fwdMisses = 0
+      failed.delete(nxt)
     } else if (++fwdMisses >= 2) {
       break
     }
@@ -2666,38 +2713,64 @@ async function fetchReleaseNotes() {
   let mi = parts ? RN_MONTHS.indexOf(parts[1].toLowerCase()) : -1
   let yr = parts ? parseInt(parts[2]) : 0
   let misses = 0
-  while (months.length < RN_MAX_MONTHS && mi >= 0) {
+  for (let probes = 0; months.length < RN_MAX_MONTHS && mi >= 0 && probes < RN_MAX_MONTHS + 6; probes++) {
     mi -= 1
     if (mi < 0) { mi = 11; yr -= 1 }
     const slug = `${RN_MONTHS[mi]}-${yr}`
-    const url = `${RN_BYDATE_BASE}/${slug}`
-    try {
-      const r = await rnFetch(url)
-      const feats = r.ok ? parseMonthFeatures(await r.text()) : []
-      if (feats.length === 0) { if (++misses >= 2) break; continue }
-      misses = 0
-      months.push({ label: rnLabelFromSlug(slug), slug, url, features: feats })
-    } catch { if (++misses >= 2) break }
+    const m = await rnLoadMonth(slug)
+    if (m.failed) { failed.add(slug); continue }
+    failed.delete(slug)
+    if (m.features.length === 0) { if (++misses >= 2) break; continue }
+    misses = 0
+    months.push({ label: rnLabelFromSlug(slug), slug, url: m.url, features: m.features })
   }
-  return months
+  // Only months inside the window matter; a failed probe past the newest month
+  // (next month's page, not published yet) is not a gap.
+  const newest = RN_MONTHS.indexOf(latestSlug.split('-')[0]) + 12 * parseInt(latestSlug.split('-')[1])
+  const idx = (sl) => RN_MONTHS.indexOf(sl.split('-')[0]) + 12 * parseInt(sl.split('-')[1])
+  const failedMonths = [...failed].filter((sl) => idx(sl) <= newest).map(rnLabelFromSlug)
+  return { months, failedMonths }
+}
+
+// One scrape at a time: the home page's release wire and the Release Notes view
+// can ask together on a cold cache, and each scrape is ~8 sequential page loads.
+let RN_INFLIGHT = null
+function scrapeReleaseNotes() {
+  if (!RN_INFLIGHT) {
+    RN_INFLIGHT = (async () => {
+      console.log('[release-notes] Scraping Palo Alto by-date feed...')
+      const { months, failedMonths } = await fetchReleaseNotes()
+      const totalFeatures = months.reduce((s, m) => s + m.features.length, 0)
+      // Never trade a complete fetch for a partial one: keep what we had and
+      // say what failed. A partial result is still stored when it is all we have.
+      if (failedMonths.length && RN_CACHE.data && !RN_CACHE.data.failedMonths?.length) {
+        console.warn(`[release-notes] Partial scrape (no answer for ${failedMonths.join(', ')}) — keeping the last complete fetch`)
+        throw new Error(`docs.paloaltonetworks.com did not answer for ${failedMonths.join(', ')} — kept the last complete fetch`)
+      }
+      RN_CACHE.data = { months, indexUrl: RN_INDEX_URL, totalFeatures, failedMonths }
+      RN_CACHE.fetchedAt = Date.now()
+      console.log(`[release-notes] Done. Months: ${months.length}, features: ${months.map(m => m.features.length).join(',')}${failedMonths.length ? ` · no answer for ${failedMonths.join(', ')}` : ''}`)
+    })().finally(() => { RN_INFLIGHT = null })
+  }
+  return RN_INFLIGHT
 }
 
 app.get('/api/release-notes', async (req, res) => {
   const force = req.query.force === '1'
-  const now = Date.now()
-  if (!force && RN_CACHE.data && (now - RN_CACHE.fetchedAt) < RN_TTL_MS) {
+  // A partial fetch (a month never answered) is retried after 10 minutes, not a day.
+  const ttl = RN_CACHE.data?.failedMonths?.length ? 10 * 60 * 1000 : RN_TTL_MS
+  const fresh = RN_CACHE.data && (Date.now() - RN_CACHE.fetchedAt) < ttl
+  if (!force && fresh) {
     return res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true })
   }
   try {
-    console.log('[release-notes] Scraping Palo Alto by-date feed...')
-    const months = await fetchReleaseNotes()
-    const totalFeatures = months.reduce((s, m) => s + m.features.length, 0)
-    const payload = { months, indexUrl: RN_INDEX_URL, totalFeatures }
-    RN_CACHE.data = payload
-    RN_CACHE.fetchedAt = now
-    console.log(`[release-notes] Done. Months: ${months.length}, features: ${months.map(m => m.features.length).join(',')}`)
-    res.json({ ...payload, fetchedAt: new Date(now).toISOString(), cached: false })
+    await scrapeReleaseNotes()
+    res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: false })
   } catch (err) {
+    // A refresh that failed still answers with the last good fetch, and says why.
+    if (RN_CACHE.data) {
+      return res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true, refreshError: err.message })
+    }
     console.error('[release-notes]', err)
     res.status(500).json({ error: err.message })
   }
@@ -2848,4 +2921,7 @@ app.listen(PORT, () => {
     console.log(`  ║  ⚠  AWS_SESSION_TOKEN not set (ASIA key detected)`)
   }
   console.log(`  ╚══════════════════════════════════════════════╝\n`)
+  // Warm the release-notes cache so the home page's release wire has data on
+  // the first visit after a restart instead of waiting on a cold scrape.
+  setTimeout(() => scrapeReleaseNotes().catch((err) => console.warn('[release-notes] warm-up failed:', err.message)), 2000)
 })

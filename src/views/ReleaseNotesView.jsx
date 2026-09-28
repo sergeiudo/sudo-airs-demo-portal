@@ -260,7 +260,10 @@ export function ReleaseNotesView() {
           {data && (
             <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
               <Clock size={10} />
-              {data.cached ? `Updated ${fetchedAgo}` : 'Just refreshed'}
+              {/* A failed refresh answers with the last complete fetch plus the reason. */}
+              {data.refreshError
+                ? <span title={data.refreshError} style={{ color: '#b45309' }}>Refresh failed · showing {fetchedAgo}</span>
+                : data.cached ? `Updated ${fetchedAgo}` : 'Just refreshed'}
             </div>
           )}
           <button
@@ -313,7 +316,7 @@ export function ReleaseNotesView() {
           {!loading && !error && data && (
             <div className="flex items-center justify-center gap-2 pt-4 text-[11px] text-slate-300">
               <CheckCircle2 size={12} />
-              Data cached for 7 days · Next refresh after {new Date(new Date(data.fetchedAt).getTime() + 7 * 86400000).toLocaleDateString()}
+              Data cached for a day · Next refresh after {new Date(new Date(data.fetchedAt).getTime() + 86400000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </div>
           )}
 

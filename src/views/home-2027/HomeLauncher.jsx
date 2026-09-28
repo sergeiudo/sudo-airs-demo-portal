@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Shield, ShieldCheck, Search, Sun, Moon, FileText, Play } from 'lucide-react'
+import { Shield, ShieldCheck, Search, Sun, Moon, FileText, Play, Megaphone } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, readLastOpened, markOpened } from './homeData'
 import { ReadinessPill } from './Preflight'
-import { DetailsSheet, CommandPalette } from './overlays'
+import { DetailsSheet, CommandPalette, ReleaseSheet } from './overlays'
 import { LauncherTile, LauncherRow } from './LauncherTile'
+import { ReleaseWire } from './ReleaseWire'
+import { useReleaseFeed } from './useReleaseFeed'
 
 /**
  * HomeLauncher — the New home as an app launcher.
@@ -20,7 +22,9 @@ import { LauncherTile, LauncherRow } from './LauncherTile'
  *   • a short intro — what Prisma AIRS is, what this portal shows — beside
  *     the author credit, then the run-of-show hint;
  *   • five large tiles, 01–05, each with a coloured band in its pillar's hue;
- *   • the deep dives and tools as a compact row underneath.
+ *   • the deep dives and tools as a compact row underneath;
+ *   • the Prisma AIRS release wire, docked to the bottom of the screen —
+ *     hovering a release lifts the tile of the pillar that demos its area.
  *
  * What's new is carried by the tiles themselves (a count on the band, the NEW
  * lines in the body) rather than a scrolling strip. Live numbers are left to
@@ -46,6 +50,9 @@ export function HomeLauncher({ homeSwitch }) {
   const [sheet, setSheet] = useState(null)
   const [palette, setPalette] = useState(false)
   const [lastOpened] = useState(readLastOpened)
+  const { feed, refresh: refreshFeed, refreshing: feedRefreshing, refreshError: feedError } = useReleaseFeed()
+  const [release, setRelease] = useState(null)   // index into feed.items
+  const [spot, setSpot] = useState(null)         // pillar lit from the release wire
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
   const kbd = isMac ? '⌘K' : 'Ctrl K'
 
@@ -55,6 +62,8 @@ export function HomeLauncher({ homeSwitch }) {
   }, [dispatch])
   const closeSheet = useCallback(() => setSheet(null), [])
   const closePalette = useCallback(() => setPalette(false), [])
+  const closeRelease = useCallback(() => setRelease(null), [])
+  const openNotes = useCallback(() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' }), [dispatch])
 
   // ⌘K / Ctrl+K anywhere; "/" when not typing.
   useEffect(() => {
@@ -77,13 +86,16 @@ export function HomeLauncher({ homeSwitch }) {
   const actions = useMemo(() => [
     { id: 'start', label: 'Start the demo — step 1', icon: Play, run: () => launch(RUN_OF_SHOW[0].id) },
     { id: 'theme', label: state.isDark ? 'Switch to light theme' : 'Switch to dark theme', icon: state.isDark ? Sun : Moon, run: () => dispatch({ type: 'TOGGLE_THEME' }) },
-    { id: 'notes', label: 'Prisma AIRS release notes', icon: FileText, run: () => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' }) },
-  ], [launch, dispatch, state.isDark])
+    ...(feed ? [{ id: 'latest', label: `What's new in Prisma AIRS — ${feed.items[0].title}`, icon: Megaphone, run: () => setRelease(0) }] : []),
+    { id: 'notes', label: 'Prisma AIRS release notes', icon: FileText, run: openNotes },
+  ], [launch, dispatch, state.isDark, feed, openNotes])
 
   const sheetPillar = HOME_PILLARS.find((p) => p.id === sheet) ?? null
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col" style={{ background: t.ground, overflowX: 'hidden' }}>
+    // overflow-x: clip, not hidden — hidden makes this div a scroll container,
+    // and the release wire's `sticky` would bind to it instead of #root.
+    <div className="relative min-h-screen w-full flex flex-col" style={{ background: t.ground, overflowX: 'clip' }}>
       <a href="#run-of-show" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:px-3 focus:py-2 focus:rounded-lg"
          style={{ background: t.panel, color: t.ink }}>Skip to the pillars</a>
 
@@ -117,7 +129,7 @@ export function HomeLauncher({ homeSwitch }) {
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
             <ReadinessPill t={t} />
             {homeSwitch}
-            <IconButton t={t} label="Prisma AIRS release notes" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' })}>
+            <IconButton t={t} label="Prisma AIRS release notes" onClick={openNotes}>
               <FileText size={15} />
             </IconButton>
             <IconButton t={t} label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}>
@@ -196,7 +208,7 @@ export function HomeLauncher({ homeSwitch }) {
         <section aria-labelledby="run-of-show" className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
                  style={{ gridAutoRows: 'minmax(clamp(400px, 46vh, 580px), auto)' }}>
           {RUN_OF_SHOW.map((p, i) => (
-            <LauncherTile key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} lastOpened={lastOpened[p.id]} />
+            <LauncherTile key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} lastOpened={lastOpened[p.id]} spotlight={spot === p.id} />
           ))}
         </section>
 
@@ -212,7 +224,14 @@ export function HomeLauncher({ homeSwitch }) {
         </section>
       </main>
 
+      {/* Renders once the feed has data (the browser cache paints it at once
+          on a return visit); with no data at all it stays out of the page. */}
+      {feed && <ReleaseWire t={t} feed={feed} onOpen={setRelease} onSpot={setSpot} onAll={openNotes} paused={release != null}
+                            onRefresh={refreshFeed} refreshing={feedRefreshing} refreshError={feedError} />}
+
       <DetailsSheet t={t} pillar={sheetPillar} onClose={closeSheet} onLaunch={launch} />
+      <ReleaseSheet t={t} items={feed?.items ?? []} index={release} onIndex={setRelease} onClose={closeRelease}
+                    onLaunch={launch} onAll={openNotes} fetchedAt={feed?.fetchedAt} />
       <CommandPalette t={t} open={palette} onClose={closePalette} pillars={HOME_PILLARS} onLaunch={launch} actions={actions} />
     </div>
   )
