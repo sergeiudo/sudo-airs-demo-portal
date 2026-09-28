@@ -16,6 +16,7 @@ import { HomeLauncher } from './views/home-2027/HomeLauncher'
 import { DesignSwitch } from './components/shared/DesignSwitch'
 import { ObservabilityView } from './views/ObservabilityView'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
+import { DeveloperCorner } from './views/developer-corner/DeveloperCorner'
 import { ReleaseNotesView } from './views/ReleaseNotesView'
 import { McpSecurityView } from './views/McpSecurityView'
 import { RagSecurityView } from './views/RagSecurityView'
@@ -60,6 +61,7 @@ function AppContent() {
   const intercept = !isNew ? <ApiInterceptView /> : RUNTIME_V1 ? <ApiIntercept2027 /> : <RuntimeLaunch />
   const modelScanning = !isNew ? <ModelScanningView /> : SCAN_V1 ? <ModelScanning2027 /> : <SupplyChainLaunch />
   const redTeaming = !isNew ? <RedTeamingView /> : <RedTeamLaunch />
+  const developerCorner = !isNew ? <DeveloperCornerView /> : <DeveloperCorner />
 
   // Must come before every other branch: this window has no sidebar, no
   // top bar and no MainLayout at all.
@@ -78,7 +80,7 @@ function AppContent() {
       case 'redTeaming':     return redTeaming
       case 'claudeHooks':    return <ClaudeHooksView />
       case 'observability':     return <ObservabilityView />
-      case 'developerCorner':  return <DeveloperCornerView />
+      case 'developerCorner':  return developerCorner
       case 'mcpSecurity':      return <McpSecurityView />
       case 'ragSecurity':      return <RagSecurityView />
       case 'llmGateway':       return <LlmGatewayView />
@@ -94,7 +96,8 @@ function AppContent() {
     (state.activeView === 'apiIntercept' && !RUNTIME_V1) ||
     (state.activeView === 'modelScanning' && !SCAN_V1) ||
     state.activeView === 'redTeaming' ||
-    state.activeView === 'enterpriseAccess'
+    state.activeView === 'enterpriseAccess' ||
+    state.activeView === 'developerCorner'
   )
 
   return (

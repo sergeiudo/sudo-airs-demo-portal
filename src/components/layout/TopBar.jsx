@@ -14,7 +14,7 @@ const VIEW_LABELS = {
   redTeaming:      { label: 'Red Teaming',                  sublabel: 'Automated adversarial campaign runner',      text: 'text-orange-400', color: '#F97316' },
   claudeHooks:     { label: 'AI Code Assistant Protection', sublabel: 'Claude Code hooks integration guide',        text: 'text-purple-400', color: '#8B5CF6' },
   observability:   { label: 'LLM Telemetry',                sublabel: 'Prompt history, metrics & pipeline traces',  text: 'text-teal-400',   color: '#10B981' },
-  developerCorner: { label: 'Developer Corner',             sublabel: 'Integration guide & API reference',          text: 'text-indigo-400', color: '#06B6D4' },
+  developerCorner: { label: 'Developer Corner',             sublabel: 'Integration hub & live API calls',           text: 'text-indigo-400', color: '#06B6D4' },
   mcpSecurity:     { label: 'MCP Security',                 sublabel: 'Live MCP tool protection with Prisma AIRS',  text: 'text-cyan-400',   color: '#06B6D4' },
   ragSecurity:     { label: 'RAG Security',                 sublabel: 'Retrieval-Augmented Generation pipeline protection', text: 'text-amber-400', color: '#F59E0B' },
   llmGateway:      { label: 'AI/LLM Gateway',               sublabel: 'Portkey gateway + Prisma AIRS guardrail',           text: 'text-pink-400',   color: '#EC4899' },
@@ -154,8 +154,8 @@ export function TopBar() {
         ) : (
           /* The pill is also the control: it already names the state, so
              reading it and changing it should not be two different places.
-             The sidebar toggle stays — it is the one that is visible while
-             the sidebar is open. Both dispatch the same action. */
+             Classic's sidebar keeps its own toggle (same action); the New
+             sidebar has none — this pill, or the pillar header, owns it. */
           <AnimatePresence mode="wait">
             <motion.button
               key={theme.isProtected ? 'secured' : 'vulnerable'}

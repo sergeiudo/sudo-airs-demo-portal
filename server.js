@@ -41,6 +41,7 @@ import mohRouter, {
   parseBlockError,
 } from './moh-routes.js'
 import accessRouter from './access-routes.js'
+import devRouter from './dev-routes.js'
 
 const app = express()
 app.use(cors())
@@ -50,6 +51,8 @@ app.use('/api/gateway', portkeyRouter)
 app.use('/api/moh', mohRouter)
 // Enterprise AI Access — Entra ID sign-in → RS256 JWT → identity-routed AI-GW.
 app.use('/api/access', accessRouter)
+// Developer Corner — "Run it live": the snippets' exact calls, keys masked in the echo.
+app.use('/api/dev', devRouter)
 
 const PORT = process.env.PROXY_PORT || 3001
 

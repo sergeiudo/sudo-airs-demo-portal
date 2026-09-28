@@ -123,8 +123,8 @@ export function usePreflight(t) {
   return { h, rows, at, busy, check, needsAttention, loaded: !!h || (!busy && at != null) }
 }
 
-/** The full check list — rendered inside the pill's popover. */
-function PreflightPanel({ t, pf }) {
+/** The full check list — rendered inside the pill's popover (and the New sidebar's). */
+export function PreflightPanel({ t, pf }) {
   const { h, rows, at, busy, check } = pf
   return (
     <section aria-labelledby="preflight-title" className="flex flex-col" style={{ ...glass(t, { radius: 22 }), padding: 18 }}>

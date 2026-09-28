@@ -11,7 +11,7 @@ const VIEWS = [
   { id: 'claudeHooks',     icon: Terminal,   label: 'AI Code Assistant Protection', desc: 'See how AIRS protects Claude Code via pre/post-tool hook scripts.',    color: '#8B5CF6' },
   { id: 'llmGateway',      icon: Waypoints,  label: 'AI/LLM Gateway',               desc: 'Portkey LLM gateway demo — model picker, fallback, cache, and a 3-lane comparison showing what AIRS catches that Portkey defaults miss.', color: '#EC4899' },
   { id: 'observability',   icon: BarChart2,  label: 'LLM Telemetry',                desc: 'Browse prompt history, latency metrics, and detection breakdowns.',    color: '#10B981' },
-  { id: 'developerCorner', icon: Code2,      label: 'Developer Corner',             desc: 'Python SDK, REST API reference, and live integration code samples.',   color: '#06B6D4' },
+  { id: 'developerCorner', icon: Code2,      label: 'Developer Corner',             desc: 'Integration guides for every Prisma AIRS product, with live API calls and official docs.',   color: '#06B6D4' },
   { id: 'mcpSecurity',     icon: Network,    label: 'MCP Security',                 desc: 'Live MCP tool demo with real AIRS two-stage scanning — 10 OWASP attack scenarios.',  color: '#06B6D4' },
   { id: 'ragSecurity',     icon: Database,   label: 'RAG Security',                 desc: 'See how AIRS protects RAG pipelines from indirect injection, data poisoning, and PII leakage.', color: '#F59E0B' },
   { id: 'ministryHealth',  icon: HeartPulse, label: 'Ministry of Health',           desc: 'Bilingual Hebrew/English health-assistant demo built for the MOH RFI — runtime attacks, poisoned clinical documents, agentic tool misuse, and a live Hebrew-vs-English detection matrix.', color: '#0EA5E9' },

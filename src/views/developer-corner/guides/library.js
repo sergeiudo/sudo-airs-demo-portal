@@ -1,0 +1,176 @@
+import { Terminal, ScanSearch, Swords, Fingerprint, Waypoints, Activity } from 'lucide-react'
+import { pick } from './links'
+
+/**
+ * Library — every official document in one place, a cross-product
+ * troubleshooting table, and a map of where each integration runs in this
+ * portal.
+ */
+
+export const LIBRARY = [
+  {
+    id: 'docs-all',
+    group: 'library',
+    title: 'All official documentation',
+    sub: 'Guides, API references, SDKs and repositories',
+    minutes: 2,
+    level: 'Reference',
+    docs: pick('docsHub', 'pandev'),
+    blocks: [
+      {
+        type: 'prose',
+        text: 'Every link below was opened on 2026-09-28 and returned a page. Admin guides live on docs.paloaltonetworks.com (the PDFs are the complete, printable versions); API references live on pan.dev; the AI Gateway\'s developer docs are Prisma AIRS-branded pages hosted by Portkey.',
+      },
+      { type: 'links', title: 'Admin guides (PDF)', items: pick('pdfRuntime', 'pdfGateway', 'pdfSupply', 'pdfRedTeam', 'pdfAgentId') },
+      { type: 'links', title: 'AI Runtime API', items: pick('rtOverview', 'rtSync', 'rtAsync', 'rtResults', 'rtReports', 'rtErrors', 'rtUseCases', 'scanSpec', 'rbac', 'scanOauth') },
+      { type: 'links', title: 'Python SDKs and packages', items: pick('sdkOverview', 'sdkUsage', 'sdkAsyncio', 'pypiSdk', 'ghSdk', 'mgmtApi', 'mgmtSdk', 'pypiMgmt', 'ghMgmt', 'pypiRelay', 'ghRelay') },
+      { type: 'links', title: 'AI Gateway', items: pick('gwOverview', 'gwDeploy', 'gwConfigs', 'gwKeys', 'gwGuardrails', 'gwAirsGuard', 'gwDevSetup', 'gwDevGuard', 'gwDevJwt', 'gwDevMcp', 'gwSpec', 'ghGwDocker') },
+      { type: 'links', title: 'AI Model Security', items: pick('msInstall', 'msScanning', 'msApi', 'msSdk', 'msListScans', 'msErrors', 'scmTokens') },
+      { type: 'links', title: 'AI Red Teaming', items: pick('rtmIntro', 'rtmOverview', 'rtmCreateTgt', 'rtmCreateScan', 'rtmChannels', 'rtmErrors', 'ghRtClient') },
+      { type: 'links', title: 'Integrations and samples', items: pick('ghIntegrations', 'litellm', 'kong', 'ghN8n', 'ghNemo', 'ghRag') },
+      {
+        type: 'callout', tone: 'warn', title: 'Links that no longer work',
+        text: 'The SDK README and its PyPI page still point at `pan.dev/prisma-airs/scan/api/` and `pan.dev/ai-runtime-security/scan/api/`; both return 404. So do `pan.dev/prisma-airs/` (use `pan.dev/airs/`) and `…/airuntimesecurity/scan-sync-request/` without `/scan/`. If a customer sends you one of these, the working pages are above.',
+      },
+      {
+        type: 'table',
+        title: 'Where the official sources disagree',
+        columns: ['Topic', 'Source A', 'Source B', 'What to tell a customer'],
+        minWidth: 640,
+        rows: [
+          ['Async batch size', 'pan.dev API: up to 25 requests', 'Python SDK: 5 scan objects', 'Plan for 5 with the SDK; 25 over raw REST'],
+          ['Python floor for `pan-aisecurity`', 'pan.dev: 3.9', 'PyPI metadata (0.11.0): 3.10', 'Use 3.10 or later'],
+          ['AI Gateway auth', 'PANW docs: `x-portkey-api-key` + virtual key', 'Developer docs: `Authorization: Bearer` + `@slug/model`', 'Both authenticate on the SCM gateway (tested); prefer Bearer + `@slug/model`'],
+          ['Gateway guardrail JSON', '`before_request_hooks` / `after_request_hooks`', '`input_guardrails` / `output_guardrails`', 'Either shape; configs are usually built in the console anyway'],
+          ['OAuth token URL', '`/oauth2/access_token` (SCM, Model Security)', '`/am/oauth2/access_token` (management SDK default)', 'The first one is used everywhere in this portal'],
+          ['Gateway metering', 'Admin guide: 1 token = 4 characters for everything', 'Onboarding guide: LLM prompts use the model\'s own token counts', 'The onboarding guide is newer'],
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'troubleshooting',
+    group: 'library',
+    title: 'Troubleshooting',
+    sub: 'The errors customers actually hit, and what fixes them',
+    minutes: 5,
+    level: 'Reference',
+    docs: pick('rtErrors', 'msErrors', 'rtmErrors', 'gwKeys'),
+    blocks: [
+      {
+        type: 'prose',
+        text: 'Collected from the official error references and from building this portal. The ones marked with the portal were learned the hard way — the docs do not mention them.',
+      },
+      {
+        type: 'table',
+        title: 'AI Runtime API',
+        columns: ['Symptom', 'Cause', 'Fix'],
+        rows: [
+          ['401', 'No `x-pan-token` (or Bearer token) sent', 'Check the header name and that the variable is exported in the process that makes the call'],
+          ['403', 'Key invalid, revoked or expired', 'Regenerate it in SCM → API Applications; keys rotate on the schedule you chose'],
+          ['400 "AI Profile not found"', 'The profile name does not exist **in the tenant the key belongs to**', 'A key and a profile from two different tenants look exactly like a typo. Check both come from the same TSG'],
+          ['400 "No default AI profile available"', 'No `ai_profile` in the body and no default profile on the key', 'Always send `ai_profile.profile_name`'],
+          ['413', 'Over 2 MB (sync) or 5 MB (async)', 'Chunk the content, or use async'],
+          ['415', 'Missing or wrong `Content-Type`', '`Content-Type: application/json`'],
+          ['429 "Requests per second exceeded"', 'Bursts from one key (no `retry_after`)', 'Retry after a short backoff (250–600 ms)'],
+          ['429 on `/v1/scan/reports` or `/results`', 'The 10-per-minute limit on results and reports', 'Do not retry in a loop; fetch reports only when you need them, off the request path'],
+          ['DLP silently not firing under load (portal)', 'Faster than about one scan per 2 s, DLP was observed returning false with no error flag', 'Space out bulk or test scans; do not conclude "not detected" from a burst'],
+          ['`CERTIFICATE_VERIFY_FAILED` (portal)', 'Corporate TLS inspection', 'Point `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS` at a bundle with the inspection CA'],
+          ['Tool event scan 400 "cannot unmarshal object" (portal)', 'A `tools/list` output wrapped as `{"tools": […]}`', 'Send the bare array of tools'],
+          ['Tool event blocked but no reason shown (portal)', 'Reading only `prompt_detected`', 'Tool detections are under `tool_detected.input_detected` / `output_detected`'],
+        ],
+      },
+      {
+        type: 'table',
+        title: 'AI Gateway',
+        columns: ['Symptom', 'Cause', 'Fix'],
+        rows: [
+          ['Every attack "passes" (portal)', 'A guardrail block is HTTP 200 with the content replaced; code only catches exceptions', 'Read `hook_results.*_hooks[].verdict === false`'],
+          ['`hook_results` missing on allowed responses', 'Strict OpenAI compliance strips non-OpenAI fields', 'Send `x-portkey-strict-open-ai-compliance: false`'],
+          ['401 with the Portkey SDK (portal)', 'The SDK defaults to `api.portkey.ai`', 'Pass `baseURL: "https://aigw.portkey.ai/v1"`'],
+          ['401 "Invalid API Key. Error Code: 03"', 'Missing key — or, with JWT auth, a bad signature, expired token, unknown `kid` or `alg: none`', 'The message is the same for all of them; decode the token and check `exp`, `kid` and the JWKS'],
+          ['`model_not_allowed`', 'Model not provisioned on the integration for this workspace', 'Enable it under the integration\'s model provisioning'],
+          ['"Model X is not allowed for this integration" for a model that is provisioned (portal)', 'A `targets`/`strategy` provider pin in the config overrides the `@slug/`', 'Remove the pin — and remove `strategy` together with `targets`'],
+          ['Per-request config ignored', 'The key does not allow config override', 'Enable config override on the gateway key'],
+          ['Inline JSON config rejected', 'Inline configs are blocked on the tenant', 'Save the config and send its `pc-…` id'],
+          ['412 / 429', 'Budget or rate limit reached (on the key, the JWT or the integration)', 'Limits are immutable once set — create a new one or wait for the window to reset'],
+        ],
+      },
+      {
+        type: 'table',
+        title: 'Model Security and Red Teaming',
+        columns: ['Symptom', 'Cause', 'Fix'],
+        rows: [
+          ['`pip install` cannot find `model-security-client` (or installs 0.0.1)', 'Not using the private index — or picking up the public placeholder', 'Install with `--extra-index-url "$(./get_pypi_url.sh)"` and pin `==1.1.2`'],
+          ['400 "Both start_time and end_time must be specified" (portal)', 'The documented `list_scans(start_time=…)` sample', 'Pass `end_time` too'],
+          ['400 on a scan', 'The security group\'s source type does not match the model (e.g. an S3 group for a Hugging Face URI)', 'Use a group for that source'],
+          ['403', 'Missing role permission (`ai_ms_pypi_auth`, `ai_ms.scans`, `ai_ms.security_groups`) or an expired deployment profile', 'Fix the service account\'s role; check the profile association'],
+          ['"N files pending scan data retrieval" (portal)', 'First scan of a repository — AIRS is still fetching it', 'Retry after a minute'],
+          ['Local scan: "Model scan failed with no result" (portal)', 'The SDK spawns a child process for local scans; a server started at import time re-runs in the child', 'Start your server under `if __name__ == "__main__":`'],
+          ['Red Teaming 400 `QUOTA_EXCEEDED`', 'Monthly scans for that job type used up', 'Raise the deployment profile allocation or wait for the month'],
+          ['Red Teaming 403', 'Permissions, licence, or the EULA not accepted', 'Accept the EULA once in the console'],
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'this-portal',
+    group: 'library',
+    title: 'See each integration in this portal',
+    sub: 'Which pillar demonstrates which path — and the file behind it',
+    minutes: 3,
+    level: 'Reference',
+    docs: pick('pandev'),
+    blocks: [
+      {
+        type: 'prose',
+        text: 'This portal is a working reference implementation. Credentials stay on the server; every browser request goes through an Express proxy that calls Prisma AIRS exactly as the guides describe.',
+      },
+      {
+        type: 'cards',
+        items: [
+          { icon: Terminal, tone: '#f43f5e', title: 'AIRS Runtime & AI-GW', kicker: 'Runtime API · AI Gateway · MCP',
+            text: 'The same attack through two architectures: scans around the model call in the app (Vertex, Bedrock, Azure), or the guardrail inside the SCM AI Gateway, with MCP tool calls scanned in two stages.',
+            bullets: ['`server.js` — `airscan()`, `/api/chat`', '`telemetry.js` — `airsFetch()`, 429 handling', '`mcp-aigw.js` — tool-event scans'],
+            go: 'pillar:apiIntercept', goLabel: 'Open the console' },
+          { icon: ScanSearch, tone: '#6366f1', title: 'AI Supply Chain', kicker: 'Model Security SDK · AIMS API',
+            text: 'Real Hugging Face and local scans, and the tenant\'s scan history.',
+            bullets: ['`scanner_app.py` — `client.scan()`', '`server.js` — `/api/supply-chain/*`', '`setup-scanner.sh` — private index install'],
+            go: 'pillar:modelScanning', goLabel: 'Open AI Supply Chain' },
+          { icon: Swords, tone: '#fb923c', title: 'Red Teaming', kicker: 'Red Teaming API',
+            text: 'Targets, campaigns, reports and the recommended runtime profile.',
+            bullets: ['`server.js` — `rtFetch()`, `/api/redteam/*`'],
+            go: 'pillar:redTeaming', goLabel: 'Open Red Teaming' },
+          { icon: Fingerprint, tone: '#8b5cf6', title: 'Enterprise AI Access', kicker: 'AI Gateway · JWT',
+            text: 'Entra ID sign-in, an RS256 credential minted per user, and routing by role in a conditional config.',
+            bullets: ['`access-routes.js` — `mintCredential()`'],
+            go: 'pillar:enterpriseAccess', goLabel: 'Open Enterprise AI Access' },
+          { icon: Waypoints, tone: '#0ea5e9', title: 'Ministry of Health', kicker: 'AI Gateway · tool events · uploads',
+            text: 'A bilingual citizen app: gateway guardrails for model turns, direct tool-event scans for agent tools, and scanned file uploads.',
+            bullets: ['`moh-routes.js` — `buildAigwClient()`', '`file-extract.js` — upload extraction'],
+            go: 'pillar:ministryHealth', goLabel: 'Open the pillar' },
+          { icon: Activity, tone: '#22c55e', title: 'LLM Telemetry', kicker: 'Traces',
+            text: 'Every request from every pillar, with the measured timeline, the AIRS scan and report, and gateway hooks.',
+            bullets: ['`traceStore.js` — trace storage'],
+            go: 'pillar:observability', goLabel: 'Open telemetry' },
+        ],
+      },
+      {
+        type: 'table',
+        title: 'Environment variables, by product',
+        columns: ['Product', 'Variables (official SDK / this portal)'],
+        rows: [
+          ['Runtime API — Python SDK', '`PANW_AI_SEC_API_KEY` (or `PANW_AI_SEC_API_TOKEN`), `PANW_AI_SEC_API_ENDPOINT`; the profile name is yours to pass'],
+          ['Runtime API — this portal', '`AIRS_API_KEY`, `AIRS_PROFILE_NAME`, `AIRS_BASE_URL`'],
+          ['AI Gateway — this portal', '`AIGW_BASE_URL`, `AIGW_API_KEY`, `AIGW_CONFIG_PROTECTED`, `AIGW_CONFIG_UNPROTECTED`'],
+          ['Model Security', '`MODEL_SECURITY_CLIENT_ID`, `MODEL_SECURITY_CLIENT_SECRET`, `TSG_ID`, `MODEL_SECURITY_API_ENDPOINT`'],
+          ['Red Teaming — this portal', 'The same service-account variables as Model Security'],
+          ['Hosted MCP server / relay', 'Server: `x-pan-token` + `x-pan-profile` headers. Relay: `apiKey` / `aiProfile` in its YAML (the example substitutes `${PRISMA_AIRS_API_KEY}`)'],
+        ],
+        note: 'Never commit these. The portal keeps them in a git-ignored `.env` per host.',
+      },
+    ],
+  },
+]

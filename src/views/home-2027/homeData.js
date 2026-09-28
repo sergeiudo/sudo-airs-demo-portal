@@ -24,20 +24,22 @@ export const MOH_SCENARIOS = MOH_ATTACKS.length
  * `run` is the demo running order — PILLARS order, row 1 of the old grid
  * (see CLAUDE.md: "PILLARS array order IS the demo running order"):
  * Runtime & AI-GW · AI Supply Chain · Red Teaming · Enterprise AI Access ·
- * Ministry of Health. The legacy gateway left the run for the deep dives
- * (2026-09-28, at the user's request) — still marked, still one click away.
+ * Developer Corner. The legacy gateway left the run for the deep dives
+ * (2026-09-28, at the user's request) — still marked, still one click away —
+ * and the Ministry of Health swapped places with the Developer Corner the same
+ * day: the integration hub closes the show, MOH leads the deep dives.
  */
 const META = {
   apiIntercept:    { run: 1, area: 'AI Runtime Security',  aka: 'runtime aigw ai-gw gateway attack library intercept api', stats: [`${PAYLOADS} payloads`, '4 targets', '2 architectures'] },
   modelScanning:   { run: 2, area: 'AI Supply Chain',      aka: 'model scan scanning skills hugging face pickle supply', stats: ['models + skills', 'SCM history'] },
   llmGateway:      { group: 'deep', area: 'Gateway · legacy',     aka: 'portkey legacy gateway lanes llm', stats: ['3 lanes side by side'] },
-  ministryHealth:  { run: 5, area: 'Customer scenario',    aka: 'moh briut health hebrew rfi israel', stats: [`${MOH_SCENARIOS} scenarios`, 'HE / EN'] },
+  ministryHealth:  { group: 'deep', area: 'Customer scenario',    aka: 'moh briut health hebrew rfi israel', stats: [`${MOH_SCENARIOS} scenarios`, 'HE / EN'] },
   redTeaming:      { run: 3, area: 'AI Red Teaming',       aka: 'red team redteam adversarial campaign', stats: ['automated campaigns'] },
   mcpSecurity:     { group: 'deep', area: 'Runtime · MCP',        aka: 'mcp tools tool poisoning owasp', stats: ['10 OWASP scenarios'] },
   ragSecurity:     { group: 'deep', area: 'Runtime · RAG',        aka: 'rag retrieval vector documents', stats: ['upstream + downstream'] },
   claudeHooks:     { group: 'deep', area: 'Runtime · IDE',        aka: 'claude code hooks ide coding assistant', stats: ['zero code changes'] },
   observability:   { group: 'ops',  area: 'Observability',        aka: 'telemetry traces observability latency logs', stats: ['every prompt traced'] },
-  developerCorner: { group: 'ops',  area: 'Integration',          aka: 'developer sdk api rest python code', stats: ['SDK · REST · samples'] },
+  developerCorner: { run: 5, area: 'Integration',          aka: 'developer sdk api rest python code docs documentation integrate integration curl node go java install pip model security scan cli ci gateway portkey jwt helm terraform litellm kong mcp relay red team troubleshooting errors', stats: ['guides · live API calls'] },
   enterpriseAccess: { run: 4, area: 'AI-GW · Identity',     aka: 'jwt entra azure ad identity token oauth pkce jwks routing enterprise access sso rbac claims', stats: ['Entra ID sign-in', 'no API keys'] },
 }
 

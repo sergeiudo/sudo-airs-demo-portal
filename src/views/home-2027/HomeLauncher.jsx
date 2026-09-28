@@ -10,7 +10,7 @@ import { LauncherTile, LauncherRow } from './LauncherTile'
 
 // Literal class names, so Tailwind's scan finds every one it may need.
 const ROW_COLS = { 5: 'xl:grid-cols-5', 6: '2xl:grid-cols-6' }
-const ROW_SPAN = { 1: 'xl:col-span-1 2xl:col-span-1', 2: 'xl:col-span-2 2xl:col-span-2', 3: 'xl:col-span-3 2xl:col-span-3', 4: 'xl:col-span-4 2xl:col-span-4' }
+const ROW_SPAN = { 1: 'xl:col-span-1 2xl:col-span-1', 2: 'xl:col-span-2 2xl:col-span-2', 3: 'xl:col-span-3 2xl:col-span-3', 4: 'xl:col-span-4 2xl:col-span-4', 5: 'xl:col-span-5 2xl:col-span-5' }
 const ROW_HEAD = DEEP_DIVES.length + OPERATE.length > 5 ? '2xl:block' : 'xl:block'
 import { ReleaseWire } from './ReleaseWire'
 import { useReleaseFeed } from './useReleaseFeed'
@@ -220,12 +220,12 @@ export function HomeLauncher({ homeSwitch }) {
         {/* ── go deeper ── */}
         <section aria-label="Deep dives and tools" className="mt-6">
           {/* One line on wide screens, the headings spanning their own groups.
-              Six compact rows (four deep dives + two tools) need 2xl — at xl
+              Six compact rows (five deep dives + telemetry) need 2xl — at xl
               a sixth column squeezes the text to ~60px — so below it the
               rows wrap in threes and the group headings step aside. */}
           <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${ROW_COLS[DEEP_DIVES.length + OPERATE.length] ?? ''}`}>
             <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[DEEP_DIVES.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Deep dives</h2>
-            <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[OPERATE.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Operate &amp; integrate</h2>
+            <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[OPERATE.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Operate</h2>
             {[...DEEP_DIVES, ...OPERATE].map((p, i) => (
               <LauncherRow key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} lastOpened={lastOpened[p.id]} />
             ))}

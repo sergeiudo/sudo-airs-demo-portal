@@ -7,7 +7,8 @@ import { NavItem } from '../sidebar/NavItem'
 import { useAppContext } from '../../context/AppContext'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 
-const NAV_ITEMS = [
+// Also the source of the New sidebar's one-line descriptions (LaunchSidebar).
+export const NAV_ITEMS = [
   {
     id: 'apiIntercept',
     label: 'AIRS Runtime & AI-GW',
@@ -53,7 +54,7 @@ const NAV_ITEMS = [
   {
     id: 'developerCorner',
     label: 'Developer Corner',
-    sublabel: 'Integration guide & API ref',
+    sublabel: 'Integration hub & live API calls',
     icon: Code2,
     color: { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', bar: 'bg-indigo-400' },
   },
