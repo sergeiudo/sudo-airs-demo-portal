@@ -15,9 +15,11 @@ import { HomeView2027 } from './views/home-2027/HomeView2027'
 import { HomeLauncher } from './views/home-2027/HomeLauncher'
 import { DesignSwitch } from './components/shared/DesignSwitch'
 import { ObservabilityView } from './views/ObservabilityView'
+import { TelemetryLaunch } from './views/telemetry-launch/TelemetryLaunch'
 import { DeveloperCornerView } from './views/DeveloperCornerView'
 import { DeveloperCorner } from './views/developer-corner/DeveloperCorner'
 import { ReleaseNotesView } from './views/ReleaseNotesView'
+import { ReleaseNotesLaunch } from './views/release-notes-launch/ReleaseNotesLaunch'
 import { McpSecurityView } from './views/McpSecurityView'
 import { RagSecurityView } from './views/RagSecurityView'
 import { LlmGatewayView } from './views/LlmGatewayView'
@@ -62,6 +64,7 @@ function AppContent() {
   const modelScanning = !isNew ? <ModelScanningView /> : SCAN_V1 ? <ModelScanning2027 /> : <SupplyChainLaunch />
   const redTeaming = !isNew ? <RedTeamingView /> : <RedTeamLaunch />
   const developerCorner = !isNew ? <DeveloperCornerView /> : <DeveloperCorner />
+  const observability = !isNew ? <ObservabilityView /> : <TelemetryLaunch />
 
   // Must come before every other branch: this window has no sidebar, no
   // top bar and no MainLayout at all.
@@ -71,7 +74,7 @@ function AppContent() {
     if (!isNew) return <HomeViewV2 homeSwitch={<DesignSwitch />} />
     return HOME_HERO ? <HomeView2027 homeSwitch={<DesignSwitch />} /> : <HomeLauncher homeSwitch={<DesignSwitch />} />
   }
-  if (state.activeView === 'releaseNotes') return <ReleaseNotesView />
+  if (state.activeView === 'releaseNotes') return isNew ? <ReleaseNotesLaunch /> : <ReleaseNotesView />
 
   const renderView = () => {
     switch (state.activeView) {
@@ -79,7 +82,7 @@ function AppContent() {
       case 'modelScanning':  return modelScanning
       case 'redTeaming':     return redTeaming
       case 'claudeHooks':    return <ClaudeHooksView />
-      case 'observability':     return <ObservabilityView />
+      case 'observability':    return observability
       case 'developerCorner':  return developerCorner
       case 'mcpSecurity':      return <McpSecurityView />
       case 'ragSecurity':      return <RagSecurityView />
@@ -97,7 +100,8 @@ function AppContent() {
     (state.activeView === 'modelScanning' && !SCAN_V1) ||
     state.activeView === 'redTeaming' ||
     state.activeView === 'enterpriseAccess' ||
-    state.activeView === 'developerCorner'
+    state.activeView === 'developerCorner' ||
+    state.activeView === 'observability'
   )
 
   return (

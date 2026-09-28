@@ -57,13 +57,15 @@ function shape(data) {
       key, month: m.label, slug: m.slug, monthUrl: m.url,
       title: f.title, category: f.category, summary: f.summary, paragraphs: f.paragraphs ?? [],
       tags: f.tags ?? [], url: f.url || m.url,
+      releaseDate: f.releaseDate ?? null, lastUpdated: f.lastUpdated ?? null,
       pillar, tone: pillar?.accent ?? NEUTRAL,
       fresh: !!seenSet && !seenSet.has(key),
     }
   }))
   return {
     items,
-    months: data.months.map((m) => ({ label: m.label, slug: m.slug, count: m.features.length })),
+    months: data.months.map((m) => ({ label: m.label, slug: m.slug, url: m.url, count: m.features.length })),
+    indexUrl: data.indexUrl ?? null,
     total: items.length,
     fresh: items.filter((i) => i.fresh).length,
     latest: data.months[0].label,
@@ -100,13 +102,14 @@ export function useReleaseFeed() {
   const [feed, setFeed] = useState(() => memo ?? shape(readJSON(CACHE_KEY)))
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     if (memo) return undefined
     let live = true
     // A failure keeps whatever the cache painted; with no cache, the wire
-    // simply does not render.
-    load().then((f) => { if (live && f) setFeed(f) }).catch(() => {})
+    // simply does not render (the release notes page shows loadError).
+    load().then((f) => { if (live && f) setFeed(f) }).catch((e) => { if (live) setLoadError(e.message) })
     return () => { live = false }
   }, [])
 
@@ -129,5 +132,5 @@ export function useReleaseFeed() {
     }
   }, [])
 
-  return { feed, refresh, refreshing, refreshError }
+  return { feed, refresh, refreshing, refreshError, loadError }
 }

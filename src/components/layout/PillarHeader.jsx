@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, HelpCircle, Sun, Moon } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { DesignSwitch } from '../shared/DesignSwitch'
 import { HelpDrawer } from './HelpDrawer'
+import { Tip } from '../shared/Tip'
 import { FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
 import { bandBg, bandDots, bandGlass } from '../../views/home-2027/band'
 import { HOME_PILLARS } from '../../views/home-2027/homeData'
@@ -31,15 +32,17 @@ import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 const focus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
 
-function ChromeIcon({ label, onClick, children }) {
+function ChromeIcon({ label, tip, onClick, children }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} title={label}
+    <Tip title={tip.title} text={tip.text}>
+    <button type="button" onClick={onClick} aria-label={label}
             className={`grid place-items-center rounded-full transition-colors ${focus}`}
             style={{ width: 28, height: 28, color: 'rgba(255,255,255,0.88)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.16)' }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
       {children}
     </button>
+    </Tip>
   )
 }
 
@@ -120,8 +123,14 @@ export function PillarHeader({ pillarId, warn = false, actions }) {
         </AnimatePresence>
         <DesignSwitch compact onBand />
         <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: bandGlass.background, border: bandGlass.border }}>
-          <ChromeIcon label="Demo guide" onClick={() => setHelpOpen(true)}><HelpCircle size={14} /></ChromeIcon>
-          <ChromeIcon label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}>
+          <ChromeIcon label="Demo guide" onClick={() => setHelpOpen(true)}
+                      tip={{ title: 'Demo guide', text: 'What this pillar shows, and how to run it in front of an audience' }}>
+            <HelpCircle size={14} />
+          </ChromeIcon>
+          <ChromeIcon label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
+                      tip={state.isDark
+                        ? { title: 'Light mode', text: 'Switch the whole portal to the light theme' }
+                        : { title: 'Dark mode', text: 'Switch the whole portal to the dark theme' }}>
             {state.isDark ? <Sun size={14} /> : <Moon size={14} />}
           </ChromeIcon>
         </div>

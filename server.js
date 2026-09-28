@@ -16,7 +16,7 @@ import { GoogleAuth } from 'google-auth-library'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
-import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail, countTraces, homeProof } from './src/traceStore.js'
+import { insertTrace, insertSpan, getTraces, getTrace, getMetrics, deleteTrace, deleteAllTraces, insertActivity, getActivity, updateTraceDetail, countTraces, homeProof, traceEvents, traceSummary, traceFeed, traceOverview } from './src/traceStore.js'
 import portkeyRouter from './portkey-routes.js'
 import {
   extractText as extractUploadText,
@@ -2197,20 +2197,41 @@ app.get('/api/airs-probe', async (_req, res) => {
     { id: 'sg', label: 'Singapore',     flag: '🇸🇬', base: 'https://service-sg.api.aisecurity.paloaltonetworks.com' },
   ]
 
+  // Each sample's HTTP exchange is captured (captureHttp), so whether it
+  // opened a new connection — and what the DNS + TCP + TLS handshake cost —
+  // is measured, not assumed. fetch keeps the connection alive, so sample 1
+  // is usually the only new connection and samples 2-4 are a warm round trip
+  // (unless a previous probe's connection was still open).
   const probeRegion = async (region) => {
     const times = []
-    for (let i = 0; i < 3; i++) {
+    const detail = []
+    for (let i = 0; i < 4; i++) {
       const t0 = Date.now()
       try {
         // Pure HTTP GET — no credentials, no scan, measures network round-trip only
-        await fetch(`${region.base}/`, { method: 'GET', signal: AbortSignal.timeout(5000) })
-      } catch { times.push(9999); continue }
-      times.push(Date.now() - t0)
+        const { value: r, http } = await captureHttp(() => fetch(`${region.base}/`, { method: 'GET', signal: AbortSignal.timeout(5000) }))
+        await r.arrayBuffer().catch(() => null)
+        const x = http[0]
+        times.push(Date.now() - t0)
+        detail.push({
+          ms: times.at(-1),
+          reused: x?.reused ?? null,
+          connect_ms: x?.connectMs != null ? Math.round(x.connectMs) : null,
+          wait_ms: x?.headers != null && x?.sent != null ? Math.round(x.headers - x.sent) : null,
+          status: x?.status ?? r.status,
+        })
+      } catch { times.push(9999); detail.push(null); continue }
     }
     const valid = times.filter(t => t < 9999)
+    const warm = detail.filter(d => d && d.reused).map(d => d.ms).sort((a, b) => a - b)
+    const cold = detail.find(d => d && d.reused === false)
     return {
       ...region,
-      min_ms: valid.length ? Math.min(...times) : null,
+      cold_ms: cold?.ms ?? null,
+      connect_ms: cold?.connect_ms ?? null,
+      warm_ms: warm.length ? warm[Math.floor(warm.length / 2)] : null,
+      sample_detail: detail,
+      min_ms: valid.length ? Math.min(...valid) : null,
       avg_ms: valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : null,
       max_ms: valid.length ? Math.max(...valid) : null,
       samples: times.map(t => t === 9999 ? null : t),
@@ -2220,7 +2241,7 @@ app.get('/api/airs-probe', async (_req, res) => {
 
   // Run all regions in parallel
   const results = await Promise.all(REGIONS.map(probeRegion))
-  res.json({ regions: results, active_endpoint: process.env.AIRS_BASE_URL })
+  res.json({ regions: results, active_endpoint: process.env.AIRS_BASE_URL, origin: { hostname: os.hostname() }, at: new Date().toISOString() })
 })
 
 // ─── MCP Security Demo ───────────────────────────────────────────────────────
@@ -2618,6 +2639,63 @@ app.get('/api/traces', (req, res) => {
     console.error('[traces] Error:', err.message)
     res.status(500).json({ error: err.message })
   }
+})
+
+// ─── Telemetry pillar ─────────────────────────────────────────────────────────
+// Read-only aggregates over the local trace store (no network calls), a paged
+// feed, and a live stream of every trace as it is written.
+
+app.get('/api/telemetry/overview', (req, res) => {
+  try {
+    res.json(traceOverview({ window: String(req.query.window || '24h'), target: String(req.query.target || '') }))
+  } catch (err) {
+    console.error('[telemetry/overview]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/telemetry/feed', (req, res) => {
+  try {
+    const { limit, before, target, outcome, q, family } = req.query
+    res.json(traceFeed({ limit, before, target: target ? String(target) : '', outcome: outcome ? String(outcome) : '', q: q ? String(q).slice(0, 200) : '', family: family ? String(family) : '' }))
+  } catch (err) {
+    console.error('[telemetry/feed]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Server-sent events: `trace` (a summary, the moment it is written), `delete`,
+// `reset`, and a comment heartbeat so proxies keep the connection open.
+app.get('/api/telemetry/stream', (req, res) => {
+  const target = String(req.query.target || '')
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+  const send = (event, data) => {
+    if (res.writableEnded) return
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+  send('hello', { at: new Date().toISOString() })
+  const onTrace = (id) => {
+    try {
+      const s = traceSummary(id)
+      if (s && (!target || s.target === target)) send('trace', s)
+    } catch (e) { console.error('[telemetry/stream]', e.message) }
+  }
+  const onDelete = (id) => send('delete', { id })
+  const onReset = () => send('reset', {})
+  traceEvents.on('trace', onTrace)
+  traceEvents.on('delete', onDelete)
+  traceEvents.on('reset', onReset)
+  const beat = setInterval(() => { if (!res.writableEnded) res.write(': beat\n\n') }, 20000)
+  req.on('close', () => {
+    clearInterval(beat)
+    traceEvents.off('trace', onTrace)
+    traceEvents.off('delete', onDelete)
+    traceEvents.off('reset', onReset)
+  })
 })
 
 // ─── GET /api/traces/metrics ──────────────────────────────────────────────────
@@ -3055,11 +3133,10 @@ app.get('/api/system-health', async (_req, res) => {
     // SQLite stats
     let db = null
     try {
-      const traces = getTraces({ limit: 1 })  // just to test connection
-      const all = getTraces({ limit: 99999 })
-      const today = new Date().toISOString().slice(0, 10)
-      const todayCount = all.traces?.filter(t => t.created_at?.startsWith(today)).length ?? 0
-      db = { totalTraces: all.traces?.length ?? 0, tracesToday: todayCount }
+      // getTraces returns an array (it once read `.traces` off it and always
+      // reported 0) — and a count needs no rows at all.
+      const c = countTraces()
+      db = { totalTraces: c.total, tracesToday: c.today }
     } catch {}
 
     // Self-ping latency

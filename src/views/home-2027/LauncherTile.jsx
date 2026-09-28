@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, Archive } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
-import { ago } from './homeData'
 import { shade, bandBg, bandDots, areaPill } from './band'
 
 /**
@@ -73,7 +72,7 @@ function LegacyStamp({ ink }) {
   )
 }
 
-export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpened, spotlight = false }) {
+export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, spotlight = false }) {
   const reduce = useReducedMotion()
   const [hot, hotProps] = useHot()
   const lit = hot || spotlight
@@ -81,7 +80,6 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
   const legacy = !!pillar.legacy
   const tone = legacy ? '#94a3b8' : pillar.accent
   const sh = shade(tone)
-  const opened = ago(lastOpened)
   const news = pillar.news.slice(0, 2)
 
   return (
@@ -107,13 +105,13 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
       {/* the band — the tile's identity */}
       {/* Sizes scale with the viewport so a 1080p projector gets bigger
           tiles rather than empty margins. */}
-      <div className="relative flex-shrink-0 overflow-hidden pointer-events-none" style={{ height: 'clamp(138px, 17vh, 196px)', background: bandBg(tone) }}>
+      <div className="relative flex-shrink-0 overflow-hidden pointer-events-none" style={{ height: 'clamp(118px, 14.5vh, 172px)', background: bandBg(tone) }}>
         <div aria-hidden="true" className="absolute inset-0" style={bandDots} />
         <div aria-hidden="true" className="absolute inset-0"
              style={{ background: 'radial-gradient(circle at 85% 10%, rgba(255,255,255,0.28), transparent 60%)', opacity: lit ? 1 : 0.35, transition: 'opacity 240ms ease' }} />
         <Icon aria-hidden="true" strokeWidth={1.4}
               style={{
-                position: 'absolute', right: -26, bottom: -34, width: 'clamp(150px, 19vh, 210px)', height: 'clamp(150px, 19vh, 210px)', color: '#fff', opacity: 0.17,
+                position: 'absolute', right: -26, bottom: -34, width: 'clamp(134px, 16.5vh, 186px)', height: 'clamp(134px, 16.5vh, 186px)', color: '#fff', opacity: 0.17,
                 transform: lit && !reduce ? 'rotate(-4deg) scale(1.07)' : 'rotate(-10deg)', transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
               }} />
 
@@ -122,7 +120,7 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
             {pillar.run && (
               <div className="leading-none">
                 <div style={{ ...LBL, fontSize: 9, color: 'rgba(255,255,255,0.8)' }}>Step</div>
-                <div style={{ fontFamily: FONT.display, fontSize: 'clamp(34px, 4.2vh, 46px)', fontWeight: 700, letterSpacing: '-0.03em', color: '#fff', marginTop: 3 }}>
+                <div style={{ fontFamily: FONT.display, fontSize: 'clamp(30px, 3.7vh, 41px)', fontWeight: 700, letterSpacing: '-0.03em', color: '#fff', marginTop: 3 }}>
                   {String(pillar.run).padStart(2, '0')}
                 </div>
               </div>
@@ -133,14 +131,14 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
             </div>
           </div>
           <span className="mt-auto grid place-items-center rounded-2xl"
-                style={{ width: 'clamp(46px, 5.4vh, 56px)', height: 'clamp(46px, 5.4vh, 56px)', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.32)', backdropFilter: 'blur(6px)' }}>
+                style={{ width: 'clamp(42px, 4.9vh, 52px)', height: 'clamp(42px, 4.9vh, 52px)', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.32)', backdropFilter: 'blur(6px)' }}>
             <Icon style={{ color: '#fff', width: '44%', height: '44%' }} aria-hidden="true" />
           </span>
         </div>
       </div>
 
       {/* the body */}
-      <div className="relative z-[1] flex-1 flex flex-col pointer-events-none" style={{ padding: '15px 18px 18px' }}>
+      <div className="relative z-[1] flex-1 flex flex-col pointer-events-none" style={{ padding: '13px 16px 16px' }}>
         <span className="truncate" style={{ ...LBL, fontSize: 9.5, ...areaPill(tone) }}>{pillar.area}</span>
         <h3 style={{ fontFamily: FONT.display, fontSize: 'clamp(19px, 2.2vh, 23px)', fontWeight: 700, letterSpacing: '-0.015em', color: t.ink, lineHeight: 1.15, marginTop: 5, textWrap: 'balance' }}>
           {pillar.title}
@@ -166,18 +164,10 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
           </ul>
         )}
 
-        <div className="mt-auto pt-4 flex items-center gap-2 flex-wrap">
-          {pillar.stats[0] && (
-            <span className="rounded-full px-2.5 py-1 whitespace-nowrap"
-                  style={{ fontFamily: FONT.mono, fontSize: 10.5, color: t.inkDim, background: t.sunken, border: `1px solid ${t.hairline}` }}>
-              {pillar.stats[0]}
-            </span>
-          )}
-          {opened && <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: t.inkDim }}>opened {opened}</span>}
-        </div>
-
+        {/* Launch sits at the foot of every tile, whatever its body holds. */}
+        <div className="flex-1 min-h-[12px]" />
         <button type="button" onClick={() => onLaunch(pillar.id)} aria-label={`Launch ${pillar.title}`}
-                className="pointer-events-auto mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-full active:scale-[0.98] focus-visible:outline-none"
+                className="pointer-events-auto w-full inline-flex items-center justify-center gap-1.5 rounded-full active:scale-[0.98] focus-visible:outline-none"
                 style={{
                   height: 38, fontFamily: FONT.prose, fontSize: 13, fontWeight: 700,
                   // Soft at rest — five solid black pills in a row read as a
@@ -195,13 +185,12 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
   )
 }
 
-export function LauncherRow({ t, pillar, index = 0, onOpen, onLaunch, lastOpened }) {
+export function LauncherRow({ t, pillar, index = 0, onOpen, onLaunch }) {
   const reduce = useReducedMotion()
   const [hot, hotProps] = useHot()
   const Icon = pillar.icon
   const tone = pillar.legacy ? '#94a3b8' : pillar.accent
   const sh = shade(tone)
-  const opened = ago(lastOpened)
 
   return (
     <motion.article
@@ -231,7 +220,7 @@ export function LauncherRow({ t, pillar, index = 0, onOpen, onLaunch, lastOpened
           fontFamily: FONT.prose, fontSize: 12, lineHeight: 1.4, color: t.inkDim, marginTop: 2,
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>
-          {opened ? `Opened ${opened} · ${pillar.area}` : pillar.summary}
+          {pillar.summary}
         </p>
       </div>
       <button type="button" onClick={() => onLaunch(pillar.id)} aria-label={`Launch ${pillar.title}`} title={`Launch ${pillar.title}`}

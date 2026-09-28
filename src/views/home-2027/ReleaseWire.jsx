@@ -1,9 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { Megaphone, Pause, Play, ArrowUpRight, Sparkles, RefreshCw, Check, AlertTriangle } from 'lucide-react'
+import { Megaphone, Pause, Play, ArrowUpRight, Sparkles, RefreshCw, Check, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Tip } from '../../components/shared/Tip'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { deepBand } from '../runtime-launch/diagramKit'
-import { shade, bandBg, bandDots } from './band'
+import { shade, bandBg, bandDots, bandGlass } from './band'
 
 /**
  * ReleaseWire — Prisma AIRS release notes as a news wire docked to the bottom
@@ -32,7 +33,19 @@ import { shade, bandBg, bandDots } from './band'
  * The tile is the refresh button (a forced re-read, ~10–20s; the server also
  * re-reads once a day). A refresh that fails keeps the last complete fetch; the
  * tile turns amber and its tooltip says why — or which month was missing.
+ *
+ * It collapses to the left, down to the band alone (the refresh tile and the
+ * label), for a presenter who wants the bottom of the screen back. One glass
+ * chevron inside the band's right edge toggles it and never moves between the
+ * two states. Collapsed, a click anywhere on the label expands it again;
+ * expanded, the label opens the release sheet as before. Collapsing never
+ * hides news — the refresh tile's ping and "N new since your last visit"
+ * stay on the band. The choice is remembered per browser, and the ticker
+ * stops while it is hidden.
  */
+
+const COLLAPSED_KEY = 'sudo-airs.home.wireCollapsed'
+const readCollapsed = () => { try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false } }
 
 const SPEED = 36          // px per second
 const PREVIEW_W = 384
@@ -157,7 +170,7 @@ function Preview({ t, item, x, w }) {
 }
 
 /** "today 12:15" · "yesterday 18:02" · "Sep 21, 09:30" — when the docs were last read. */
-function fetchedLabel(iso) {
+export function fetchedLabel(iso) {
   const d = new Date(iso)
   if (!iso || Number.isNaN(d.getTime())) return null
   const now = new Date()
@@ -182,7 +195,7 @@ const SERVER_TTL_MS = 24 * 60 * 60 * 1000   // server.js RN_TTL_MS
 const PARTIAL_TTL_MS = 10 * 60 * 1000       // a fetch with a month missing is retried sooner
 
 /** True for a moment after a refresh that worked — the tile's check and the "up to date" line. */
-function useJustRefreshed(refreshing, refreshError) {
+export function useJustRefreshed(refreshing, refreshError) {
   const [done, setDone] = useState(false)
   const prev = useRef(refreshing)
   useEffect(() => {
@@ -200,7 +213,7 @@ function useJustRefreshed(refreshing, refreshError) {
  * The band's left tile: a refresh icon over the date and time of the latest
  * fetch. It is the refresh button; hovering or focusing it opens FetchCard.
  */
-function RefreshTile({ fetchedAt, failedMonths, refreshing, refreshError, done, fresh, reduce, onRefresh, onPeek }) {
+export function RefreshTile({ fetchedAt, failedMonths, refreshing, refreshError, done, fresh, reduce, onRefresh, onPeek }) {
   const partial = failedMonths?.length > 0
   const warn = !refreshing && !done && (refreshError || partial)
   const Icon = refreshing ? RefreshCw : done ? Check : warn ? AlertTriangle : RefreshCw
@@ -292,6 +305,21 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
   const [labelHot, setLabelHot] = useState(false)
   const justRefreshed = useJustRefreshed(refreshing, refreshError)
   const [peek, setPeek] = useState(null)   // x of the refresh tile while hovered/focused
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const bandRef = useRef(null)
+  const [bandW, setBandW] = useState(0)
+  useEffect(() => { try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0') } catch { /* private mode */ } }, [collapsed])
+  // The collapsed width is the band's own — measured, since the label hides on small screens.
+  useLayoutEffect(() => {
+    const el = bandRef.current
+    if (!el) return undefined
+    const measure = () => setBandW(el.offsetWidth)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const toggle = () => { setPreview(null); onSpot(null); setCollapsed((c) => !c) }
   const peekAt = (el) => {
     if (!el) { setPeek(null); return }
     const root = rootRef.current?.getBoundingClientRect()
@@ -325,7 +353,7 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
   const clear = () => { setPreview(null); onSpot(null) }
   const open = (idx) => { clear(); setHover(false); onOpen(idx) }
 
-  const running = !held && !hover && !paused
+  const running = !held && !hover && !paused && !collapsed
   const liveDark = shade(t.live)
 
   const copy = (focusable) => groups.map((g) => (
@@ -346,9 +374,14 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
                     transition={{ delay: 0.5, duration: 0.55, ease: EASE }}
                     className="sticky bottom-0 z-20 flex-shrink-0"
                     style={{
+                      // Collapsed, the wire shrinks to the band — a width
+                      // transition from 100% to the band's measured px.
+                      width: collapsed && bandW ? bandW : '100%', alignSelf: 'flex-start',
+                      transition: reduce ? 'none' : 'width 460ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 300ms ease',
+                      borderTopRightRadius: collapsed ? 16 : 0,
                       background: t.isLight ? 'rgba(255,255,255,0.9)' : 'rgba(32,32,36,0.9)',
                       backdropFilter: 'blur(14px) saturate(1.15)', WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
-                      borderTop: `1px solid ${t.hairline}`,
+                      borderTop: `1px solid ${t.hairline}`, borderRight: collapsed ? `1px solid ${t.hairline}` : '1px solid transparent',
                       boxShadow: t.isLight ? '0 -10px 30px rgba(18,18,22,0.07)' : '0 -10px 30px rgba(0,0,0,0.4)',
                     }}>
       <style>{`
@@ -357,12 +390,12 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
         @keyframes release-ping { 0% { transform: scale(1); opacity: .7 } 80%, 100% { transform: scale(2.6); opacity: 0 } }
       `}</style>
 
-      <div className="relative flex items-stretch" style={{ height: 62 }}>
+      <div className="relative flex items-stretch overflow-hidden" style={{ height: 62, borderTopRightRadius: collapsed ? 16 : 0 }}>
         {/* ── the band: the refresh tile (with the fetch time), then the label —
             the keyboard's way into the releases. Siblings, never a button in a button. ── */}
-        <div className="relative flex items-center gap-3 flex-shrink-0 overflow-hidden pl-4 lg:pl-8"
+        <div ref={bandRef} className="relative flex items-center gap-3 flex-shrink-0 overflow-hidden pl-4 lg:pl-8"
              onMouseEnter={() => setLabelHot(true)} onMouseLeave={() => setLabelHot(false)}
-             style={{ background: deepBand(t.live), paddingRight: 44, zIndex: 1, clipPath: 'polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%)' }}>
+             style={{ background: deepBand(t.live), paddingRight: 78, zIndex: 1, clipPath: 'polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%)' }}>
           <span aria-hidden="true" className="absolute inset-0 pointer-events-none" style={bandDots} />
           <span aria-hidden="true" className="absolute inset-0 pointer-events-none"
                 style={{ background: 'radial-gradient(circle at 92% 20%, rgba(255,255,255,0.3), transparent 62%)', opacity: labelHot ? 1 : 0.45, transition: 'opacity 220ms ease' }} />
@@ -371,15 +404,15 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
                   style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)', animation: 'release-shine 1.6s 1.1s ease-out both' }} />
           )}
           <Megaphone aria-hidden="true" strokeWidth={1.4}
-                     style={{ position: 'absolute', right: 26, bottom: -30, width: 92, height: 92, color: '#fff', opacity: 0.13, pointerEvents: 'none', transform: labelHot && !reduce ? 'rotate(-4deg) scale(1.06)' : 'rotate(-10deg)', transition: 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)' }} />
+                     style={{ position: 'absolute', right: 58, bottom: -30, width: 92, height: 92, color: '#fff', opacity: 0.13, pointerEvents: 'none', transform: labelHot && !reduce ? 'rotate(-4deg) scale(1.06)' : 'rotate(-10deg)', transition: 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)' }} />
 
           {onRefresh && (
             <RefreshTile fetchedAt={feed.fetchedAt} failedMonths={feed.failedMonths} refreshing={refreshing}
                          refreshError={refreshError} done={justRefreshed} fresh={feed.fresh} reduce={reduce} onRefresh={onRefresh} onPeek={peekAt} />
           )}
 
-          <button type="button" onClick={() => open(0)}
-                  aria-label={`What's new in Prisma AIRS: ${feed.total} releases, ${spanLabel(feed)}${feed.fresh ? `, ${feed.fresh} new since your last visit` : ''}. Open to browse.`}
+          <button type="button" onClick={() => (collapsed ? setCollapsed(false) : open(0))}
+                  aria-label={`What's new in Prisma AIRS: ${feed.total} releases, ${spanLabel(feed)}${feed.fresh ? `, ${feed.fresh} new since your last visit` : ''}. ${collapsed ? 'Show the release wire.' : 'Open to browse.'}`}
                   onFocus={(e) => { e.currentTarget.style.outline = '2px solid #fff'; e.currentTarget.style.outlineOffset = '4px' }}
                   onBlur={(e) => { e.currentTarget.style.outline = 'none' }}
                   className="relative hidden sm:flex flex-col text-left rounded-lg focus-visible:outline-none" style={{ cursor: 'pointer', lineHeight: 1 }}>
@@ -389,7 +422,23 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
               {feed.fresh > 0 ? `${feed.fresh} new since your last visit` : `${feed.total} releases · ${spanLabel(feed)}`}
             </span>
           </button>
+
+          {/* The one toggle — same place in both states. */}
+          <Tip side="top" title={collapsed ? 'Show the release wire' : 'Collapse to the left'}
+               text={collapsed ? 'Scroll every Prisma AIRS release across the bottom again' : 'Keep just this band — refresh and new-release signals stay'}>
+            <button type="button" onClick={toggle} aria-expanded={!collapsed} aria-controls="release-wire-track"
+                    aria-label={collapsed ? 'Show the release wire' : 'Collapse the release wire to the left'}
+                    className="absolute grid place-items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                    style={{ right: 34, top: '50%', marginTop: -14, width: 28, height: 28, ...bandGlass, transition: 'background 160ms ease' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.24)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = bandGlass.background }}>
+              {collapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronLeft size={15} aria-hidden="true" />}
+            </button>
+          </Tip>
         </div>
+
+        <div id="release-wire-track" className="flex flex-1 min-w-0 items-stretch" inert={collapsed ? '' : undefined} aria-hidden={collapsed || undefined}
+             style={{ opacity: collapsed ? 0 : 1, transition: reduce ? 'none' : 'opacity 240ms ease' }}>
 
         {/* ── the wire ── */}
         {reduce ? (
@@ -439,6 +488,7 @@ export function ReleaseWire({ t, feed, onOpen, onSpot, onAll, paused = false, on
                   }}>
             All {feed.total} releases <ArrowUpRight size={14} aria-hidden="true" />
           </button>
+        </div>
         </div>
       </div>
 

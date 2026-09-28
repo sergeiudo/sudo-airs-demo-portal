@@ -3,10 +3,12 @@ import { Shield, ShieldCheck, Search, Sun, Moon, FileText, Play, Megaphone } fro
 import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
-import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, readLastOpened, markOpened } from './homeData'
+import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, markOpened } from './homeData'
 import { ReadinessPill } from './Preflight'
 import { DetailsSheet, CommandPalette, ReleaseSheet } from './overlays'
 import { LauncherTile, LauncherRow } from './LauncherTile'
+import { Tip } from '../../components/shared/Tip'
+import { RegionsButton } from '../../components/shared/RegionsPanel'
 
 // Literal class names, so Tailwind's scan finds every one it may need.
 const ROW_COLS = { 5: 'xl:grid-cols-5', 6: '2xl:grid-cols-6' }
@@ -36,13 +38,19 @@ import { useReleaseFeed } from './useReleaseFeed'
  * LLM Telemetry. Classic (HomeViewV2) is kept beside it via the Design switch.
  */
 
-function IconButton({ t, label, onClick, children }) {
+// Icon-only, so each carries a Tip saying what it does — a native title shows
+// late and small, and never on a projector.
+function IconButton({ t, label, tip, onClick, children }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} title={label}
-            className="grid place-items-center rounded-full transition-colors flex-shrink-0"
-            style={{ width: 38, height: 38, color: t.inkDim, background: t.panel, border: `1px solid ${t.hairline}` }}>
-      {children}
-    </button>
+    <Tip title={tip.title} text={tip.text}>
+      <button type="button" onClick={onClick} aria-label={label}
+              className="grid place-items-center rounded-full transition-colors flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+              style={{ width: 38, height: 38, color: t.inkDim, background: t.panel, border: `1px solid ${t.hairline}` }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = t.ink; e.currentTarget.style.borderColor = `${t.live}55` }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = t.inkDim; e.currentTarget.style.borderColor = t.hairline }}>
+        {children}
+      </button>
+    </Tip>
   )
 }
 
@@ -54,7 +62,6 @@ export function HomeLauncher({ homeSwitch }) {
   const t = useMemo(() => (base.isLight ? { ...base, inkDim: '#55555D' } : base), [base])
   const [sheet, setSheet] = useState(null)
   const [palette, setPalette] = useState(false)
-  const [lastOpened] = useState(readLastOpened)
   const { feed, refresh: refreshFeed, refreshing: feedRefreshing, refreshError: feedError } = useReleaseFeed()
   const [release, setRelease] = useState(null)   // index into feed.items
   const [spot, setSpot] = useState(null)         // pillar lit from the release wire
@@ -132,12 +139,17 @@ export function HomeLauncher({ homeSwitch }) {
           </button>
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <RegionsButton t={t} variant="bar" />
             <ReadinessPill t={t} />
             {homeSwitch}
-            <IconButton t={t} label="Prisma AIRS release notes" onClick={openNotes}>
+            <IconButton t={t} label="Prisma AIRS release notes" onClick={openNotes}
+                        tip={{ title: 'Release notes', text: 'Every Prisma AIRS feature, month by month — read from docs.paloaltonetworks.com' }}>
               <FileText size={15} />
             </IconButton>
-            <IconButton t={t} label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}>
+            <IconButton t={t} label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
+                        tip={state.isDark
+                          ? { title: 'Light mode', text: 'Switch the whole portal to the light theme' }
+                          : { title: 'Dark mode', text: 'Switch the whole portal to the dark theme' }}>
               {state.isDark ? <Sun size={15} /> : <Moon size={15} />}
             </IconButton>
             {/* The lockup is white — on the light ground it needs a dark plate. */}
@@ -213,7 +225,7 @@ export function HomeLauncher({ homeSwitch }) {
         <section aria-labelledby="run-of-show" className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
                  style={{ gridAutoRows: 'minmax(clamp(400px, 46vh, 580px), auto)' }}>
           {RUN_OF_SHOW.map((p, i) => (
-            <LauncherTile key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} lastOpened={lastOpened[p.id]} spotlight={spot === p.id} />
+            <LauncherTile key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} spotlight={spot === p.id} />
           ))}
         </section>
 
@@ -227,7 +239,7 @@ export function HomeLauncher({ homeSwitch }) {
             <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[DEEP_DIVES.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Deep dives</h2>
             <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[OPERATE.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Operate</h2>
             {[...DEEP_DIVES, ...OPERATE].map((p, i) => (
-              <LauncherRow key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} lastOpened={lastOpened[p.id]} />
+              <LauncherRow key={p.id} t={t} pillar={p} index={i} onOpen={setSheet} onLaunch={launch} />
             ))}
           </div>
         </section>
