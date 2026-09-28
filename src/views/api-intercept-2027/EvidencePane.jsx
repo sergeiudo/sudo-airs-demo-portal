@@ -796,6 +796,16 @@ function BandVerdict({ t, v, message, inScan, outScan, upload, fired }) {
  * the same drawer, as a card at the top of the evidence — blue, the colour the
  * transcript action already uses, so the two read as one feature.
  */
+/**
+ * A soft blue wash at rest, stronger under the pointer, so the one action
+ * the pane is built around stands out from plain cards. Shared by the runtime
+ * and supply-chain telemetry cards.
+ */
+export function ctaWash(t, tone, hot) {
+  const [a, b] = t.isLight ? (hot ? ['24', '12'] : ['17', '09']) : (hot ? ['59', '33'] : ['40', '22'])
+  return `linear-gradient(120deg, ${tone}${a} 0%, ${tone}${b} 100%), ${t.panel}`
+}
+
 function TelemetryCta({ t, traceId, onOpen }) {
   const [hot, setHot] = useState(false)
   const tone = t.live
@@ -804,10 +814,10 @@ function TelemetryCta({ t, traceId, onOpen }) {
             onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)}
             className="w-full flex items-center gap-3 rounded-2xl text-left mt-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             style={{
-              padding: '10px 10px 10px 11px', background: t.panel,
-              border: `1px solid ${hot ? `${tone}88` : `${tone}40`}`,
+              padding: '10px 10px 10px 11px', background: ctaWash(t, tone, hot),
+              border: `1px solid ${hot ? `${tone}88` : `${tone}55`}`,
               boxShadow: hot ? `0 10px 24px ${tone}2e` : `0 6px 16px ${tone}17`,
-              transition: 'border-color 160ms ease, box-shadow 200ms ease',
+              transition: 'border-color 160ms ease, box-shadow 200ms ease, background 180ms ease',
             }}>
       <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 36, height: 36, background: bandBg(tone), boxShadow: `0 5px 12px ${tone}55` }}>
         <Activity size={16} style={{ color: '#fff' }} aria-hidden="true" />
@@ -819,7 +829,7 @@ function TelemetryCta({ t, traceId, onOpen }) {
         </span>
       </span>
       <span className="grid place-items-center rounded-full flex-shrink-0" aria-hidden="true"
-            style={{ width: 28, height: 28, color: hot ? '#fff' : tone, background: hot ? shade(tone) : `${tone}14`, transition: 'background 140ms ease, color 140ms ease' }}>
+            style={{ width: 28, height: 28, color: hot ? '#fff' : tone, background: hot ? shade(tone) : t.panel, transition: 'background 140ms ease, color 140ms ease' }}>
         <ArrowUpRight size={14} />
       </span>
     </button>

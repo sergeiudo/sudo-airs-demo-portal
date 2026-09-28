@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
@@ -14,6 +14,7 @@ import { LaunchScanLibrary } from './LaunchScanLibrary'
 import { LaunchScanComposer } from './LaunchScanComposer'
 import { LaunchScanEvidence } from './LaunchScanEvidence'
 import { LaunchScanArchitecture } from './LaunchScanArchitecture'
+import { ScanTelemetryDrawer } from './ScanTelemetryDrawer'
 
 /**
  * SupplyChainLaunch — AI Supply Chain in the launch design.
@@ -25,6 +26,10 @@ import { LaunchScanArchitecture } from './LaunchScanArchitecture'
  * launch-design components; the transcript is the v1 console's ScanStream in
  * its band variant; the session logic is the shared useScanSession — a new
  * look over the same behaviour, not a second implementation.
+ *
+ * The evidence pane opens the scan telemetry drawer — every rule, the file
+ * tree, provenance, raw — from its "Open full scan telemetry" card or from a
+ * failed rule (which opens the drawer at that rule).
  *
  * The previous New console (ModelScanning2027) stays reachable at /?scan=v1;
  * Classic behind the Design switch.
@@ -49,6 +54,15 @@ export function SupplyChainLaunch() {
   const [dragL, setDragL] = useState(false)
   const [dragR, setDragR] = useState(false)
   const down = health.state === 'stub' || health.state === 'offline'
+
+  // The drawer follows the record it was opened for, not the selection; it
+  // closes on its own when New session clears that record.
+  const [tele, setTele] = useState(null)   // { id, focus, n }
+  const teleRecord = tele ? records.find((r) => r.id === tele.id) ?? null : null
+  const openTelemetry = useCallback((focus) => {
+    if (selected) setTele({ id: selected.id, focus: focus ?? null, n: Date.now() })
+  }, [selected])
+  const closeTelemetry = useCallback(() => setTele(null), [])
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden"
@@ -115,9 +129,11 @@ export function SupplyChainLaunch() {
 
         <Handle t={t} side="right" dragging={dragR} onDrag={{ width: rightW, setWidth: setRightW, setDragging: setDragR }} />
         <div className="relative flex-shrink-0 overflow-hidden py-3 pr-3" style={{ width: rightW }}>
-          <LaunchScanEvidence t={t} record={selected} ready={ready} />
+          <LaunchScanEvidence t={t} record={selected} ready={ready} onOpenTelemetry={openTelemetry} />
         </div>
       </div>
+
+      <ScanTelemetryDrawer record={teleRecord} focus={tele?.focus} focusKey={tele?.n} onClose={closeTelemetry} />
     </div>
   )
 }

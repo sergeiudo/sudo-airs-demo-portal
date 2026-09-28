@@ -1925,9 +1925,12 @@ async function aimsAccessToken(force = false) {
   return aimsToken.value
 }
 
-/** GET on the data plane; one retry with a fresh token on 401. */
-async function aimsGet(path, params) {
-  const url = `${AIMS_BASE}/data${path}${params?.toString() ? `?${params}` : ''}`
+/**
+ * GET on the data plane (or `plane: 'mgmt'` — security groups and their rule
+ * instances live there); one retry with a fresh token on 401.
+ */
+async function aimsGet(path, params, plane = 'data') {
+  const url = `${AIMS_BASE}/${plane}${path}${params?.toString() ? `?${params}` : ''}`
   let r = await fetch(url, { headers: { Authorization: `Bearer ${await aimsAccessToken()}` } })
   if (r.status === 401) r = await fetch(url, { headers: { Authorization: `Bearer ${await aimsAccessToken(true)}` } })
   const body = await r.json().catch(() => null)
@@ -2003,6 +2006,99 @@ app.get('/api/supply-chain/scans/:uuid', async (req, res) => {
       ...(violations_error ? { violations_error } : {}),
       scan_source: scan.source_type === 'HUGGING_FACE' ? 'huggingface' : 'local',
     })
+  } catch (e) {
+    res.status(e.status && e.status < 500 ? e.status : 502).json({ error: String(e.message).slice(0, 300) })
+  }
+})
+
+// ─── Scan telemetry: everything AIMS knows about one scan ────────────────────
+// The detail route above returns the scan and its violations — the failures.
+// The telemetry drawer also wants what passed and why the group was set up the
+// way it was, all from documented endpoints the SDK uses (verified 2026-09-28):
+//   data  /v1/scans/{uuid}/evaluations        every rule, PASSED or FAILED
+//   data  /v1/scans/{uuid}/files?query_path=/ the scanned file tree, one level
+//   data  /v1/model-versions/{uuid}           HF commit, license, file count
+//   data  /v1/models/{uuid}                   first seen, latest outcome
+//   mgmt  /v1/security-groups/{uuid}          the group
+//   mgmt  /v1/security-groups/{uuid}/rule-instances  rule type + configured values
+// Each call settles on its own, so one failing endpoint leaves a named gap in
+// the drawer rather than an empty one. A scan never changes, so the bundle is
+// cached briefly per uuid.
+const SC_TELEMETRY = new Map()
+const SC_TELEMETRY_TTL = 10 * 60 * 1000
+
+const settle = (p) => (p ? p.then((value) => ({ value }), (e) => ({ error: String(e.message).slice(0, 200) })) : Promise.resolve(null))
+
+// Rule instances carry the whole editable-field schema (every format and
+// licence in a dropdown). The drawer needs the configured values and their
+// display names, not the schema.
+function trimRuleInstance(ri) {
+  const r = ri.rule ?? ri.custom_rule ?? {}
+  const fields = (r.editable_fields ?? []).map((f) => {
+    const key = String(f.attribute_name ?? '').replace(/^field_values\./, '')
+    return { key, label: f.display_name ?? key, description: f.description ?? null, value: ri.field_values?.[key] ?? null }
+  })
+  return {
+    uuid: ri.uuid, state: ri.state, custom: !!ri.custom_rule_uuid,
+    name: r.name ?? null, description: r.description ?? null, type: r.rule_type ?? null,
+    sources: r.compatible_sources ?? [], defaultState: r.default_state ?? null,
+    remediation: r.remediation ?? null, fields,
+  }
+}
+
+const FILES_PATH_RE = /^\/(?:[^?#]*\/)?$/
+
+app.get('/api/supply-chain/scans/:uuid/telemetry', async (req, res) => {
+  if (!aimsConfigured()) return res.status(503).json({ configured: false, error: 'Model Security credentials are not set on this host' })
+  const { uuid } = req.params
+  if (!UUID_RE.test(uuid)) return res.status(400).json({ error: 'not a scan uuid' })
+  const hit = SC_TELEMETRY.get(uuid)
+  if (hit && req.query.force !== '1' && Date.now() - hit.at < SC_TELEMETRY_TTL) return res.json({ ...hit.data, cached: true })
+  try {
+    const scan = await aimsGet(`/v1/scans/${uuid}`)
+    const page = (extra) => new URLSearchParams({ skip: '0', limit: '100', ...extra })
+    const sg = scan.security_group_uuid
+    const [evaluations, files, version, model, group, rules] = await Promise.all([
+      settle(aimsGet(`/v1/scans/${uuid}/evaluations`, page())),
+      settle(aimsGet(`/v1/scans/${uuid}/files`, page({ query_path: '/' }))),
+      settle(scan.model_version_uuid && aimsGet(`/v1/model-versions/${scan.model_version_uuid}`)),
+      settle(scan.model_uuid && aimsGet(`/v1/models/${scan.model_uuid}`)),
+      settle(sg && aimsGet(`/v1/security-groups/${sg}`, null, 'mgmt')),
+      settle(sg && aimsGet(`/v1/security-groups/${sg}/rule-instances`, page(), 'mgmt')),
+    ])
+    const errors = {}
+    for (const [k, v] of Object.entries({ evaluations, files, version, model, group, rules })) if (v?.error) errors[k] = v.error
+    const data = {
+      configured: true,
+      fetchedAt: new Date().toISOString(),
+      evaluations: evaluations?.value?.evaluations ?? null,
+      files: files?.value ? { path: '/', items: files.value.files ?? [], total: files.value.pagination?.total_items ?? null } : null,
+      version: version?.value ?? null,
+      model: model?.value ?? null,
+      group: group?.value ?? null,
+      rules: rules?.value ? (rules.value.rule_instances ?? []).map(trimRuleInstance) : null,
+      errors,
+    }
+    SC_TELEMETRY.set(uuid, { at: Date.now(), data })
+    if (SC_TELEMETRY.size > 60) SC_TELEMETRY.delete(SC_TELEMETRY.keys().next().value)
+    res.json({ ...data, cached: false })
+  } catch (e) {
+    res.status(e.status && e.status < 500 ? e.status : 502).json({ configured: true, error: String(e.message).slice(0, 300) })
+  }
+})
+
+// One folder of the scanned file tree. AIMS wants the path to start AND end
+// with "/" (`/archive/`), and returns one level at a time.
+app.get('/api/supply-chain/scans/:uuid/files', async (req, res) => {
+  if (!aimsConfigured()) return res.status(503).json({ configured: false, error: 'Model Security credentials are not set on this host' })
+  const { uuid } = req.params
+  if (!UUID_RE.test(uuid)) return res.status(400).json({ error: 'not a scan uuid' })
+  const path = String(req.query.path || '/').slice(0, 1024)
+  if (!FILES_PATH_RE.test(path)) return res.status(400).json({ error: 'path must start and end with /' })
+  const skip = String(Math.max(0, parseInt(req.query.skip, 10) || 0))
+  try {
+    const d = await aimsGet(`/v1/scans/${uuid}/files`, new URLSearchParams({ skip, limit: '100', query_path: path }))
+    res.json({ path, items: d.files ?? [], total: d.pagination?.total_items ?? null, skip: Number(skip) })
   } catch (e) {
     res.status(e.status && e.status < 500 ? e.status : 502).json({ error: String(e.message).slice(0, 300) })
   }

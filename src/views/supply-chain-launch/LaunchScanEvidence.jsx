@@ -1,17 +1,15 @@
 import React, { useState } from 'react'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
-  ShieldCheck, ShieldX, AlertTriangle, Loader2, Radar, Package, ExternalLink, BookOpen, FileWarning, Hash,
-  ListChecks, Biohazard, Scale, ChevronDown, Fingerprint, Braces, ArrowUpRight, Files, Link2,
+  ShieldCheck, ShieldX, AlertTriangle, Loader2, Radar, Package, ExternalLink, ListChecks, Biohazard, Scale,
+  ArrowUpRight, Link2, Activity,
 } from 'lucide-react'
 import { FONT, label as LBL, glass } from '../api-intercept-2027/tokens'
 import { shade, bandBg, bandDots } from '../home-2027/band'
-import { Row, Block, EvidenceLook } from '../api-intercept-2027/EvidencePane'
-import { Copyable } from '../api-intercept-2027/RecordStream'
-import { Markdown } from '../api-intercept-2027/Markdown'
+import { Block, EvidenceLook, ctaWash } from '../api-intercept-2027/EvidencePane'
 import {
   KIND_TONE, scanVerdict, ruleCounts, groupViolations, threatSignals, unapprovedFormats,
-  filesWithFindings, parseTarget, scmScanUrl, fmtBytes, isTempCopy,
+  parseTarget, scmScanUrl, fmtBytes,
 } from '../model-scanning-2027/scanModel'
 
 /**
@@ -20,15 +18,15 @@ import {
  * The verdict is a band (Allowed / Blocked / Scanning / Fault), the SCM
  * record is a card right under it, and the evidence is list-row sections.
  *
- * One home per piece of evidence: the Security group section is where rule
- * detail lives now — each failed rule is a row that opens onto its findings,
- * the file they were found in and how to fix it, and a threat rule shows what
- * executes on load without being opened. The v1 console repeated all of that
- * under every scan in the transcript and again in a separate Threats block.
+ * One home per piece of evidence. The pane is the verdict and the failures at
+ * a glance: each failed rule is a row naming its threat code and what runs on
+ * load. Everything deeper — findings, how to fix, every rule including the
+ * ones that passed, the file tree with hashes, provenance, identifiers and the
+ * raw payloads — lives in the scan telemetry drawer, opened from the card
+ * under the SCM link or from any rule row (which opens it at that rule).
  */
 
 const focusCls = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
-const basename = (p) => String(p ?? '').split('/').pop()
 
 // ─── empty ───────────────────────────────────────────────────────────────────
 
@@ -38,9 +36,9 @@ export function ScanEvidenceEmpty({ t, ready }) {
   const tone = ready ? t.pass : t.warn
   const rows = [
     { icon: ShieldCheck, title: 'Verdict', text: 'Allowed or blocked — and whether the reason is a threat or a policy rule.' },
-    { icon: ListChecks, title: 'Security group', text: 'Every rule it evaluated, and each one that failed with its findings and fix.' },
+    { icon: ListChecks, title: 'Security group', text: 'How many rules passed, and each one that failed.' },
     { icon: Biohazard, title: 'Threats', text: 'PAIT codes and the operators that run on load — exec, os, Lambda layers.' },
-    { icon: Files, title: 'Files and hashes', text: 'Which files carried findings, down to the hash.' },
+    { icon: Activity, title: 'Full scan telemetry', text: 'Every rule and its configuration, the scanned file tree with hashes, provenance and raw JSON.' },
     { icon: ExternalLink, title: 'SCM record', text: 'The same scan in Strata Cloud Manager, by its scan id.' },
   ]
   return (
@@ -152,6 +150,38 @@ function ScmCta({ t, href }) {
   )
 }
 
+/**
+ * The way into the scan telemetry drawer — a visible card, not a hover
+ * action, the same as the runtime console's "Open full telemetry".
+ */
+function TelemetryCta({ t, onOpen }) {
+  const [hot, setHot] = useState(false)
+  const tone = t.live
+  return (
+    <button type="button" onClick={() => onOpen(null)}
+            onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)}
+            className={`w-full flex items-center gap-3 rounded-2xl text-left mt-2 ${focusCls}`}
+            style={{
+              padding: '10px 10px 10px 11px', background: ctaWash(t, tone, hot),
+              border: `1px solid ${hot ? `${tone}88` : `${tone}55`}`,
+              boxShadow: hot ? `0 10px 24px ${tone}2e` : `0 6px 16px ${tone}17`,
+              transition: 'border-color 160ms ease, box-shadow 200ms ease, background 160ms ease',
+            }}>
+      <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 36, height: 36, background: bandBg(tone), boxShadow: `0 5px 12px ${tone}55` }}>
+        <Activity size={16} style={{ color: '#fff' }} aria-hidden="true" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block" style={{ fontFamily: FONT.display, fontSize: 13.5, fontWeight: 700, color: t.ink }}>Open full scan telemetry</span>
+        <span className="block truncate" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim, marginTop: 1 }}>Every rule · file tree · provenance · raw</span>
+      </span>
+      <span className="grid place-items-center rounded-full flex-shrink-0" aria-hidden="true"
+            style={{ width: 28, height: 28, color: hot ? '#fff' : tone, background: hot ? shade(tone) : t.panel, transition: 'background 140ms ease, color 140ms ease' }}>
+        <ArrowUpRight size={14} />
+      </span>
+    </button>
+  )
+}
+
 // ─── sections ────────────────────────────────────────────────────────────────
 
 function ModelRow({ t, rec }) {
@@ -230,127 +260,64 @@ function RuleMeter({ t, total, passed, failed }) {
   )
 }
 
-/** A failed rule as a row that opens onto its findings, file and fix. */
-function RuleRow({ t, g, uploadName }) {
-  const [open, setOpen] = useState(false)
-  const [all, setAll] = useState(false)
+/**
+ * A failed rule, at a glance: state, kind, threat code, finding count and the
+ * operators that run on load. Its findings and fix open in the scan telemetry
+ * drawer, at this rule.
+ */
+function RuleRow({ t, g, onOpen }) {
+  const [hot, setHot] = useState(false)
   const tone = KIND_TONE[g.kind]
   const ink = t.isLight ? shade(tone, 0.3) : tone
   const Icon = g.kind === 'threat' ? Biohazard : Scale
   const signals = g.kind === 'threat' ? threatSignals(g.items) : []
-  // A threat rule firing on six operators is six near-identical sentences; the
-  // chips name them, so one sentence stands for the set.
-  const limit = signals.length ? 1 : 3
-  const shown = all ? g.items : g.items.slice(0, limit)
-  const steps = g.remediation?.steps ?? []
   const stateTone = g.state === 'BLOCKING' ? t.block : g.state === 'WARNING' ? t.warn : t.inkDim
+  const Tag = onOpen ? 'button' : 'div'
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: t.panel, border: `1px solid ${open ? `${tone}55` : t.hairline}`, transition: 'border-color 160ms ease' }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
-              className={`w-full flex items-start gap-2.5 text-left ${focusCls}`} style={{ padding: '9px 10px' }}>
-        <span className="grid place-items-center rounded-lg flex-shrink-0" style={{ width: 26, height: 26, background: `${tone}17`, color: ink }}>
-          <Icon size={13} aria-hidden="true" />
+    <Tag {...(onOpen ? { type: 'button', onClick: () => onOpen(g.key), 'aria-label': `${g.name} — open in scan telemetry` } : {})}
+         onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)}
+         className={`w-full flex items-start gap-2.5 text-left rounded-2xl ${focusCls}`}
+         style={{
+           padding: '9px 10px', background: t.panel, cursor: onOpen ? 'pointer' : 'default',
+           border: `1px solid ${hot && onOpen ? `${tone}66` : t.hairline}`,
+           boxShadow: hot && onOpen ? `0 8px 18px ${tone}1f` : 'none', transition: 'border-color 160ms ease, box-shadow 180ms ease',
+         }}>
+      <span className="grid place-items-center rounded-lg flex-shrink-0" style={{ width: 26, height: 26, background: `${tone}17`, color: ink }}>
+        <Icon size={13} aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block" style={{ fontFamily: FONT.prose, fontSize: 12.5, fontWeight: 600, color: t.ink }}>{g.name}</span>
+        <span className="block" style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkDim, marginTop: 1 }}>
+          <span style={{ color: t.isLight ? shade(stateTone, 0.25) : stateTone, fontWeight: 600 }}>{g.state.toLowerCase()}</span>
+          {' · '}{g.kind}
+          {g.threat ? <> · <span style={{ fontFamily: FONT.mono, fontSize: 10.5 }}>{g.threat}</span></> : null}
+          {g.items.length > 1 ? ` · ${g.items.length} findings` : ''}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block" style={{ fontFamily: FONT.prose, fontSize: 12.5, fontWeight: 600, color: t.ink }}>{g.name}</span>
-          <span className="block" style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkDim, marginTop: 1 }}>
-            <span style={{ color: t.isLight ? shade(stateTone, 0.25) : stateTone, fontWeight: 600 }}>{g.state.toLowerCase()}</span>
-            {' · '}{g.kind}
-            {g.threat ? <> · <span style={{ fontFamily: FONT.mono, fontSize: 10.5 }}>{g.threat}</span></> : null}
-            {g.items.length > 1 ? ` · ${g.items.length} findings` : ''}
+        {signals.length > 0 && (
+          <span className="flex flex-wrap gap-1 mt-1.5">
+            {signals.map((s) => (
+              <span key={s.label} dir="ltr" className="rounded-full px-2" title={s.module ? `from module ${s.module}` : undefined}
+                    style={{ fontFamily: FONT.mono, fontSize: 10.5, fontWeight: 600, lineHeight: '18px', color: t.isLight ? shade(t.block, 0.2) : t.block, background: `${t.block}17` }}>
+                {s.label}
+              </span>
+            ))}
           </span>
-          {signals.length > 0 && (
-            <span className="flex flex-wrap gap-1 mt-1.5">
-              {signals.map((s) => (
-                <span key={s.label} dir="ltr" className="rounded-full px-2" title={s.module ? `from module ${s.module}` : undefined}
-                      style={{ fontFamily: FONT.mono, fontSize: 10.5, fontWeight: 600, lineHeight: '18px', color: t.isLight ? shade(t.block, 0.2) : t.block, background: `${t.block}17` }}>
-                  {s.label}
-                </span>
-              ))}
-            </span>
-          )}
-        </span>
-        <ChevronDown size={14} className="flex-shrink-0" style={{ color: t.inkDim, marginTop: 5, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} aria-hidden="true" />
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.18 }} className="overflow-hidden">
-            <div className="px-3 pb-3" style={{ borderTop: `1px solid ${t.hairline}` }}>
-              {g.description && (
-                <p style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.5, color: t.inkDim, marginTop: 8 }}>{g.description}</p>
-              )}
-              <div className="mt-2 space-y-2">
-                {shown.map((v) => (
-                  <div key={v.uuid} className="pl-2.5" style={{ borderLeft: `2px solid ${tone}55` }}>
-                    <div style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.5, color: t.inkDim }}>
-                      <Markdown text={v.description ?? v.threat_description ?? ''} t={t} />
-                    </div>
-                    {v.file && (
-                      <span className="block mt-0.5 truncate" dir="ltr" title={v.hash ? `sha1 ${v.hash}` : undefined}
-                            style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkDim }}>
-                        {v.file}{uploadName && isTempCopy(v.file) ? ` · temp copy of ${uploadName}` : ''}
-                      </span>
-                    )}
-                  </div>
-                ))}
-                {g.items.length > limit && (
-                  <button type="button" onClick={() => setAll((a) => !a)}
-                          style={{ fontFamily: FONT.prose, fontSize: 11.5, fontWeight: 600, color: t.live }}>
-                    {all ? 'Show fewer' : `Show ${g.items.length - limit} more finding${g.items.length - limit === 1 ? '' : 's'}`}
-                  </button>
-                )}
-              </div>
-
-              {steps.length > 0 && (
-                <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: t.sunken }}>
-                  <div style={{ fontFamily: FONT.display, fontSize: 12, fontWeight: 700, color: t.ink, marginBottom: 4 }}>How to fix</div>
-                  <ol className="space-y-1">
-                    {steps.map((s, i) => (
-                      <li key={i} className="flex gap-2" style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.5, color: t.inkDim }}>
-                        <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: t.inkDim, minWidth: 14 }}>{i + 1}.</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              {(g.kbUrl || g.insightsUrl || g.remediation?.url) && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
-                  {g.kbUrl && (
-                    <a href={g.kbUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1"
-                       style={{ fontFamily: FONT.prose, fontSize: 11.5, fontWeight: 600, color: t.live }}>
-                      <BookOpen size={11} aria-hidden="true" /> {g.threat ?? 'Threat'} knowledge base
-                    </a>
-                  )}
-                  {g.insightsUrl && (
-                    <a href={g.insightsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1"
-                       style={{ fontFamily: FONT.prose, fontSize: 11.5, fontWeight: 600, color: t.live }}>
-                      <ExternalLink size={11} aria-hidden="true" /> File in AI model insights
-                    </a>
-                  )}
-                  {g.remediation?.url && (
-                    <a href={g.remediation.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1"
-                       style={{ fontFamily: FONT.prose, fontSize: 11.5, fontWeight: 600, color: t.live }}>
-                      <ExternalLink size={11} aria-hidden="true" /> Rule documentation
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
         )}
-      </AnimatePresence>
-    </div>
+      </span>
+      {onOpen && (
+        <span className="grid place-items-center rounded-full flex-shrink-0" aria-hidden="true"
+              style={{ width: 26, height: 26, marginTop: 1, color: hot ? '#fff' : t.inkDim, background: hot ? shade(tone) : t.sunken, transition: 'background 140ms ease, color 140ms ease' }}>
+          <ArrowUpRight size={13} />
+        </span>
+      )}
+    </Tag>
   )
 }
 
 // ─── the pane ────────────────────────────────────────────────────────────────
 
-export function LaunchScanEvidence({ t, record, ready }) {
+export function LaunchScanEvidence({ t, record, ready, onOpenTelemetry }) {
   if (!record) return <ScanEvidenceEmpty t={t} ready={ready} />
 
   const v = scanVerdict(record)
@@ -359,9 +326,9 @@ export function LaunchScanEvidence({ t, record, ready }) {
   const groups = groupViolations(r?.violations)
   const threats = groups.filter((g) => g.kind === 'threat')
   const policy = groups.filter((g) => g.kind === 'policy')
-  const files = filesWithFindings(r?.violations)
   const scm = scmScanUrl(r)
-  const uploadName = record.source === 'local' && !record.fromScm ? record.target : null
+  // The drawer reads AIMS by scan id — no id, no drawer.
+  const openTel = r?.uuid && onOpenTelemetry ? onOpenTelemetry : null
   const signals = threatSignals(threats.flatMap((g) => g.items)).filter((s) => s.module && !/layer/i.test(s.label))
 
   const where = v === 'blocked'
@@ -392,6 +359,7 @@ export function LaunchScanEvidence({ t, record, ready }) {
           <div className="px-4 pt-3 pb-3">
             <p style={{ fontFamily: FONT.prose, fontSize: 12.5, lineHeight: 1.5, color: t.inkDim, overflowWrap: 'anywhere' }}>{note}</p>
             {scm && <ScmCta t={t} href={scm} />}
+            {openTel && <TelemetryCta t={t} onOpen={openTel} />}
           </div>
 
           <ModelRow t={t} rec={record} />
@@ -404,10 +372,10 @@ export function LaunchScanEvidence({ t, record, ready }) {
               {groups.length > 0 && (
                 <>
                   <div style={{ fontFamily: FONT.prose, fontSize: 11.5, fontWeight: 600, color: t.inkDim, margin: '14px 0 6px' }}>
-                    {groups.length} rule{groups.length === 1 ? '' : 's'} failed · {r.violations.length} finding{r.violations.length === 1 ? '' : 's'} — open one for the detail
+                    {groups.length} rule{groups.length === 1 ? '' : 's'} failed · {r.violations.length} finding{r.violations.length === 1 ? '' : 's'}{openTel ? ' — open one for its findings and fix' : ''}
                   </div>
                   <div className="space-y-1.5">
-                    {groups.map((g) => <RuleRow key={g.key} t={t} g={g} uploadName={uploadName} />)}
+                    {groups.map((g) => <RuleRow key={g.key} t={t} g={g} onOpen={openTel} />)}
                   </div>
                 </>
               )}
@@ -422,53 +390,6 @@ export function LaunchScanEvidence({ t, record, ready }) {
             </Block>
           )}
 
-          {files.length > 0 && (
-            <Block t={t} title="Files with findings" icon={FileWarning} accent={files.some((f) => f.threat) ? t.block : t.warn}
-                   sub={files.map((f) => basename(f.file)).slice(0, 3).join(' · ')} count={files.length} defaultOpen={false}>
-              <div className="space-y-1.5">
-                {files.map((f) => (
-                  <div key={f.file} className="rounded-xl px-3 py-2" style={{ background: t.sunken }}>
-                    <div className="flex items-center gap-1.5">
-                      <FileWarning size={12} style={{ color: f.threat ? t.block : t.warn, flexShrink: 0 }} aria-hidden="true" />
-                      <span className="flex-1 min-w-0 truncate" dir="ltr" title={f.file} style={{ fontFamily: FONT.mono, fontSize: 11, fontWeight: 600, color: t.ink }}>{f.file}</span>
-                      {uploadName && isTempCopy(f.file) && <span style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.inkDim }}>temp copy</span>}
-                      <span style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkDim }}>×{f.count}</span>
-                    </div>
-                    {f.hash && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <Hash size={10} style={{ color: t.inkDim, flexShrink: 0 }} aria-hidden="true" />
-                        <span className="flex-1 min-w-0 truncate" dir="ltr" style={{ fontFamily: FONT.mono, fontSize: 10, color: t.inkDim }}>{f.hash}</span>
-                        <Copyable t={t} text={f.hash} />
-                      </div>
-                    )}
-                    <div style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkDim, marginTop: 3 }}>{[...f.rules].join(' · ')}</div>
-                  </div>
-                ))}
-              </div>
-            </Block>
-          )}
-
-          {r && (
-            <Block t={t} title="Identifiers" icon={Fingerprint} defaultOpen={false} sub="scan · model version · group · tenant">
-              <Row t={t} label="scan_id" value={r.uuid} />
-              <Row t={t} label="version" value={r.model_version_uuid} />
-              <Row t={t} label="group" value={r.security_group_name} />
-              <Row t={t} label="group_id" value={r.security_group_uuid} />
-              <Row t={t} label="tsg" value={r.tsg_id} />
-              <Row t={t} label="scanner" value={r.scanner_version} />
-              <Row t={t} label="origin" value={r.scan_origin} />
-              <Row t={t} label="started" value={r.time_started} />
-            </Block>
-          )}
-
-          {r && (
-            <Block t={t} title="Raw scan response" icon={Braces} defaultOpen={false} sub="the JSON the scanner returned">
-              <pre className="px-2.5 py-2 rounded-lg overflow-auto whitespace-pre-wrap break-all"
-                   style={{ background: t.codeBg, fontFamily: FONT.mono, fontSize: 9.5, color: t.inkDim, maxHeight: 360, direction: 'ltr' }}>
-                {JSON.stringify(r, null, 2)}
-              </pre>
-            </Block>
-          )}
         </div>
       </div>
     </EvidenceLook.Provider>

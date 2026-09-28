@@ -100,7 +100,8 @@ export function IdValue({ t, value, truncate = 0 }) {
   )
 }
 
-export function Card({ t, title, right, children, tone, pad = true, className = '' }) {
+/** `icon` overrides the title → icon table (the scan telemetry drawer names its own). */
+export function Card({ t, title, right, children, tone, pad = true, className = '', icon }) {
   const launch = useLaunch()
   if (launch) {
     return (
@@ -108,7 +109,7 @@ export function Card({ t, title, right, children, tone, pad = true, className = 
                style={{ background: t.panel, border: `1px solid ${tone ? `${tone}40` : t.glassEdge}`, borderRadius: 20, boxShadow: t.shadowSm, overflow: 'hidden' }}>
         {(title || right) && (
           <header className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5">
-            {title && <IconSquare t={t} icon={iconFor(title)} tone={tone} />}
+            {title && <IconSquare t={t} icon={icon ?? iconFor(title)} tone={tone} />}
             {title && <span className="min-w-0 truncate" style={{ fontFamily: FONT.display, fontSize: 14, fontWeight: 700, color: t.ink }}>{title}</span>}
             <span className="flex-1" />
             {right}
@@ -178,12 +179,12 @@ export function Chip({ t, children, tone, solid, title }) {
 }
 
 /** Big numeral tile. */
-export function Stat({ t, label, value, sub, tone }) {
+export function Stat({ t, label, value, sub, tone, icon }) {
   if (useLaunch()) {
     return (
       <div className="px-3.5 py-3 min-w-0" style={{ background: t.panel, border: `1px solid ${t.glassEdge}`, borderRadius: 18, boxShadow: t.shadowSm }}>
         <div className="flex items-center gap-2">
-          <IconSquare t={t} icon={iconFor(label)} tone={tone && tone !== t.ink ? tone : undefined} size={26} />
+          <IconSquare t={t} icon={icon ?? iconFor(label)} tone={tone && tone !== t.ink ? tone : undefined} size={26} />
           <span className="truncate" style={{ fontFamily: FONT.prose, fontSize: 11.5, fontWeight: 600, color: t.inkDim }}>{label}</span>
         </div>
         <div className="truncate" style={{ fontFamily: FONT.display, fontSize: 23, fontWeight: 700, letterSpacing: '-0.02em', color: tone || t.ink, lineHeight: 1.1, marginTop: 8 }}>{value}</div>
