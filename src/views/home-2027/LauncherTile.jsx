@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, Archive } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { ago } from './homeData'
-import { shade, bandBg, bandDots } from './band'
+import { shade, bandBg, bandDots, areaPill } from './band'
 
 /**
  * LauncherTile / LauncherRow — the pillars on the launcher home.
@@ -141,7 +141,7 @@ export function LauncherTile({ t, pillar, index = 0, onOpen, onLaunch, lastOpene
 
       {/* the body */}
       <div className="relative z-[1] flex-1 flex flex-col pointer-events-none" style={{ padding: '15px 18px 18px' }}>
-        <span className="truncate" style={{ ...LBL, fontSize: 9.5, color: t.inkDim }}>{pillar.area}</span>
+        <span className="truncate" style={{ ...LBL, fontSize: 9.5, ...areaPill(tone) }}>{pillar.area}</span>
         <h3 style={{ fontFamily: FONT.display, fontSize: 'clamp(19px, 2.2vh, 23px)', fontWeight: 700, letterSpacing: '-0.015em', color: t.ink, lineHeight: 1.15, marginTop: 5, textWrap: 'balance' }}>
           {pillar.title}
         </h3>

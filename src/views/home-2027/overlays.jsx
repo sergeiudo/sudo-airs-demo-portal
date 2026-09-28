@@ -4,7 +4,7 @@ import { X, ArrowUpRight, Search, CornerDownLeft, Sun, Moon, FileText, Play, Che
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { deepBand } from '../runtime-launch/diagramKit'
 import { hl } from '../HomeViewV2'
-import { shade, bandBg, bandDots, bandGlass } from './band'
+import { shade, bandBg, bandDots, bandGlass, areaPill } from './band'
 import { ago } from './homeData'
 
 /**
@@ -88,7 +88,7 @@ export function DetailsSheet({ t, pillar, onClose, onLaunch }) {
                     {pillar.run && (
                       <span style={{ fontFamily: FONT.mono, fontSize: 11, fontWeight: 700, color: t.inkDim }}>STEP {String(pillar.run).padStart(2, '0')}</span>
                     )}
-                    <span style={{ ...LBL, fontSize: 10.5, color: t.inkDim }}>{pillar.area}</span>
+                    <span style={{ ...LBL, fontSize: 10, ...areaPill(pillar.legacy ? '#94a3b8' : pillar.accent) }}>{pillar.area}</span>
                     {pillar.legacy && (
                       <span style={{ ...LBL, fontSize: 9, color: '#64748b', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 999, padding: '2px 8px' }}>Legacy</span>
                     )}

@@ -31,3 +31,21 @@ export const bandGlass = {
   background: 'rgba(0,0,0,0.22)',
   border: '1px solid rgba(255,255,255,0.24)',
 }
+
+/**
+ * A pillar's product area ("AI Runtime Security") as a small solid pill in the
+ * pillar's colour, so the area reads at a glance. Its white text spans the
+ * whole pill, so it runs from the band's dark end (42%) only to 34% — never
+ * out to the raw accent, which is under 4.5:1 against white for sky, amber
+ * and orange. Legacy pillars pass their slate tone and get a grey pill.
+ */
+export const areaPill = (tone) => ({
+  display: 'inline-block',
+  maxWidth: '100%',
+  alignSelf: 'flex-start',
+  padding: '3px 9px',
+  borderRadius: 999,
+  color: '#fff',
+  background: `linear-gradient(90deg, ${shade(tone, 0.42)}, ${shade(tone, 0.34)})`,
+  boxShadow: `0 3px 8px ${tone}33`,
+})

@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, X } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { ago } from './homeData'
+import { areaPill } from './band'
 
 /**
  * PillarTile — one pillar on the home page, in three sizes.
@@ -208,7 +209,7 @@ export function PillarTile({ t, pillar, variant = 'tile', onOpen, onLaunch, last
       <div className="relative z-[1] flex flex-col h-full pointer-events-none">
         <div className="flex items-center gap-2">
           {pillar.run && <RunBadge t={t} n={pillar.run} accent={legacy ? '#94a3b8' : pillar.accent} />}
-          <span className="truncate" style={{ ...LBL, fontSize: 10.5, color: t.inkDim }}>{pillar.area}</span>
+          <span className="truncate" style={{ ...LBL, fontSize: 10, ...areaPill(tone) }}>{pillar.area}</span>
           {legacy && <LegacyChip />}
           {pillar.news.length > 0 && (
             <span className="rounded-full px-1.5 py-0.5 flex-shrink-0"

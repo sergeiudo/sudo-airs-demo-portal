@@ -168,11 +168,19 @@ export function AccessLanding({ t, tone, a, onOpenLifecycle }) {
               Real prompts, real models —<br />
               <span style={{ color: ink }}>routed by policy, not by trust.</span>
             </h2>
-            <p style={{ fontFamily: FONT.prose, fontSize: 15, lineHeight: 1.65, color: t.inkDim, maxWidth: '58ch', margin: '16px 0 0' }}>
-              Sign in with your organisation account. Your role and department are read from the directory, sealed into a short-lived
-              RS256 credential, and verified by the AI gateway on every prompt. Nobody is issued an API key, and the model you get is
-              decided server side.
-            </p>
+            {/* Same words as the pillar's description on the portal home (PILLARS in HomeViewV2), split for reading. */}
+            {/* One wide paragraph, not two narrow ones — the hero has the full width since the pre-flight card went. */}
+            <div style={{ fontFamily: FONT.prose, fontSize: 15, lineHeight: 1.65, color: t.inkDim, maxWidth: 1080, marginTop: 16 }}>
+              <p style={{ margin: 0 }}>
+                An enterprise app that lets employees use LLMs without ever holding an API key, and lets the organization decide which
+                model each person may reach — enforced cryptographically, not in the browser. Users sign in with Microsoft Entra ID; the
+                backend seals their app role and department into a short-lived RS256 JWT and sends it to the AI gateway as the API key.
+                The gateway verifies the signature, trusts the claims, and routes.
+              </p>
+              <p style={{ margin: '10px 0 0', color: t.ink }}>
+                Pick a model your role isn't allowed to use, and a different one answers. <b style={{ color: ink }}>That's the demo.</b>
+              </p>
+            </div>
             <div className="flex items-center gap-2.5 flex-wrap mt-6">
               <SignInButton t={t} tone={tone} configured={c.configured} onClick={a.signIn} />
               <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer"

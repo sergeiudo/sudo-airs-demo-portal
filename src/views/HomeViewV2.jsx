@@ -63,8 +63,8 @@ export const PILLARS = [
     icon: Fingerprint,
     title: 'Enterprise AI Access',
     tag: 'Identity Routing',
-    summary: 'No API keys: sign in with Entra ID, and the gateway picks your model from who you are.',
-    description: 'Employees reach LLMs through the SCM AI Gateway without ever holding an API key. Sign in with Microsoft Entra ID; the portal reads your app role and department, seals them into a short-lived RS256 JWT, and the gateway verifies the signature before routing on those claims — pick a model your role is not allowed and a different one answers. Every artifact of the token lifecycle is on screen, and doctored tokens are sent to the gateway for real to prove the claims are sealed.',
+    summary: 'Use LLMs without ever holding an API key — who you are decides which model answers.',
+    description: "An enterprise app that lets employees use LLMs without ever holding an API key, and lets the organization decide which model each person may reach — enforced cryptographically, not in the browser. Users sign in with Microsoft Entra ID; the backend seals their app role and department into a short-lived RS256 JWT and sends it to the AI gateway as the API key. The gateway verifies the signature, trusts the claims, and routes. Pick a model your role isn't allowed to use, and a different one answers. That's the demo.",
     highlights: [
       { t: 'Entra ID → RS256 credential → identity-routed AI-GW', tag: 'NEW' },
       { t: 'The full token lifecycle — seven steps, real artifacts', tag: 'NEW' },
