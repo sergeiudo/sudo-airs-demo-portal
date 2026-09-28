@@ -32,10 +32,29 @@ function initialUiMode() {
   return 'new'
 }
 
+/**
+ * /?view=<pillarId> opens that pillar instead of the home. The portal has no
+ * router, so this is how a redirect lands inside a pillar — Entra's sign-in
+ * callback returns to /?view=enterpriseAccess. The parameter is removed from
+ * the address bar once read, so a refresh does not keep re-entering.
+ */
+function initialView() {
+  try {
+    const url = new URL(window.location.href)
+    const v = url.searchParams.get('view')
+    if (!v || !/^[A-Za-z]{3,40}$/.test(v)) return 'home'
+    url.searchParams.delete('view')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    return v
+  } catch {
+    return 'home'
+  }
+}
+
 const initialState = {
   uiMode: initialUiMode(),
   isProtected: false,
-  activeView: 'home',
+  activeView: initialView(),
   scmUrl: null,
   isDark: false,
   selectedTraceId: null,

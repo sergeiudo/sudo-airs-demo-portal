@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, Waypoints, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare, HeartPulse } from 'lucide-react'
+import { X, Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, Waypoints, ShieldCheck, ShieldOff, Zap, Eye, MessageSquare, HeartPulse, Fingerprint } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 
 
@@ -15,6 +15,7 @@ const VIEWS = [
   { id: 'mcpSecurity',     icon: Network,    label: 'MCP Security',                 desc: 'Live MCP tool demo with real AIRS two-stage scanning — 10 OWASP attack scenarios.',  color: '#06B6D4' },
   { id: 'ragSecurity',     icon: Database,   label: 'RAG Security',                 desc: 'See how AIRS protects RAG pipelines from indirect injection, data poisoning, and PII leakage.', color: '#F59E0B' },
   { id: 'ministryHealth',  icon: HeartPulse, label: 'Ministry of Health',           desc: 'Bilingual Hebrew/English health-assistant demo built for the MOH RFI — runtime attacks, poisoned clinical documents, agentic tool misuse, and a live Hebrew-vs-English detection matrix.', color: '#0EA5E9' },
+  { id: 'enterpriseAccess', icon: Fingerprint, label: 'Enterprise AI Access',        desc: 'Sign in with Entra ID and reach models with no API key: a signed RS256 credential carries your role, and the AI Gateway routes on it. Shows every token artifact, and tamper tests the gateway refuses.', color: '#8B5CF6' },
 ]
 
 const TIPS = [

@@ -22,6 +22,7 @@ import { RagSecurityView } from './views/RagSecurityView'
 import { LlmGatewayView } from './views/LlmGatewayView'
 import { MinistryHealthView } from './views/MinistryHealthView'
 import { BriutStandalone } from './views/moh/BriutApp'
+import { EnterpriseAccess } from './views/enterprise-access/EnterpriseAccess'
 
 // The portal has no router, so the chrome-free citizen app is selected by
 // query string instead: /?app=briut. Keeping the path at "/" means nothing
@@ -82,6 +83,7 @@ function AppContent() {
       case 'ragSecurity':      return <RagSecurityView />
       case 'llmGateway':       return <LlmGatewayView />
       case 'ministryHealth':   return <MinistryHealthView />
+      case 'enterpriseAccess': return <EnterpriseAccess />
       default:                 return intercept
     }
   }
@@ -91,7 +93,8 @@ function AppContent() {
   const unifiedHeader = isNew && (
     (state.activeView === 'apiIntercept' && !RUNTIME_V1) ||
     (state.activeView === 'modelScanning' && !SCAN_V1) ||
-    state.activeView === 'redTeaming'
+    state.activeView === 'redTeaming' ||
+    state.activeView === 'enterpriseAccess'
   )
 
   return (

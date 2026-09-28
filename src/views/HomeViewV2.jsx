@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, Waypoints, HeartPulse,
+  Crosshair, ScanSearch, Swords, Terminal, BarChart2, Code2, Network, Database, Waypoints, HeartPulse, Fingerprint,
   ChevronRight, X, ArrowRight, Shield, Sun, Moon,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
@@ -47,23 +47,34 @@ export const PILLARS = [
     dim: 'rgba(99,102,241,0.08)',
   },
   {
-    id: 'llmGateway',
-    icon: Waypoints,
-    title: 'AI/LLM Gateway',
-    tag: 'Gateway Layer',
-    legacy: true,
-    summary: 'Legacy Portkey gateway — the three-lane comparison, still live.',
-    description: 'The original gateway pillar, on the legacy Portkey workspace (api.portkey.ai). Route Vertex (Gemini) and Bedrock models through it and compare three lanes side by side — no gateway, Portkey native guardrails, and Prisma AIRS — then watch live MCP tool-calling through the Portkey MCP Registry. Superseded by the SCM AI Gateway in AIRS Runtime & AI-GW, which is where the current demo lives; kept because the native-vs-AIRS comparison exists nowhere else.',
+    id: 'redTeaming',
+    icon: Swords,
+    title: 'Red Teaming',
+    tag: 'Adversarial Testing',
+    summary: 'Run automated adversarial campaigns and measure model robustness.',
+    description: 'Run automated adversarial campaigns across multiple attack categories — DAN variants, role-play escapes, multi-turn manipulation, and more. Track robustness scores in real time and compare protected vs unprotected model behaviour.',
+    highlights: ['Multi-category attack campaigns', 'Real-time robustness gauge', 'Attack log feed', 'Campaign state management'],
+    accent: '#fb923c',
+    glow: 'rgba(251,146,60,0.32)',
+    dim: 'rgba(251,146,60,0.08)',
+  },
+  {
+    id: 'enterpriseAccess',
+    icon: Fingerprint,
+    title: 'Enterprise AI Access',
+    tag: 'Identity Routing',
+    summary: 'No API keys: sign in with Entra ID, and the gateway picks your model from who you are.',
+    description: 'Employees reach LLMs through the SCM AI Gateway without ever holding an API key. Sign in with Microsoft Entra ID; the portal reads your app role and department, seals them into a short-lived RS256 JWT, and the gateway verifies the signature before routing on those claims — pick a model your role is not allowed and a different one answers. Every artifact of the token lifecycle is on screen, and doctored tokens are sent to the gateway for real to prove the claims are sealed.',
     highlights: [
-      { t: 'Superseded by SCM AI-GW — see AIRS Runtime & AI-GW', tag: 'LEGACY' },
-      '3 lanes: none · Portkey native · AIRS',
-      'Native: PII redaction, banned words, code',
-      'AIRS: prompt injection, jailbreak, DLP, URLs',
-      'MCP Registry tool-calling (CoinGecko)',
+      { t: 'Entra ID → RS256 credential → identity-routed AI-GW', tag: 'NEW' },
+      { t: 'The full token lifecycle — seven steps, real artifacts', tag: 'NEW' },
+      'Conditional routing on sealed JWT claims',
+      'Tamper tests: edited claim, forged key, expired, alg:none',
+      'Nobody is issued an API key',
     ],
-    accent: '#ec4899',
-    glow: 'rgba(236,72,153,0.32)',
-    dim: 'rgba(236,72,153,0.08)',
+    accent: '#8b5cf6',
+    glow: 'rgba(139,92,246,0.32)',
+    dim: 'rgba(139,92,246,0.08)',
   },
   {
     id: 'ministryHealth',
@@ -83,18 +94,6 @@ export const PILLARS = [
     accent: '#0ea5e9',
     glow: 'rgba(14,165,233,0.32)',
     dim: 'rgba(14,165,233,0.08)',
-  },
-  {
-    id: 'redTeaming',
-    icon: Swords,
-    title: 'Red Teaming',
-    tag: 'Adversarial Testing',
-    summary: 'Run automated adversarial campaigns and measure model robustness.',
-    description: 'Run automated adversarial campaigns across multiple attack categories — DAN variants, role-play escapes, multi-turn manipulation, and more. Track robustness scores in real time and compare protected vs unprotected model behaviour.',
-    highlights: ['Multi-category attack campaigns', 'Real-time robustness gauge', 'Attack log feed', 'Campaign state management'],
-    accent: '#fb923c',
-    glow: 'rgba(251,146,60,0.32)',
-    dim: 'rgba(251,146,60,0.08)',
   },
   {
     id: 'claudeHooks',
@@ -155,6 +154,25 @@ export const PILLARS = [
     accent: '#f59e0b',
     glow: 'rgba(245,158,11,0.32)',
     dim: 'rgba(245,158,11,0.08)',
+  },
+  {
+    id: 'llmGateway',
+    icon: Waypoints,
+    title: 'AI/LLM Gateway',
+    tag: 'Gateway Layer',
+    legacy: true,
+    summary: 'Legacy Portkey gateway — the three-lane comparison, still live.',
+    description: 'The original gateway pillar, on the legacy Portkey workspace (api.portkey.ai). Route Vertex (Gemini) and Bedrock models through it and compare three lanes side by side — no gateway, Portkey native guardrails, and Prisma AIRS — then watch live MCP tool-calling through the Portkey MCP Registry. Superseded by the SCM AI Gateway in AIRS Runtime & AI-GW, which is where the current demo lives; kept because the native-vs-AIRS comparison exists nowhere else.',
+    highlights: [
+      { t: 'Superseded by SCM AI-GW — see AIRS Runtime & AI-GW', tag: 'LEGACY' },
+      '3 lanes: none · Portkey native · AIRS',
+      'Native: PII redaction, banned words, code',
+      'AIRS: prompt injection, jailbreak, DLP, URLs',
+      'MCP Registry tool-calling (CoinGecko)',
+    ],
+    accent: '#ec4899',
+    glow: 'rgba(236,72,153,0.32)',
+    dim: 'rgba(236,72,153,0.08)',
   },
 ]
 
@@ -594,7 +612,7 @@ export function HomeViewV2({ homeSwitch = null } = {}) {
             />
           ))}
         </div>
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.max(5, PILLARS.length - 5)}, 1fr)` }}>
           {PILLARS.slice(5).map((pillar, i) => (
             <MiniCard
               key={pillar.id}

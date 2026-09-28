@@ -19,6 +19,7 @@ const VIEW_LABELS = {
   ragSecurity:     { label: 'RAG Security',                 sublabel: 'Retrieval-Augmented Generation pipeline protection', text: 'text-amber-400', color: '#F59E0B' },
   llmGateway:      { label: 'AI/LLM Gateway',               sublabel: 'Portkey gateway + Prisma AIRS guardrail',           text: 'text-pink-400',   color: '#EC4899' },
   ministryHealth:  { label: 'Ministry of Health',           sublabel: 'בריאות.AI — bilingual HE/EN health assistant demo', text: 'text-sky-400',    color: '#0EA5E9' },
+  enterpriseAccess: { label: 'Enterprise AI Access',         sublabel: 'Entra ID sign-in → RS256 JWT → identity-routed AI Gateway', text: 'text-violet-400', color: '#8B5CF6' },
 }
 
 /** One utility icon inside the segmented control on the right. */
@@ -137,6 +138,17 @@ export function TopBar() {
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#3b82f6' }} />
             <span className="text-[10px] font-bold tracking-widest" style={{ color: '#3b82f6' }}>
               SCAN BEFORE LOAD
+            </span>
+          </div>
+        ) : state.activeView === 'enterpriseAccess' ? (
+          /* Enterprise AI Access routes on identity: the gateway decides the
+             model from the signed token whatever the portal's AIRS switch
+             says, so a SECURED/VULNERABLE control here would change nothing. */
+          <div className="flex items-center gap-2 h-8 px-3.5 rounded-full border"
+               style={{ background: 'rgba(139,92,246,0.12)', borderColor: 'rgba(139,92,246,0.4)' }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#8b5cf6' }} />
+            <span className="text-[10px] font-bold tracking-widest" style={{ color: '#8b5cf6' }}>
+              ROUTED BY IDENTITY
             </span>
           </div>
         ) : (

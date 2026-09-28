@@ -40,6 +40,7 @@ import mohRouter, {
   hookVerdictFailed,
   parseBlockError,
 } from './moh-routes.js'
+import accessRouter from './access-routes.js'
 
 const app = express()
 app.use(cors())
@@ -47,6 +48,8 @@ app.use(express.json({ limit: '10mb' }))
 app.use('/api/gateway', portkeyRouter)
 // Ministry of Health RFI demo — isolated AIGW_* env block, SCM AI Gateway.
 app.use('/api/moh', mohRouter)
+// Enterprise AI Access — Entra ID sign-in → RS256 JWT → identity-routed AI-GW.
+app.use('/api/access', accessRouter)
 
 const PORT = process.env.PROXY_PORT || 3001
 

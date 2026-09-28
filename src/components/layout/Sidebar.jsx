@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Crosshair, ScanSearch, Swords, Terminal, Settings, Activity, ExternalLink, BarChart2, Code2, Network, Database, Waypoints, HeartPulse } from 'lucide-react'
+import { Crosshair, ScanSearch, Swords, Terminal, Settings, Activity, ExternalLink, BarChart2, Code2, Network, Database, Waypoints, HeartPulse, Fingerprint } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '../sidebar/Logo'
 import { ProtectionToggle } from '../sidebar/ProtectionToggle'
@@ -77,6 +77,13 @@ const NAV_ITEMS = [
     sublabel: 'משרד הבריאות — bilingual RFI demo',
     icon: HeartPulse,
     color: { text: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30', bar: 'bg-sky-400' },
+  },
+  {
+    id: 'enterpriseAccess',
+    label: 'Enterprise AI Access',
+    sublabel: 'Entra ID → JWT → identity routing',
+    icon: Fingerprint,
+    color: { text: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/30', bar: 'bg-violet-400' },
   },
 ]
 

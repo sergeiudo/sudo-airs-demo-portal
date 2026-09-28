@@ -58,3 +58,12 @@ gcp-*-key.json
 # paths and belong on the host, not in git.
 *-wif-*.json
 vertex-wif*.json
+
+# Enterprise AI Access signing key. Anyone holding private_key.pem can mint a
+# token asserting any role for any address, and the gateway will believe it.
+# Keep the pair outside the repo (JWT_PRIVATE_KEY_PATH / JWT_JWKS_PATH); these
+# patterns are the net under that rule, not the rule.
+*.pem
+private_key*
+jwks.json
+jwt-keys/

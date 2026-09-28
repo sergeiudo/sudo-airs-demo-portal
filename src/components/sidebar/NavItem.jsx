@@ -16,6 +16,7 @@ const COLOR_VALS = {
   'text-yellow-400': '#facc15',
   'text-sky-400':    '#38bdf8',
   'text-amber-400':  '#fbbf24',
+  'text-violet-400': '#a78bfa',
 }
 const BG_VALS = {
   'bg-red-500/10':    'rgba(239,68,68,0.10)',
@@ -30,6 +31,7 @@ const BG_VALS = {
   'bg-yellow-500/10': 'rgba(234,179,8,0.10)',
   'bg-sky-500/10':    'rgba(14,165,233,0.10)',
   'bg-amber-500/10':  'rgba(245,158,11,0.10)',
+  'bg-violet-500/10': 'rgba(139,92,246,0.10)',
 }
 const BORDER_VALS = {
   'border-red-500/30':    'rgba(239,68,68,0.30)',
@@ -44,6 +46,7 @@ const BORDER_VALS = {
   'border-yellow-500/30': 'rgba(234,179,8,0.30)',
   'border-sky-500/30':    'rgba(14,165,233,0.30)',
   'border-amber-500/30':  'rgba(245,158,11,0.30)',
+  'border-violet-500/30': 'rgba(139,92,246,0.30)',
 }
 
 export function NavItem({ icon: Icon, label, sublabel, isActive, onClick, color, collapsed }) {

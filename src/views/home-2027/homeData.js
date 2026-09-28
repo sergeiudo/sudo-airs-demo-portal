@@ -22,20 +22,23 @@ export const MOH_SCENARIOS = MOH_ATTACKS.length
 
 /**
  * `run` is the demo running order — PILLARS order, row 1 of the old grid
- * (see CLAUDE.md: "PILLARS array order IS the demo running order"). The legacy
- * gateway keeps its place in the run: it is marked, not demoted.
+ * (see CLAUDE.md: "PILLARS array order IS the demo running order"):
+ * Runtime & AI-GW · AI Supply Chain · Red Teaming · Enterprise AI Access ·
+ * Ministry of Health. The legacy gateway left the run for the deep dives
+ * (2026-09-28, at the user's request) — still marked, still one click away.
  */
 const META = {
   apiIntercept:    { run: 1, area: 'AI Runtime Security',  aka: 'runtime aigw ai-gw gateway attack library intercept api', stats: [`${PAYLOADS} payloads`, '4 targets', '2 architectures'] },
   modelScanning:   { run: 2, area: 'AI Supply Chain',      aka: 'model scan scanning skills hugging face pickle supply', stats: ['models + skills', 'SCM history'] },
-  llmGateway:      { run: 3, area: 'Gateway · legacy',     aka: 'portkey legacy gateway lanes llm', stats: ['3 lanes side by side'] },
-  ministryHealth:  { run: 4, area: 'Customer scenario',    aka: 'moh briut health hebrew rfi israel', stats: [`${MOH_SCENARIOS} scenarios`, 'HE / EN'] },
-  redTeaming:      { run: 5, area: 'AI Red Teaming',       aka: 'red team redteam adversarial campaign', stats: ['automated campaigns'] },
+  llmGateway:      { group: 'deep', area: 'Gateway · legacy',     aka: 'portkey legacy gateway lanes llm', stats: ['3 lanes side by side'] },
+  ministryHealth:  { run: 5, area: 'Customer scenario',    aka: 'moh briut health hebrew rfi israel', stats: [`${MOH_SCENARIOS} scenarios`, 'HE / EN'] },
+  redTeaming:      { run: 3, area: 'AI Red Teaming',       aka: 'red team redteam adversarial campaign', stats: ['automated campaigns'] },
   mcpSecurity:     { group: 'deep', area: 'Runtime · MCP',        aka: 'mcp tools tool poisoning owasp', stats: ['10 OWASP scenarios'] },
   ragSecurity:     { group: 'deep', area: 'Runtime · RAG',        aka: 'rag retrieval vector documents', stats: ['upstream + downstream'] },
   claudeHooks:     { group: 'deep', area: 'Runtime · IDE',        aka: 'claude code hooks ide coding assistant', stats: ['zero code changes'] },
   observability:   { group: 'ops',  area: 'Observability',        aka: 'telemetry traces observability latency logs', stats: ['every prompt traced'] },
   developerCorner: { group: 'ops',  area: 'Integration',          aka: 'developer sdk api rest python code', stats: ['SDK · REST · samples'] },
+  enterpriseAccess: { run: 4, area: 'AI-GW · Identity',     aka: 'jwt entra azure ad identity token oauth pkce jwks routing enterprise access sso rbac claims', stats: ['Entra ID sign-in', 'no API keys'] },
 }
 
 export const HOME_PILLARS = PILLARS.map((p) => ({
