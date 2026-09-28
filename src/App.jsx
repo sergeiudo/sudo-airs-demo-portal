@@ -8,6 +8,7 @@ import { ModelScanningView } from './views/ModelScanningView'
 import { ModelScanning2027 } from './views/model-scanning-2027/ModelScanning2027'
 import { SupplyChainLaunch } from './views/supply-chain-launch/SupplyChainLaunch'
 import { RedTeamingView } from './views/RedTeamingView'
+import { RedTeamLaunch } from './views/red-team-launch/RedTeamLaunch'
 import { ClaudeHooksView } from './views/ClaudeHooksView'
 import { HomeViewV2 } from './views/HomeViewV2'
 import { HomeView2027 } from './views/home-2027/HomeView2027'
@@ -57,6 +58,7 @@ function AppContent() {
   // wiping its transcript on any context change, even an AIRS toggle.
   const intercept = !isNew ? <ApiInterceptView /> : RUNTIME_V1 ? <ApiIntercept2027 /> : <RuntimeLaunch />
   const modelScanning = !isNew ? <ModelScanningView /> : SCAN_V1 ? <ModelScanning2027 /> : <SupplyChainLaunch />
+  const redTeaming = !isNew ? <RedTeamingView /> : <RedTeamLaunch />
 
   // Must come before every other branch: this window has no sidebar, no
   // top bar and no MainLayout at all.
@@ -72,7 +74,7 @@ function AppContent() {
     switch (state.activeView) {
       case 'apiIntercept':   return intercept
       case 'modelScanning':  return modelScanning
-      case 'redTeaming':     return <RedTeamingView />
+      case 'redTeaming':     return redTeaming
       case 'claudeHooks':    return <ClaudeHooksView />
       case 'observability':     return <ObservabilityView />
       case 'developerCorner':  return <DeveloperCornerView />
@@ -88,7 +90,8 @@ function AppContent() {
   // design. Add a pillar here when its launch-design console lands.
   const unifiedHeader = isNew && (
     (state.activeView === 'apiIntercept' && !RUNTIME_V1) ||
-    (state.activeView === 'modelScanning' && !SCAN_V1)
+    (state.activeView === 'modelScanning' && !SCAN_V1) ||
+    state.activeView === 'redTeaming'
   )
 
   return (

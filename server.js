@@ -1543,7 +1543,11 @@ app.post('/api/redteam/scan', async (req, res) => {
 
 app.get('/api/redteam/scan', async (req, res) => {
   try {
-    const { status, data } = await rtFetch(RT_DATA, '/v1/scan', 'GET', null, { limit: 20, skip: 0 })
+    // Paged for the launch console's campaign history; the defaults are the
+    // Classic view's (20 from the top).
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20))
+    const skip = Math.max(0, parseInt(req.query.skip, 10) || 0)
+    const { status, data } = await rtFetch(RT_DATA, '/v1/scan', 'GET', null, { limit, skip })
     res.status(status).json(data)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -1580,6 +1584,76 @@ app.get('/api/redteam/scan/:id/attacks', async (req, res) => {
     const { status, data } = await rtFetch(RT_DATA, `/v1/report/static/${req.params.id}/list-attacks`, 'GET', null, params)
     res.status(status).json(data)
   } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ── Launch console: the rest of a campaign ───────────────────────────────────
+// Read-only proxies over documented data-plane endpoints (pan.dev → Prisma AIRS
+// AI Red Teaming → Data Plane), verified against this tenant 2026-09-28. The
+// Classic view reads only the job, the static report and the attack list; the
+// launch console also shows each attack's responses, the remediations, the
+// runtime security profile AIRS recommends from the findings, target errors,
+// and — for agent (DYNAMIC) campaigns — the dynamic report and its goals.
+const RT_TERMINAL = new Set(['COMPLETED', 'FAILED', 'ABORTED'])
+const RT_TELEMETRY = new Map()
+const RT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+async function rtData(path, params) {
+  const { status, data } = await rtFetch(RT_DATA, path, 'GET', null, params)
+  if (status >= 400) {
+    const detail = data?.detail ?? data?.error ?? data?.message
+    throw Object.assign(new Error(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail).slice(0, 200) : `HTTP ${status}`), { status })
+  }
+  return data
+}
+const rtSettle = (p) => (p ? p.then((value) => ({ value }), (e) => ({ error: String(e.message).slice(0, 200) })) : Promise.resolve(null))
+
+app.get('/api/redteam/categories', async (_req, res) => {
+  try { res.json(await rtData('/v1/categories')) } catch (err) { res.status(err.status || 500).json({ error: err.message }) }
+})
+
+app.get('/api/redteam/scan/:id/telemetry', async (req, res) => {
+  const { id } = req.params
+  if (!RT_UUID.test(id)) return res.status(400).json({ error: 'not a campaign id' })
+  const hit = RT_TELEMETRY.get(id)
+  if (hit && req.query.force !== '1') return res.json({ ...hit, cached: true })
+  try {
+    const job = await rtData(`/v1/scan/${id}`)
+    const dynamic = job.job_type === 'DYNAMIC'
+    const kind = dynamic ? 'dynamic' : 'static'
+    const done = job.status === 'COMPLETED'
+    const [report, remediation, policy, errors, goals] = await Promise.all([
+      rtSettle(done && rtData(`/v1/report/${kind}/${id}/report`)),
+      rtSettle(done && rtData(`/v1/report/${kind}/${id}/remediation`)),
+      rtSettle(done && rtData(`/v1/report/${kind}/${id}/runtime-policy-config`)),
+      rtSettle(rtData(`/v1/error-log/job/${id}`, { limit: 20, skip: 0 })),
+      rtSettle(dynamic && done && rtData(`/v1/report/dynamic/${id}/list-goals`, { limit: 50, skip: 0 })),
+    ])
+    const errs = {}
+    for (const [k, v] of Object.entries({ report, remediation, policy, errors, goals })) if (v?.error) errs[k] = v.error
+    const data = {
+      fetchedAt: new Date().toISOString(),
+      job, kind,
+      report: report?.value ?? null,
+      remediations: remediation?.value?.remediations ?? null,
+      policy: policy?.value?.runtime_security_profile ?? null,
+      errors: errors?.value ? { items: errors.value.data ?? [], total: errors.value.pagination?.total_items ?? null } : null,
+      goals: goals?.value ? { items: goals.value.data ?? [], total: goals.value.pagination?.total_items ?? null } : null,
+      endpointErrors: errs,
+    }
+    // A finished campaign never changes; a running one must not be cached.
+    if (RT_TERMINAL.has(job.status)) {
+      RT_TELEMETRY.set(id, data)
+      if (RT_TELEMETRY.size > 40) RT_TELEMETRY.delete(RT_TELEMETRY.keys().next().value)
+    }
+    res.json({ ...data, cached: false })
+  } catch (err) { res.status(err.status && err.status < 500 ? err.status : 502).json({ error: err.message }) }
+})
+
+// One attack with its outputs (the model's responses) — the list has none.
+app.get('/api/redteam/scan/:id/attack/:attackId', async (req, res) => {
+  const { id, attackId } = req.params
+  if (!RT_UUID.test(id) || !RT_UUID.test(attackId)) return res.status(400).json({ error: 'not a campaign / attack id' })
+  try { res.json(await rtData(`/v1/report/static/${id}/attack/${attackId}`)) } catch (err) { res.status(err.status || 500).json({ error: err.message }) }
 })
 
 // ─── GET /api/scanner/health — check if Python scanner is running ────────────
