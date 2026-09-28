@@ -118,8 +118,8 @@ export function LaunchComposer({ t, tone, isProtected, isLoading, onSend, onScan
 
   return (
     <div className="relative flex-shrink-0 mx-3 mb-3 mt-2" {...handlers}>
-      <DropOverlay visible={dragging} isProtected={isProtected} />
-      <FileDropModal open={dropOpen} onClose={() => setDropOpen(false)} onFile={uploadFile}
+      <DropOverlay visible={dragging} isProtected={isProtected} variant="band" />
+      <FileDropModal variant="band" open={dropOpen} onClose={() => setDropOpen(false)} onFile={uploadFile}
                      isProtected={isProtected} busy={busy} limitsUrl="/api/upload/limits" />
 
       {/* ── suggestions: one control, two attacks ── */}
