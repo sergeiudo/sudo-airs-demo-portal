@@ -1,7 +1,8 @@
-import { Compass, Terminal, Network, Waypoints, Plug, ScanSearch, Swords, Server, Library } from 'lucide-react'
+import { Compass, Terminal, Network, Waypoints, Landmark, Plug, ScanSearch, Swords, Server, Library } from 'lucide-react'
 import { START } from './start'
 import { RUNTIME, AGENTS } from './runtime'
 import { GATEWAY, INTEGRATIONS } from './gateway'
+import { AIGW_GATEWAY, AIGW_GOVERNANCE } from './aigw'
 import { MODELS, REDTEAM, NETWORK } from './models'
 import { LIBRARY } from './library'
 
@@ -16,6 +17,7 @@ export const GROUPS = [
   { id: 'runtime',      title: 'AIRS Runtime API',     sub: 'API intercept, in your code',    icon: Terminal,   tone: '#f43f5e' },
   { id: 'agents',       title: 'Agents & MCP',         sub: 'Tool calls and MCP servers',     icon: Network,    tone: '#2dd4bf' },
   { id: 'gateway',      title: 'SCM AI Gateway',       sub: 'Guardrails in the traffic path', icon: Waypoints,  tone: '#EC4899' },
+  { id: 'gwgov',        title: 'AI Gateway governance', sub: 'Keys, budgets, identity, admin', icon: Landmark,  tone: '#d946ef' },
   { id: 'integrations', title: 'Integrations',         sub: 'Gateways, frameworks, clouds',   icon: Plug,       tone: '#f59e0b' },
   { id: 'models',       title: 'AI Model Security',    sub: 'Scan before a model is loaded',  icon: ScanSearch, tone: '#6366f1' },
   { id: 'redteam',      title: 'AI Red Teaming',       sub: 'Attack before you ship',         icon: Swords,     tone: '#fb923c' },
@@ -23,7 +25,17 @@ export const GROUPS = [
   { id: 'library',      title: 'Library',              sub: 'Every doc, errors, this portal', icon: Library,    tone: '#64748b' },
 ]
 
-export const GUIDES = [...START, ...RUNTIME, ...AGENTS, ...GATEWAY, ...INTEGRATIONS, ...MODELS, ...REDTEAM, ...NETWORK, ...LIBRARY]
+// The gateway guides come from two files; this is their reading order, which
+// is also what Previous / Next follows.
+const GATEWAY_ORDER = [
+  'gw-overview', 'gw-connect', 'gw-universal', 'gw-routing', 'gw-guardrail', 'gw-guardrails',
+  'gw-observability', 'gw-mcp', 'gw-agents', 'gw-coding',
+  'gw-governance', 'gw-jwt', 'gw-admin',
+]
+const gatewayPool = Object.fromEntries([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_GOVERNANCE].map((g) => [g.id, g]))
+const GATEWAY_ALL = GATEWAY_ORDER.map((id) => gatewayPool[id])
+
+export const GUIDES = [...START, ...RUNTIME, ...AGENTS, ...GATEWAY_ALL, ...INTEGRATIONS, ...MODELS, ...REDTEAM, ...NETWORK, ...LIBRARY]
 
 export const GROUP_BY_ID = Object.fromEntries(GROUPS.map((g) => [g.id, g]))
 export const GUIDE_BY_ID = Object.fromEntries(GUIDES.map((g) => [g.id, g]))

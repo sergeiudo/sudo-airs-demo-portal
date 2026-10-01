@@ -1,4 +1,4 @@
-import { Terminal, Fingerprint } from 'lucide-react'
+import { Terminal, Fingerprint, Braces, Shuffle, ShieldCheck, Activity, Network, Code2, KeyRound, Building2 } from 'lucide-react'
 import { pick } from './links'
 import { gatewayChat, gatewayBlockCheck } from '../snippets'
 
@@ -75,6 +75,75 @@ export function mintCredential({ email, sub, role, department }, keys, overrides
   return signRs256({ alg: 'RS256', typ: 'JWT', kid: keys.kid }, payload, keys.privateKey)
 }`
 
+const MCP_CLIENT_TABS = [
+  { id: 'bash', label: 'Claude Code', lang: 'bash', code: `claude mcp add --transport http linear https://aigw.portkey.ai/m/linear/mcp \\
+  --header "Authorization: Bearer $PORTKEY_API_KEY"
+
+# OAuth instead of a key: leave the header out and sign in from /mcp on first use` },
+  { id: 'json', label: 'Cursor / Claude Desktop', lang: 'json', code: `{
+  "mcpServers": {
+    "linear": {
+      "url": "https://aigw.portkey.ai/m/linear/mcp",
+      "headers": { "Authorization": "Bearer YOUR_GATEWAY_API_KEY" }
+    }
+  }
+}` },
+  { id: 'python', lang: 'python', file: 'mcp_client.py', code: `# pip install mcp
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
+url = "https://aigw.portkey.ai/m/linear/mcp"          # your tenant's MCP gateway URL + server slug
+headers = {"Authorization": "Bearer YOUR_GATEWAY_API_KEY"}
+
+async with streamablehttp_client(url, headers=headers) as (read, write, _):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+        tools = await session.list_tools()
+        for tool in tools.tools:
+            print(f"{tool.name}: {tool.description}")
+        result = await session.call_tool("create_issue", {"title": "Bug report", "priority": "high"})
+        print(result)
+` },
+  { id: 'node', lang: 'node', file: 'mcp-client.mjs', code: `import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+const transport = new StreamableHTTPClientTransport(new URL('https://aigw.portkey.ai/m/linear/mcp'), {
+  requestInit: { headers: { Authorization: \`Bearer \${process.env.PORTKEY_API_KEY}\` } },
+})
+const client = new Client({ name: 'my-agent', version: '1.0.0' })
+await client.connect(transport)
+console.log((await client.listTools()).tools.map((t) => t.name))` },
+]
+
+const MCP_GUARD_TABS = [
+  { id: 'create', label: 'Create', lang: 'json', code: `// POST https://aigw.portkey.ai/v1/guardrails
+{
+  "name": "MCP tool content filter",
+  "target": "mcp_tools",
+  "checks": [
+    { "id": "default.regexMatch", "parameters": { "rule": "(?i)(password|secret|api_key)" } },
+    { "id": "default.contains", "parameters": { "words": ["DROP TABLE", "DELETE FROM"], "operator": "none" } }
+  ],
+  "actions": { "on_fail": "deny" }
+}` },
+  { id: 'map', label: 'Map to servers', lang: 'json', code: `// PUT https://aigw.portkey.ai/v1/guardrails/{guardrailId}/mcp-servers — replaces the whole set
+{
+  "mcp_servers": {
+    "<server-uuid>":   { "run_on": ["input", "output"] },
+    "<server-uuid-2>": { "run_on": ["input"], "mcp_integration_capability_ids": ["<capability-id>"] }
+  }
+}` },
+  { id: 'blocked', label: 'A blocked call', lang: 'json', code: `{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32446,
+    "message": "Request blocked by guardrail",
+    "data": { "guardrail_id": "default.regexMatch", "reason": "Input matched restricted pattern" }
+  }
+}` },
+]
+
 export const GATEWAY = [
   {
     id: 'gw-overview',
@@ -83,13 +152,23 @@ export const GATEWAY = [
     sub: 'Providers, integrations, workspaces, configs, guardrails',
     minutes: 6,
     level: 'Setup',
-    docs: pick('gwOverview', 'gwDeploy', 'gwConfigs', 'pdfGateway', 'gwDevSetup'),
+    docs: pick('gwOverview', 'gwDeploy', 'gwConfigs', 'pdfGateway', 'agWelcome', 'gwDevSetup', 'agFeatures'),
     blocks: [
       {
         type: 'prose',
         text: [
           'The AI Gateway is a centralised, OpenAI-compatible proxy in front of your LLM providers — and your MCP servers and agent-to-agent traffic — managed from Strata Cloud Manager. Apps call one endpoint; the gateway routes to the right provider, applies budgets, rate limits, retries, caching and **guardrails** (including Prisma AIRS), and logs every request.',
           'It runs as **SaaS** (`https://aigw.portkey.ai/v1`) or **Hybrid**, with the data plane on your own Kubernetes. It is available in the Americas; both models are priced the same.',
+          'Two official doc sets cover it: the admin guide on docs.paloaltonetworks.com, and the **Prisma AIRS AI Gateway developer docs** at [docs.gw.prismaairs.com](https://docs.gw.prismaairs.com/docs/aigw/introduction/welcome) — the API, configs, guardrails, MCP and the code. The guides in this group draw on both.',
+        ],
+      },
+      {
+        type: 'facts',
+        items: [
+          { label: 'Models behind one API', value: '3,000+', sub: 'Chat Completions, Responses or Anthropic Messages format', accent: true },
+          { label: 'Added latency', value: '20–40 ms', sub: 'Edge-hosted, per the developer docs\' benchmarks' },
+          { label: 'Data protection', value: 'AES-256', sub: 'In transit and at rest; SSO with any OIDC provider' },
+          { label: 'Gateway timeout', value: 'None', sub: 'Set a client timeout, or `request_timeout` in a config' },
         ],
       },
       {
@@ -135,8 +214,22 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
         ],
       },
       {
-        type: 'callout', tone: 'docs',
-        text: 'PII detection and content moderation are not gateway guardrails — they are handled by Prisma AIRS (advanced DLP and threat detection) through the partner guardrail.',
+        type: 'callout', tone: 'docs', title: 'PII and moderation: the two doc sets differ',
+        text: 'The SCM admin guide says PII detection and content moderation are not gateway guardrails but are handled by Prisma AIRS (advanced DLP and threat detection) through the partner guardrail. The developer docs list PRO guardrails for PII detection (with redaction) and content moderation. Check what Guardrails → Create offers on your tenant.',
+      },
+      {
+        type: 'cards',
+        min: 240,
+        items: [
+          { icon: Braces, tone: '#EC4899', title: 'One endpoint, three formats', kicker: 'Universal API', text: 'Chat Completions, Responses or Messages, against any provider.', go: 'gw-universal' },
+          { icon: Shuffle, tone: '#EC4899', title: 'Routing and reliability', kicker: 'Configs', text: 'Fallbacks, retries, load balancing, timeouts and caching.', go: 'gw-routing' },
+          { icon: ShieldCheck, tone: '#EC4899', title: 'Guardrail framework', kicker: 'Actions · verdicts · PII', text: 'Deny vs log, 246 and 446, redaction, org-wide enforcement.', go: 'gw-guardrails' },
+          { icon: Activity, tone: '#EC4899', title: 'Observability', kicker: 'Logs · traces · OTel', text: 'Trace ids, metadata, feedback, exports and OpenTelemetry.', go: 'gw-observability' },
+          { icon: Network, tone: '#EC4899', title: 'MCP Gateway', kicker: 'Registry · auth · tools', text: 'Broker MCP servers with per-tool access and logs.', go: 'gw-mcp' },
+          { icon: Code2, tone: '#EC4899', title: 'Coding agents', kicker: 'Claude Code · Codex · Cursor', text: 'Per-developer keys, budgets and guardrails.', go: 'gw-coding' },
+          { icon: KeyRound, tone: '#d946ef', title: 'Keys, budgets, rate limits', kicker: 'Governance', text: 'Scopes, rotation, limits and what callers cannot opt out of.', go: 'gw-governance' },
+          { icon: Building2, tone: '#d946ef', title: 'Org admin', kicker: 'Governance', text: 'Workspaces, roles, SSO, SCIM and CIE Directory Sync.', go: 'gw-admin' },
+        ],
       },
     ],
   },
@@ -197,7 +290,7 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
     minutes: 6,
     level: 'Build',
     live: 'gateway.chat',
-    docs: pick('gwAirsGuard', 'gwGuardrails', 'gwDevGuard'),
+    docs: pick('gwAirsGuard', 'gwGuardrails', 'gwDevGuard', 'agGuardrails', 'agGuardCaps'),
     blocks: [
       {
         type: 'prose',
@@ -206,8 +299,8 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
       {
         type: 'steps',
         steps: [
-          { title: 'Connect the gateway to Prisma AIRS', text: 'Enter the API Intercept endpoint URL and an API key from your **AI Runtime Security** deployment profile. A 401 at save means the key is wrong; a 400 later usually means a typo in the endpoint (it is not validated at save).', path: ['Admin Settings', 'Plugins', 'PANW Prisma AIRS'] },
-          { title: 'Create the guardrail', text: 'Create a partner guardrail **PANW Prisma AIRS Guardrail**, choose Deny (block) or Log only, and set its parameters (below). Note its `pg-…` id.', path: ['Guardrails', 'Create', 'Partner', 'PANW Prisma AIRS'] },
+          { title: 'Connect the gateway to Prisma AIRS', text: 'Enter the API Intercept endpoint URL and an API key from your **AI Runtime Security** deployment profile. A 401 at save means the key is wrong; a 400 later usually means a typo in the endpoint (it is not validated at save). The developer docs place the same form under Settings → Integrations → Palo Alto Networks Prisma AIRS.', path: ['Admin Settings', 'Plugins', 'PANW Prisma AIRS'] },
+          { title: 'Create the guardrail', text: 'Create a partner guardrail **PANW Prisma AIRS Guardrail**, set its parameters (below) and its actions: run it synchronously (`async` off) with **Deny** on to block, or with Deny off to let the request through and mark it (246). Note its `pg-…` id.', path: ['Guardrails', 'Create', 'Partner', 'PANW Prisma AIRS'] },
           { title: 'Attach it to a config', text: 'Reference the guardrail id as an input and/or output guardrail in a `pc-…` config, then use that config (as the key\'s default, or per request with `x-portkey-config`).',
             code: [
               { id: 'json', label: 'Config (developer docs)', lang: 'json', code: `{
@@ -228,10 +321,17 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
         rows: [
           ['Profile name / ID', '—', 'The AIRS security profile; falls back to the profile linked to the API key'],
           ['Scan scope', '`last_message`', '`last_message`, `last_user_message`, `user_messages`, `all_messages`'],
-          ['Strip scaffolding', '`false`', 'Removes agent-harness wrappers (e.g. `<system-reminder>`) before scanning; tool results are still scanned'],
-          ['AI model / app name / app user', '`unknown-model` / — / `portkey-gateway`', 'Sent to AIRS as metadata'],
+          ['Strip scaffolding', '`false`', 'Removes agent-harness wrappers (e.g. `<system-reminder>` blocks, MCP tool instructions) before scanning; `tool_result` content is always kept and scanned'],
+          ['AI model / application name / application user', '`unknown-model` / — / `portkey-gateway`', 'Sent to AIRS as metadata; the application name is prefixed `Portkey-` (e.g. `Portkey-chatbot`)'],
         ],
-        note: 'For agentic clients the developer docs recommend `scan_scope: "last_user_message"` with `strip_scaffolding: true`.',
+        note: 'For agentic clients (Claude Code, Cursor, Cline) the developer docs recommend `scan_scope: "last_user_message"` with `strip_scaffolding: true`, and separate security profiles for dev, staging and production.',
+      },
+      {
+        type: 'callout', tone: 'docs', title: 'What the AIRS guardrail does — and does not — do',
+        text: [
+          'The check fails when AIRS returns `action=block` for the prompt (input) or the response (output); it covers prompt injection, malicious URLs, sensitive data, insecure output, jailbreaks, toxic content and model DoS. It **blocks; it does not redact** — pair it with a redacting check for "mask and continue".',
+          'Like every gateway guardrail it reads text only (images are skipped), its output verdict on a stream is informational, and it is **not available on MCP tool calls** through the MCP Gateway, which excludes partner checks — scan tool events with the Runtime API instead. Actions, status codes and `hook_results` are in "Guardrail actions, verdicts and PII redaction".',
+        ],
       },
       { type: 'code', title: 'Detecting a block', build: () => V(gatewayBlockCheck()) },
       { type: 'live', title: 'Watch a block come back as HTTP 200', text: 'Run the "Prompt injection" preset, then "Same attack, no guardrail" — the only difference is the config.' },
@@ -247,12 +347,12 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
 
   {
     id: 'gw-jwt',
-    group: 'gateway',
+    group: 'gwgov',
     title: 'Identity-based routing with JWT',
     sub: 'No API keys for users — the model is chosen by who they are',
     minutes: 8,
     level: 'Build',
-    docs: pick('gwDevJwt', 'gwConfigs', 'gwKeys'),
+    docs: pick('gwDevJwt', 'gwConfigs', 'gwKeys', 'agKeys', 'agAudit'),
     blocks: [
       {
         type: 'prose',
@@ -273,14 +373,17 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
         title: 'What the gateway requires',
         columns: ['Item', 'Requirement'],
         rows: [
-          ['Algorithm', '**RS256** only; the JOSE header `kid` must match a key in the JWKS'],
-          ['JWKS', 'A JWKS URL (comma-separated for rotation) or static JWKS JSON, configured on the organisation'],
-          ['Required claims', '`portkey_oid` (organisation), `portkey_workspace`, `scope`, `exp`'],
+          ['Algorithm', '**RS256** only (HS256 is refused); RSA keys of 2048 bits or more; the JOSE header `kid` must match a key in the JWKS'],
+          ['JWKS', 'A JWKS URL (comma-separated for rotation; the sets are merged) or static JWKS JSON, under Admin Settings → Organisation → Authentication'],
+          ['Required claims', '`portkey_oid` (or `organisation_id`), `portkey_workspace` (or `workspace_slug`), `scope` (or `scopes`), `exp`'],
           ['Recommended', '`iat`, `nbf`; identity from `email_id` > `sub` > `uid`'],
-          ['Optional', '`defaults` (an embedded default config and metadata), `usage_limits`, `rate_limits`'],
-          ['Sent as', '`x-portkey-api-key: <jwt>` or `Authorization: Bearer <jwt>`'],
-          ['Errors', '401 invalid or expired · 403 scope/workspace not allowed · 412 usage limit · 429 rate limit'],
+          ['Optional', '`defaults` (an embedded default config and metadata — a config from another organisation is silently ignored), `usage_limits`, `rate_limits`'],
+          ['Sent as', '`x-portkey-api-key: <jwt>` (no `Bearer`) or `Authorization: Bearer <jwt>`'],
+          ['Acts as', 'A **workspace** API key — never an organisation key'],
+          ['Revocation', 'None: a validated token is cached until `exp`. Keep tokens short-lived; rotate by publishing a new `kid` first.'],
+          ['Errors', '401 invalid or expired · 403 scope/workspace not allowed · 412 usage limit · 429 rate limit. Invalid tokens are also written to the audit log (e.g. "Signing Key Not Found").'],
         ],
+        note: 'Hybrid and air-gapped gateways can validate tokens locally — including a plain IdP token from Okta, Entra ID, Auth0 or Cognito when one organisation is configured.',
       },
       {
         type: 'code', title: 'Mint the token',
@@ -375,38 +478,84 @@ def mint_gateway_token(email: str, sub: str, role: str, department: str) -> str:
   {
     id: 'gw-mcp',
     group: 'gateway',
-    title: 'MCP through the gateway',
-    sub: 'Broker MCP servers with the same keys and guardrails',
-    minutes: 4,
+    title: 'MCP Gateway: registry, auth and tool control',
+    sub: 'Broker MCP servers with one key, per-tool access and a log of every call',
+    minutes: 8,
     level: 'Build',
-    docs: pick('gwDevMcp', 'pdfGateway'),
+    docs: pick('agMcp', 'agMcpQuick', 'gwDevMcp', 'agMcpRegistry', 'agMcpAuth', 'agMcpCas', 'agMcpIdentity', 'agMcpTools', 'agMcpTeams', 'agMcpGuard', 'agMcpRate', 'agMcpObs', 'agMcpRegApi', 'agMcpClaude', 'pdfGateway'),
     blocks: [
       {
         type: 'prose',
-        text: 'The AI Gateway can front MCP servers too: clients connect to the gateway\'s MCP URL for a server, authenticate with the gateway key, and the gateway injects the server\'s own credentials. The documented URL shape is `https://aigw.portkey.ai/m/{server-slug}/mcp`; your tenant\'s exact MCP gateway URL is shown under Admin Settings → General.',
+        text: [
+          'The MCP Gateway sits between MCP clients and MCP servers. A client authenticates **once**, to the gateway; the gateway checks that the caller\'s workspace and user may reach that server and that tool, injects the server\'s own credential (an OAuth token, an API key or a signed identity header), forwards the call and logs it. Agents never hold an upstream credential, so those rotate without touching a client.',
+          'Transport is **Streamable HTTP** only — a local stdio server has to be exposed over HTTP first. Sessions are ephemeral, so no sticky routing is needed.',
+        ],
       },
       {
-        type: 'code',
-        tabs: [{ id: 'python', lang: 'python', file: 'mcp_client.py', code: `# pip install mcp
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
-
-url = "https://aigw.portkey.ai/m/linear/mcp"          # your tenant's MCP gateway URL + server slug
-headers = {"Authorization": "Bearer YOUR_GATEWAY_API_KEY"}
-
-async with streamablehttp_client(url, headers=headers) as (read, write, _):
-    async with ClientSession(read, write) as session:
-        await session.initialize()
-        tools = await session.list_tools()
-        for tool in tools.tools:
-            print(f"{tool.name}: {tool.description}")
-        result = await session.call_tool("create_issue", {"title": "Bug report", "priority": "high"})
-        print(result)
-` }],
+        type: 'table',
+        title: 'Addresses',
+        columns: ['What', 'URL'],
+        rows: [
+          ['One server', '`https://aigw.portkey.ai/m/{server-slug}/mcp` — copy the exact URL from **AI Gateway → Catalogs**'],
+          ['The approved-server catalog (Registry API, beta)', '`GET https://aigw.portkey.ai/m/v0.1/servers` — MCP Registry `server.json` format; needs the `mcp_servers.list` scope'],
+          ['Keys that sign forwarded identity', '`https://aigw.portkey.ai/m/.well-known/jwks.json`'],
+          ['Callback for upstream OAuth apps', '`https://aigw.portkey.ai/m/oauth/upstream-callback`'],
+        ],
+      },
+      {
+        type: 'steps',
+        title: 'Add a server and hand it out',
+        steps: [
+          { title: 'Register the server', text: 'Name, slug, URL, type **Streamable HTTP** and the upstream auth type, then **Test Connection**.', path: ['AI Gateway', 'Integrations', 'MCP Registry', 'Add MCP Server'] },
+          { title: 'Provision it to workspaces', text: 'On the server\'s **Access Control** tab — optionally to every new workspace automatically.' },
+          { title: 'Choose its tools', text: 'The **Capabilities** tab lists tools, resources and prompts. A disabled tool is hidden from `tools/list` and refused if called directly. Each level — organisation, workspace, user — can only remove access, never add it.' },
+          { title: 'Choose its users', text: 'In the workspace, the server\'s **User Access** tab.' },
+          { title: 'Give callers a key that may invoke MCP', text: 'A workspace key with the `mcp.invoke` scope — or no key at all, and let the client sign in with OAuth.' },
+        ],
+      },
+      {
+        type: 'table',
+        title: 'Two authentication layers',
+        columns: ['Layer', 'Options'],
+        minWidth: 600,
+        rows: [
+          ['Caller → gateway', '**API key** (`Authorization: Bearer`, scope `mcp.invoke`) · **OAuth 2.1** with PKCE, the default when no key is sent — the client opens a browser · **your IdP\'s JWT**, validated per server (`jwt_validation`: JWKS or introspection, required claims) · **OAuth through Palo Alto Networks CAS**, backed by CIE Directory Sync'],
+          ['Gateway → server', '**None** · **Headers** (static API keys, stored encrypted, never logged) · **Client credentials** (one shared identity) · **OAuth 2.1** per user, by dynamic client registration or a pre-registered `client_id` / `client_secret`'],
+          ['Who the user is, upstream', '`user_identity_forwarding`: `claims_header` (JSON claims in `X-User-Claims`), `bearer` (the original token) or `jwt_header` (a gateway-signed RS256 JWT in `X-User-JWT`, 5-minute expiry). Copies of these headers sent by the client are stripped.'],
+        ],
+      },
+      { type: 'code', title: 'Connect a client', tabs: MCP_CLIENT_TABS },
+      {
+        type: 'table',
+        title: 'Controls on tool calls',
+        columns: ['Control', 'Status'],
+        rows: [
+          ['Team and tool provisioning', 'Available — per workspace, per user, per tool'],
+          ['Server access by claims', 'Available — `jwt_validation.requiredClaims` / `claimValues`, e.g. only `@yourcompany.com` addresses'],
+          ['Guardrails', 'On `tools/call` — arguments (input) and result (output); deterministic checks and webhooks only'],
+          ['Rate limits', 'Policies with `target: "mcp_tools"` per key, server, tool or user → 429 (gateway 2.18+)'],
+          ['Tool-level claim rules · authorization webhook · circuit breakers', 'Coming soon'],
+        ],
+      },
+      { type: 'code', title: 'An MCP guardrail', text: 'Created with `target: "mcp_tools"`, then mapped to servers (optionally to single tools). A blocked call comes back as a JSON-RPC error.', tabs: MCP_GUARD_TABS },
+      {
+        type: 'callout', tone: 'warn', title: 'Prisma AIRS does not scan tool calls in the MCP Gateway',
+        text: 'The docs exclude LLM-based and partner checks — PII detection, moderation and every third-party provider — from MCP guardrails, and never mention Prisma AIRS for tool calls. To scan tool parameters and results with AIRS, call the Runtime API with a `tool_event` around each call, or host a `default.webhook` check that does. The model turns still pass the AIRS guardrail on the AI Gateway.',
       },
       {
         type: 'callout', tone: 'observed', title: 'The URL on the SCM tenant used here',
-        text: 'This portal\'s SCM tenant brokers servers at `https://mcp-aigw.portkey.ai/<server>/mcp` (e.g. `/huggingface/mcp`, `/github-copilot/mcp`) with `x-portkey-api-key`. It still scans each tool manifest and every call with `tool_event` — see "Scan every tool call" — because the gateway guardrail scans model turns, not tool events.',
+        text: 'This portal\'s SCM tenant brokers servers at `https://mcp-aigw.portkey.ai/<server>/mcp` (e.g. `/huggingface/mcp`, `/github-copilot/mcp`) with `x-portkey-api-key` — not the `aigw.portkey.ai/m/…` shape in the docs, so copy the URL from the console. Each tool manifest and every call is also scanned with `tool_event`, because the gateway\'s guardrails do not.',
+      },
+      {
+        type: 'callout', tone: 'docs', title: 'Read the fine print',
+        text: 'The CAS page says OAuth through Palo Alto Networks CAS is for the **self-hosted** MCP Gateway only, not the cloud-managed one. The Claude Code client page still shows an older `/m/{workspace-id}/{server-id}/mcp` URL. The Registry API page names both `Authorization: Bearer` and `x-portkey-api-key` as the only accepted header.',
+      },
+      {
+        type: 'cards',
+        items: [
+          { icon: Network, tone: '#2dd4bf', title: 'Scan every tool call', kicker: 'Agents & MCP',
+            text: 'Two-stage `tool_event` scans with the Runtime API — what this portal runs around every MCP call.', go: 'mcp-tool-events', goLabel: 'Open the guide' },
+        ],
       },
     ],
   },

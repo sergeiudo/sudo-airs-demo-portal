@@ -4,6 +4,8 @@
  * README, its PyPI metadata and older pan.dev pages still carry return 404
  * today (e.g. pan.dev/prisma-airs/scan/api/) — they are deliberately absent.
  */
+const AIGW = 'https://docs.gw.prismaairs.com/docs/aigw'
+
 export const L = {
   // pan.dev — AI Runtime (API intercept)
   pandev:        { title: 'pan.dev · Prisma AIRS', url: 'https://pan.dev/airs/', source: 'pandev', what: 'Developer landing page for every Prisma AIRS API.' },
@@ -52,12 +54,148 @@ export const L = {
   msInstall:     { title: 'Install AI Model Security', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/ai-model-security/model-security-to-secure-your-ai-models/get-started-with-ai-model-security/install-ai-model-security', source: 'docs', what: 'Private index script, environment variables, requirements.' },
   msScanning:    { title: 'Scanning models', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/ai-model-security/model-security-to-secure-your-ai-models/get-started-with-ai-model-security/scanning-models', source: 'docs', what: 'Hugging Face, local and object-storage scans; options.' },
 
-  // Prisma AIRS AI Gateway developer docs (hosted by Portkey)
-  gwDevSetup:    { title: 'AI Gateway developer docs — simple setup', url: 'https://docs.portkey.ai/docs/aigw/introduction/simple-setup', source: 'other', what: 'Prisma AIRS-branded developer docs: base URL, auth, first call.' },
-  gwDevJwt:      { title: 'AI Gateway — JWT authentication', url: 'https://docs.portkey.ai/docs/aigw/product/enterprise-offering/org-management/jwt', source: 'other', what: 'JWKS, RS256, required claims.' },
-  gwDevGuard:    { title: 'AI Gateway — PANW Prisma AIRS guardrail', url: 'https://docs.portkey.ai/docs/aigw/integrations/guardrails/palo-alto-panw-prisma', source: 'other', what: 'Guardrail parameters: profile, scan scope, strip scaffolding.' },
-  gwDevMcp:      { title: 'AI Gateway — MCP gateway', url: 'https://docs.portkey.ai/docs/aigw/product/mcp-gateway/using-mcp-servers', source: 'other', what: 'Connect MCP servers through the gateway.' },
+  // Prisma AIRS AI Gateway developer docs — docs.gw.prismaairs.com (the same
+  // pages are also served under docs.portkey.ai/docs/aigw/, which now redirects
+  // to portkey.ai). Checked on 2026-10-01: each returned HTTP 200.
+  gwDevSetup:    { title: 'AI Gateway developer docs — simple setup', url: `${AIGW}/introduction/simple-setup`, source: 'aigw', what: 'Workspace, integration, key, first request, logs — the minimal path.' },
+  gwDevJwt:      { title: 'AI Gateway — JWT authentication', url: `${AIGW}/product/enterprise-offering/org-management/jwt`, source: 'aigw', what: 'JWKS, RS256, required claims.' },
+  gwDevGuard:    { title: 'AI Gateway — PANW Prisma AIRS guardrail', url: `${AIGW}/integrations/guardrails/palo-alto-panw-prisma`, source: 'aigw', what: 'Guardrail parameters: profile, scan scope, strip scaffolding.' },
+  gwDevMcp:      { title: 'MCP Gateway — using MCP servers', url: `${AIGW}/product/mcp-gateway/using-mcp-servers`, source: 'aigw', what: 'Connect agents and apps to MCP servers through the gateway.' },
   gwSpec:        { title: 'AI Gateway OpenAPI spec (raw)', url: 'https://raw.githubusercontent.com/PaloAltoNetworks/openapi/refs/heads/main/openapi.yaml', source: 'github', what: 'Inference and admin API paths.' },
+  agWelcome:     { title: 'AI Gateway developer docs — welcome', url: `${AIGW}/introduction/welcome`, source: 'aigw', what: '3,000+ models behind one OpenAI-compatible API; latency, security and scale FAQ.' },
+  agFeatures:    { title: 'AI Gateway — feature overview', url: `${AIGW}/introduction/feature-overview`, source: 'aigw', what: 'Every gateway capability on one page.' },
+  agApiRef:      { title: 'Inference API reference', url: `${AIGW}/api-reference/inference-api/introduction`, source: 'aigw', what: 'Base URL, endpoints and SDKs.' },
+  agHeaders:     { title: 'Inference API — headers', url: `${AIGW}/api-reference/inference-api/headers`, source: 'aigw', what: 'Every x-portkey-* request header.' },
+  agAuth:        { title: 'Inference API — authentication', url: `${AIGW}/api-reference/inference-api/authentication`, source: 'aigw', what: 'API key and JWT header forms.' },
+  agAgentic:     { title: 'Inference API — agentic usage', url: `${AIGW}/api-reference/inference-api/agentic-usage`, source: 'aigw', what: 'Calling the gateway from agents and tools.' },
+
+  // AIGW — Universal API
+  agUniversal:   { title: 'Universal API', url: `${AIGW}/product/ai-gateway/universal-api`, source: 'aigw', what: 'Chat Completions, Responses or Messages format against any provider.' },
+  agChat:        { title: 'Chat Completions', url: `${AIGW}/product/ai-gateway/chat-completions`, source: 'aigw', what: 'OpenAI-compatible /v1/chat/completions for every provider.' },
+  agMessages:    { title: 'Messages (Anthropic format)', url: `${AIGW}/product/ai-gateway/messages-api`, source: 'aigw', what: '/v1/messages in Anthropic\'s format, translated to any provider.' },
+  agResponses:   { title: 'Open Responses', url: `${AIGW}/product/ai-gateway/responses-api`, source: 'aigw', what: '/v1/responses on any provider, Open Responses compliant.' },
+  agDecisions:   { title: 'Decisions API', url: `${AIGW}/product/ai-gateway/decisions-api`, source: 'aigw', what: 'Typed judgments — probability, choice or score — from /v1/decisions.' },
+  agMultimodal:  { title: 'Multimodal capabilities', url: `${AIGW}/product/ai-gateway/multimodal-capabilities`, source: 'aigw', what: 'Vision, images, speech, function calling, thinking.' },
+  agFunctions:   { title: 'Function calling', url: `${AIGW}/product/ai-gateway/multimodal-capabilities/function-calling`, source: 'aigw', what: 'Tools across providers in the OpenAI shape.' },
+  agThinking:    { title: 'Thinking mode', url: `${AIGW}/product/ai-gateway/multimodal-capabilities/thinking-mode`, source: 'aigw', what: 'Reasoning models and how their thinking is returned.' },
+  agFiles:       { title: 'Files', url: `${AIGW}/product/ai-gateway/files`, source: 'aigw', what: 'Upload once, reuse in requests, batches and fine-tunes.' },
+  agBatches:     { title: 'Unified batch inference', url: `${AIGW}/product/ai-gateway/batches`, source: 'aigw', what: 'One /v1/batches endpoint across providers.' },
+  agFineTune:    { title: 'Fine-tuning', url: `${AIGW}/product/ai-gateway/fine-tuning`, source: 'aigw', what: 'Fine-tuning jobs through the gateway.' },
+  agStrict:      { title: 'Strict OpenAI compliance', url: `${AIGW}/product/ai-gateway/strict-open-ai-compliance`, source: 'aigw', what: 'Which non-OpenAI fields are stripped, and how to keep them.' },
+  agCustomHosts: { title: 'Custom hosts', url: `${AIGW}/product/ai-gateway/custom-hosts`, source: 'aigw', what: 'Private or self-hosted models, and the host validation rules.' },
+  agRemoteMcp:   { title: 'Remote MCP', url: `${AIGW}/product/ai-gateway/remote-mcp`, source: 'aigw', what: 'Provider-native MCP tools through the gateway.' },
+  agNitro:       { title: 'Nitro mode (beta)', url: `${AIGW}/product/ai-gateway/nitro-mode`, source: 'aigw', what: 'Forward the body untransformed when it already matches the provider.' },
+  agGrpc:        { title: 'gRPC (beta)', url: `${AIGW}/product/ai-gateway/grpc`, source: 'aigw', what: 'gRPC transport for lower latency.' },
+  agRealtime:    { title: 'Realtime API', url: `${AIGW}/product/ai-gateway/realtime-api`, source: 'aigw', what: 'OpenAI Realtime through the gateway, with logs and cost.' },
+  agBeta:        { title: 'Beta features', url: `${AIGW}/product/ai-gateway/beta-features`, source: 'aigw', what: 'Opt in with the x-portkey-beta header.' },
+
+  // AIGW — routing and reliability
+  agGateway:     { title: 'AI Gateway — routing and reliability', url: `${AIGW}/product/ai-gateway`, source: 'aigw', what: 'Routing, fallbacks, retries, caching and guardrails.' },
+  agConfigs:     { title: 'Configs', url: `${AIGW}/product/ai-gateway/configs`, source: 'aigw', what: 'The pc- config object and how a request picks it up.' },
+  agConditional: { title: 'Conditional routing', url: `${AIGW}/product/ai-gateway/conditional-routing`, source: 'aigw', what: 'Route on metadata and request parameters.' },
+  agFallbacks:   { title: 'Fallbacks', url: `${AIGW}/product/ai-gateway/fallbacks`, source: 'aigw', what: 'Switch to a backup target when the primary fails.' },
+  agRetries:     { title: 'Automatic retries', url: `${AIGW}/product/ai-gateway/automatic-retries`, source: 'aigw', what: 'Retry with exponential backoff.' },
+  agCircuit:     { title: 'Circuit breaker', url: `${AIGW}/product/ai-gateway/circuit-breaker`, source: 'aigw', what: 'Stop routing to unhealthy targets until they recover.' },
+  agLoadBalance: { title: 'Load balancing', url: `${AIGW}/product/ai-gateway/load-balancing`, source: 'aigw', what: 'Weighted distribution across targets.' },
+  agCanary:      { title: 'Canary testing', url: `${AIGW}/product/ai-gateway/canary-testing`, source: 'aigw', what: 'Send a slice of traffic to a new model.' },
+  agCache:       { title: 'Cache (simple and semantic)', url: `${AIGW}/product/ai-gateway/cache-simple-and-semantic`, source: 'aigw', what: 'Exact and semantic response caching.' },
+  agTimeouts:    { title: 'Request timeouts', url: `${AIGW}/product/ai-gateway/request-timeouts`, source: 'aigw', what: 'Cap how long a target may take.' },
+
+  // AIGW — guardrails
+  agGuardrails:  { title: 'Guardrails', url: `${AIGW}/product/guardrails`, source: 'aigw', what: 'Checks, actions, verdicts and status codes.' },
+  agGuardCaps:   { title: 'Guardrails — supported endpoints', url: `${AIGW}/product/guardrails/capabilities`, source: 'aigw', what: 'Which endpoints, inputs and modes guardrails cover.' },
+  agGuardList:   { title: 'List of guardrail checks', url: `${AIGW}/product/guardrails/list-of-guardrail-checks`, source: 'aigw', what: 'Deterministic, LLM-based and partner checks.' },
+  agGuardRaw:    { title: 'Raw guardrails in JSON', url: `${AIGW}/product/guardrails/creating-raw-guardrails-in-json`, source: 'aigw', what: 'Define checks and actions directly in a config.' },
+  agGuardHdrs:   { title: 'Guardrails — forwarding headers', url: `${AIGW}/product/guardrails/forwarding-headers`, source: 'aigw', what: 'Pass client headers to guardrail providers.' },
+  agPii:         { title: 'PII redaction', url: `${AIGW}/product/guardrails/pii-redaction`, source: 'aigw', what: 'Replace sensitive data with standard identifiers.' },
+  agByo:         { title: 'Bring your own guardrails', url: `${AIGW}/integrations/guardrails/bring-your-own-guardrails`, source: 'aigw', what: 'Your own check, called as a webhook.' },
+  agOrgGuard:    { title: 'Enforce org-level guardrails', url: `${AIGW}/product/administration/enforce-organisation-level-guardrails`, source: 'aigw', what: 'Guardrails on every request in the organisation.' },
+  agWsGuard:     { title: 'Enforce workspace-level guardrails', url: `${AIGW}/product/administration/enforce-workspace-level-guardrails`, source: 'aigw', what: 'Guardrails on every request in a workspace.' },
+  agModelRules:  { title: 'Model Rules guardrail', url: `${AIGW}/integrations/guardrails/model-rules`, source: 'aigw', what: 'Allow or block requested models, per metadata.' },
+  agReqParams:   { title: 'Request Parameters Check guardrail', url: `${AIGW}/integrations/guardrails/request-parameters-check`, source: 'aigw', what: 'Allow or block tools, keys and parameter values.' },
+
+  // AIGW — observability
+  agObs:         { title: 'Observability', url: `${AIGW}/product/observability`, source: 'aigw', what: 'Logs, traces, analytics and OpenTelemetry.' },
+  agLogs:        { title: 'Logs', url: `${AIGW}/product/observability/logs`, source: 'aigw', what: 'Every request the gateway processed.' },
+  agTraces:      { title: 'Tracing', url: `${AIGW}/product/observability/traces`, source: 'aigw', what: 'Trace and span headers; one view per request lifecycle.' },
+  agMetadata:    { title: 'Metadata', url: `${AIGW}/product/observability/metadata`, source: 'aigw', what: 'x-portkey-metadata for filtering, analytics and routing.' },
+  agFeedback:    { title: 'Feedback', url: `${AIGW}/product/observability/feedback`, source: 'aigw', what: 'Weighted feedback on any request by trace id.' },
+  agAnalytics:   { title: 'Analytics', url: `${AIGW}/product/observability/analytics`, source: 'aigw', what: 'Cost, tokens, latency and errors over time.' },
+  agLogsExport:  { title: 'Logs export', url: `${AIGW}/product/observability/logs-export`, source: 'aigw', what: 'Export logs for analysis and reporting.' },
+  agCost:        { title: 'Model pricing and cost', url: `${AIGW}/product/observability/cost-management`, source: 'aigw', what: 'How cost is calculated and priced.' },
+  agOtel:        { title: 'OpenTelemetry for LLM observability', url: `${AIGW}/product/observability/opentelemetry`, source: 'aigw', what: 'Send your app\'s OTel traces to the gateway.' },
+  agOtelExport:  { title: 'OpenTelemetry export', url: `${AIGW}/product/enterprise-offering/otel/otel`, source: 'aigw', what: 'Export gateway data to your OTel collector.' },
+  agReqLogging:  { title: 'Configure request logging', url: `${AIGW}/product/administration/configuring-request-logging`, source: 'aigw', what: 'What is stored for each request.' },
+  agEnforceMeta: { title: 'Enforce request metadata', url: `${AIGW}/product/administration/enforcing-request-metadata`, source: 'aigw', what: 'Require metadata keys with a JSON schema.' },
+
+  // AIGW — keys, budgets, policy, catalog
+  agKeys:        { title: 'API keys (AuthN and AuthZ)', url: `${AIGW}/product/enterprise-offering/org-management/api-keys-authn-and-authz`, source: 'aigw', what: 'Admin and workspace keys, roles, scopes.' },
+  agKeyRotation: { title: 'API key rotation', url: `${AIGW}/product/enterprise-offering/org-management/api-key-rotation`, source: 'aigw', what: 'Manual or automatic rotation with a transition period.' },
+  agBudget:      { title: 'Budget limits', url: `${AIGW}/product/policies/budget-limits`, source: 'aigw', what: 'Spend limits per workspace on an integration.' },
+  agRate:        { title: 'Rate limits', url: `${AIGW}/product/policies/rate-limits`, source: 'aigw', what: 'Request and token velocity limits.' },
+  agKeyLimits:   { title: 'Budget and rate limits on API keys', url: `${AIGW}/product/administration/enforce-budget-and-rate-limit`, source: 'aigw', what: 'Limits that ride on a key.' },
+  agWsLimits:    { title: 'Workspace budget and rate limits', url: `${AIGW}/product/administration/enforce-workspace-budget-and-rate-limits`, source: 'aigw', what: 'Limits for a whole workspace.' },
+  agPolicies:    { title: 'Usage and rate limit policies', url: `${AIGW}/product/enterprise-offering/budget-policies`, source: 'aigw', what: 'Fine-grained limits grouped by key, user or metadata.' },
+  agDefaultCfg:  { title: 'Enforce default configs on API keys', url: `${AIGW}/product/administration/enforce-default-config`, source: 'aigw', what: 'Policy that rides on the key.' },
+  agSavedOnly:   { title: 'Enforce saved-only resources', url: `${AIGW}/product/administration/enforce-saved-only-config`, source: 'aigw', what: 'Reject inline provider configuration at request time.' },
+  agCatalog:     { title: 'Model Catalog', url: `${AIGW}/product/model-catalog`, source: 'aigw', what: 'Every provider and model in the organisation.' },
+  agIntegrations:{ title: 'Integrations', url: `${AIGW}/product/model-catalog/integrations`, source: 'aigw', what: 'Provider credentials under central governance.' },
+  agWsProv:      { title: 'Workspace provisioning', url: `${AIGW}/product/model-catalog/workspace-provisioning`, source: 'aigw', what: 'Which workspaces use an integration, and their limits.' },
+  agModelProv:   { title: 'AI model provisioning', url: `${AIGW}/product/model-catalog/model-provisioning`, source: 'aigw', what: 'Which models an integration exposes.' },
+  agCustomModels:{ title: 'Adding custom models', url: `${AIGW}/product/model-catalog/custom-models`, source: 'aigw', what: 'Custom and fine-tuned models in the catalog.' },
+  agPricing:     { title: 'Pricing adjustments', url: `${AIGW}/product/model-catalog/pricing-adjustments`, source: 'aigw', what: 'Discount or markup multipliers per integration.' },
+  agBedrockRole: { title: 'Connect Bedrock with an assumed role', url: `${AIGW}/product/model-catalog/connect-bedrock-with-amazon-assumed-role`, source: 'aigw', what: 'Bedrock integration without static keys.' },
+  agSecretRefs:  { title: 'Secret references', url: `${AIGW}/product/enterprise-offering/secret-references`, source: 'aigw', what: 'AWS Secrets Manager, Azure Key Vault, HashiCorp Vault.' },
+
+  // AIGW — org administration
+  agOrgMgmt:     { title: 'Org management', url: `${AIGW}/product/enterprise-offering/org-management`, source: 'aigw', what: 'Organisations, workspaces, users.' },
+  agWorkspaces:  { title: 'Workspaces', url: `${AIGW}/product/enterprise-offering/org-management/workspaces`, source: 'aigw', what: 'The unit that owns integrations, configs and keys.' },
+  agRoles:       { title: 'User roles and permissions', url: `${AIGW}/product/enterprise-offering/org-management/user-roles-and-permissions`, source: 'aigw', what: 'Org and workspace roles.' },
+  agAccessCtl:   { title: 'Access control management', url: `${AIGW}/product/enterprise-offering/access-control-management`, source: 'aigw', what: 'Roles, key management and audit together.' },
+  agSso:         { title: 'SSO', url: `${AIGW}/product/enterprise-offering/org-management/sso`, source: 'aigw', what: 'Single sign-on for the organisation.' },
+  agScim:        { title: 'SCIM', url: `${AIGW}/product/enterprise-offering/org-management/scim/scim`, source: 'aigw', what: 'User and group provisioning.' },
+  agScimGroups:  { title: 'SCIM group management', url: `${AIGW}/product/enterprise-offering/org-management/scim/group-management`, source: 'aigw', what: 'Map groups to workspaces and roles.' },
+  agCie:         { title: 'CIE Directory Sync', url: `${AIGW}/product/enterprise-offering/org-management/directory-sync/cie-directory-sync`, source: 'aigw', what: 'Users and groups from Cloud Identity Engine into SCM\'s AI Gateway.' },
+  agAudit:       { title: 'Audit logs', url: `${AIGW}/product/enterprise-offering/audit-logs`, source: 'aigw', what: 'Every administrative action, tracked.' },
+  agKms:         { title: 'KMS integration', url: `${AIGW}/product/enterprise-offering/kms`, source: 'aigw', what: 'Bring your own encryption keys.' },
+  agSecurity:    { title: 'Security at the AI Gateway', url: `${AIGW}/product/enterprise-offering/security`, source: 'aigw', what: 'Encryption and service security.' },
+  agGatewayUrls: { title: 'Gateway URLs', url: `${AIGW}/product/enterprise-offering/org-management/gateway-urls`, source: 'aigw', what: 'Custom endpoints for the AI and MCP gateways.' },
+  agGwRegister:  { title: 'Gateway registration (hybrid)', url: `${AIGW}/self-hosting/hybrid-deployments/gateway-registration`, source: 'aigw', what: 'Register a self-hosted data plane for config sync.' },
+
+  // AIGW — MCP Gateway, Agent Gateway
+  agMcp:         { title: 'MCP Gateway', url: `${AIGW}/product/mcp-gateway`, source: 'aigw', what: 'Central auth, access control and observability for MCP servers.' },
+  agMcpQuick:    { title: 'MCP Gateway — quickstart', url: `${AIGW}/product/mcp-gateway/quickstart`, source: 'aigw', what: 'Add a server and connect it to Claude.' },
+  agMcpRegistry: { title: 'MCP Registry', url: `${AIGW}/product/mcp-gateway/mcp-registry`, source: 'aigw', what: 'Add, manage and govern MCP servers.' },
+  agMcpInternal: { title: 'Add internal MCP servers', url: `${AIGW}/product/mcp-gateway/internal-mcp-servers`, source: 'aigw', what: 'Your own servers, behind gateway auth and logging.' },
+  agMcpExternal: { title: 'Add external MCP servers', url: `${AIGW}/product/mcp-gateway/external-mcp-servers`, source: 'aigw', what: 'Linear, GitHub, Slack and other third-party servers.' },
+  agMcpRegApi:   { title: 'MCP Registry API (beta)', url: `${AIGW}/product/mcp-gateway/registry-api`, source: 'aigw', what: 'Approved servers as a standards-compliant catalog.' },
+  agMcpAuth:     { title: 'MCP Gateway — authentication', url: `${AIGW}/product/mcp-gateway/authentication`, source: 'aigw', what: 'Gateway-side and upstream authentication.' },
+  agMcpCas:      { title: 'MCP Gateway — OAuth in SCM', url: `${AIGW}/product/mcp-gateway/authentication/cas`, source: 'aigw', what: 'OAuth 2.1 through Palo Alto Networks Cloud Authentication Service.' },
+  agMcpIdentity: { title: 'MCP Gateway — identity forwarding', url: `${AIGW}/product/mcp-gateway/authentication/identity-forwarding`, source: 'aigw', what: 'Pass the authenticated user to the MCP server.' },
+  agMcpTools:    { title: 'MCP Gateway — tool provisioning', url: `${AIGW}/product/mcp-gateway/tool-provisioning`, source: 'aigw', what: 'Which tools, resources and prompts each workspace gets.' },
+  agMcpTeams:    { title: 'MCP Gateway — team provisioning', url: `${AIGW}/product/mcp-gateway/access-control`, source: 'aigw', what: 'Which workspaces and users reach which servers.' },
+  agMcpGuard:    { title: 'MCP Gateway — guardrails', url: `${AIGW}/product/mcp-gateway/guardrails`, source: 'aigw', what: 'Guardrails on MCP tool calls.' },
+  agMcpRate:     { title: 'MCP Gateway — rate limits', url: `${AIGW}/product/mcp-gateway/rate-limits`, source: 'aigw', what: 'Throttle tool calls per key, server or tool.' },
+  agMcpObs:      { title: 'MCP Gateway — observability', url: `${AIGW}/product/mcp-gateway/observability`, source: 'aigw', what: 'Log and debug MCP interactions.' },
+  agMcpClaude:   { title: 'MCP clients — Claude Code', url: `${AIGW}/integrations/mcp-clients/claude-code`, source: 'aigw', what: 'Connect gateway MCP servers to the Claude Code CLI.' },
+  agAgentGw:     { title: 'Agent Gateway', url: `${AIGW}/product/agent-gateway`, source: 'aigw', what: 'Central auth, access control and observability for agents.' },
+  agAgentQuick:  { title: 'Agent Gateway — quickstart', url: `${AIGW}/product/agent-gateway/quickstart`, source: 'aigw', what: 'Register an agent and call it through the gateway.' },
+  agAgentReg:    { title: 'Agent Registry', url: `${AIGW}/product/agent-gateway/registry`, source: 'aigw', what: 'Manage agent integrations.' },
+  agAgentCat:    { title: 'Agent Catalog', url: `${AIGW}/product/catalogs/agents`, source: 'aigw', what: 'Every registered agent and the skills it exposes.' },
+
+  // AIGW — coding agents and frameworks
+  agCoding:      { title: 'Coding agents', url: `${AIGW}/product/coding-agent`, source: 'aigw', what: 'Governance for Claude Code, Codex and other coding agents.' },
+  agClaudeCode:  { title: 'Claude Code', url: `${AIGW}/integrations/libraries/claude-code`, source: 'aigw', what: 'Route Claude Code through the gateway.' },
+  agClaudeBedrock:{ title: 'Claude Code with Amazon Bedrock', url: `${AIGW}/integrations/libraries/claude-code-bedrock`, source: 'aigw', what: 'Claude Code → gateway → Bedrock.' },
+  agClaudeVertex:{ title: 'Claude Code with Google Vertex AI', url: `${AIGW}/integrations/libraries/claude-code-vertex`, source: 'aigw', what: 'Claude Code → gateway → Vertex AI.' },
+  agCodex:       { title: 'OpenAI Codex', url: `${AIGW}/integrations/libraries/codex`, source: 'aigw', what: 'Usage tracking, cost controls and guardrails for Codex.' },
+  agCursor:      { title: 'Cursor', url: `${AIGW}/integrations/libraries/cursor`, source: 'aigw', what: 'Observability and governance for Cursor.' },
+  agOpenaiAgents:{ title: 'OpenAI Agents SDK (Python)', url: `${AIGW}/integrations/agents/openai-agents`, source: 'aigw', what: 'Agents SDK through the gateway.' },
+  agLanggraph:   { title: 'LangGraph', url: `${AIGW}/integrations/agents/langgraph`, source: 'aigw', what: 'LangGraph workflows through the gateway.' },
+  agStrands:     { title: 'Strands Agents', url: `${AIGW}/integrations/agents/strands`, source: 'aigw', what: 'AWS Strands through the gateway.' },
+  agLangchain:   { title: 'LangChain (Python)', url: `${AIGW}/integrations/libraries/langchain-python`, source: 'aigw', what: 'LangChain apps through the gateway.' },
+  agVercel:      { title: 'Vercel AI SDK', url: `${AIGW}/integrations/libraries/vercel`, source: 'aigw', what: 'Vercel AI SDK through the gateway.' },
+  agOpenaiCompat:{ title: 'Any OpenAI-compatible project', url: `${AIGW}/integrations/libraries/openai-compatible`, source: 'aigw', what: 'Two settings: base URL and key.' },
 
   // Packages and repos
   pypiSdk:       { title: 'pan-aisecurity on PyPI', url: 'https://pypi.org/project/pan-aisecurity/', source: 'pypi', what: 'The official Runtime API Python SDK.' },

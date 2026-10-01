@@ -263,6 +263,7 @@ function DecisionCard({ t, card, onGo }) {
 const SOURCE = {
   docs:   { label: 'docs.paloaltonetworks.com', key: 'live' },
   pandev: { label: 'pan.dev', key: 'live' },
+  aigw:   { label: 'docs.gw.prismaairs.com', key: 'live' },
   pypi:   { label: 'PyPI', key: 'pass' },
   npm:    { label: 'npm', key: 'pass' },
   github: { label: 'GitHub', key: 'idle' },
