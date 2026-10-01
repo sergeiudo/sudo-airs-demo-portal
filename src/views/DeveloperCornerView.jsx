@@ -282,7 +282,7 @@ async function airscan(prompt, response = null, model = 'unknown') {
     metadata: {
       app_name: 'SUDO AIRS Demo',
       ai_model: model,
-      app_user: 'demo-user',
+      app_user: 'sudo-airs-demo-portal',
     },
     contents: [{ prompt, ...(response != null ? { response } : {}) }],
   }

@@ -33,7 +33,7 @@ const AIRSCAN = `export async function airscan(prompt, response = null, model = 
   const body = {
     tr_id: \`citadel-\${Date.now()}\`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
-    metadata: { app_name: 'SUDO AIRS Demo', ai_model: model, app_user: 'demo-user' },
+    metadata: { app_name: 'SUDO AIRS Demo', ai_model: model, app_user: 'sudo-airs-demo-portal' },
     contents: [{ prompt, ...(response != null ? { response } : {}) }],
   }
   const url = \`\${process.env.AIRS_BASE_URL}/v1/scan/sync/request\`

@@ -51,12 +51,19 @@ export const MCP_SERVERS = [
     allow: ['hf_whoami', 'hub_repo_search', 'hub_repo_details', 'hf_fs'],
     // No bare 'model', 'models' or 'llm': every prompt in an AI-security demo
     // contains them, and routing on them offered Hub tools to "what model are you?".
+    // The two patterns catch ranking questions instead — "top 5 llm models",
+    // "most downloaded LLMs", "which models are trending". Plural only: "you are
+    // the best model" is a jailbreak line, not a Hub question.
     hints: ['huggingface', 'hugging face', 'hf', 'dataset', 'datasets', 'spaces', 'checkpoint',
             'checkpoints', 'fine-tune', 'finetune', 'safetensors', 'gguf', 'model card',
-            'trending models', 'open-source model', 'open-source models', 'open weights'],
+            'trending models', 'open-source model', 'open-source models', 'open-source llm',
+            'open-source llms', 'open weights',
+            /\b(top|best|popular|trending|leading|most downloaded|most liked)\s+(\d+\s+)?((open[- ]?(source|weights?)|text[- ]generation|small|local|coding|code)\s+)?(llm\s+models|llms|models|language models|datasets)\b/,
+            /\b(llms|models|datasets)\s+(are\s+)?(trending|most downloaded|most popular|most liked)\b/],
     guidance: [
       'Hugging Face tools:',
-      '- hub_repo_search(query, repo_type): find models / datasets / spaces. repo_type is "model", "dataset" or "space".',
+      '- hub_repo_search(query, repo_types, sort, limit, filters): find models / datasets / spaces. repo_types is an array of "model", "dataset", "space".',
+      '  For "top / most popular / trending" questions, rank on the Hub: query "", repo_types ["model"], sort "downloads" or "trendingScore", limit = the number asked for, filters ["text-generation"] for LLMs.',
       '- hub_repo_details(...): details for a specific repo once you know its id.',
       '- hf_fs(...): list or read files inside a repo.',
       '- hf_whoami(): the authenticated Hugging Face account.',
@@ -320,9 +327,13 @@ function toOpenAiTools(serverId, tools) {
  *
  * No match means no tools: the MCP servers are here to showcase tool calling on
  * prompts that are actually about them, not to be offered to everything.
+ *
+ * A hint may also be a RegExp, for intents a word list cannot express without
+ * the generic words it must avoid. It is tested against the lowercased prompt.
  */
 const hintRe = new Map()
 function mentions(q, hint) {
+  if (hint instanceof RegExp) return hint.test(q)
   if (!hintRe.has(hint)) {
     const esc = hint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     hintRe.set(hint, new RegExp(`(^|[^a-z0-9])${esc}($|[^a-z0-9])`))

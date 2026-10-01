@@ -176,7 +176,7 @@ export async function airscan(prompt, response = null, model = 'unknown', { defe
   const body = {
     tr_id: `citadel-${Date.now()}`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
-    metadata: { app_name: 'SUDO AIRS Demo', ai_model: model, app_user: 'demo-user' },
+    metadata: { app_name: 'SUDO AIRS Demo', ai_model: model, app_user: 'sudo-airs-demo-portal' },
     contents: [{ prompt, ...(response != null ? { response } : {}) }],
   }
 
@@ -1023,7 +1023,7 @@ app.post('/api/chat', async (req, res) => {
           createCompletion: async ({ messages, tools }) => {
             const { configId } = resolveAigwConfig(airsEnabled)
             const client = buildAigwClient(configId, {
-              metadata: { demo: 'api-intercept-mcp', _user: 'demo-user', lane: airsEnabled ? 'airs' : 'none' },
+              metadata: { demo: 'api-intercept-mcp', _user: 'sudo-airs-demo-portal', lane: airsEnabled ? 'airs' : 'none' },
             })
             // No server routed → a plain turn. An empty tools array with
             // tool_choice set is a request some providers reject outright.
@@ -1693,7 +1693,7 @@ async function callScmGateway(prompt, modelId, airsEnabled) {
   const model = modelId || `${SCM_ENV.bedrockSlug}/${SCM_MODELS[0].id}`
   const { configId, mode } = resolveAigwConfig(airsEnabled)
   const client = buildAigwClient(configId, {
-    metadata: { demo: 'api-intercept', _user: 'demo-user', lane: airsEnabled ? 'airs' : 'none' },
+    metadata: { demo: 'api-intercept', _user: 'sudo-airs-demo-portal', lane: airsEnabled ? 'airs' : 'none' },
   })
 
   const t0 = Date.now()
@@ -2271,7 +2271,7 @@ async function airscanMcp({ prompt, response = null, toolName, toolInput, toolOu
   const body = {
     tr_id: trId,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
-    metadata: { app_name: 'AIRS MCP Demo', ai_model: model, app_user: 'demo-user' },
+    metadata: { app_name: 'AIRS MCP Demo', ai_model: model, app_user: 'sudo-airs-demo-portal' },
     contents: [contentItem],
   }
 

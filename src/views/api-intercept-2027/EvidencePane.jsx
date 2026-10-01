@@ -378,10 +378,11 @@ function McpBlock({ t, mcp }) {
           tools from the model entirely; a blocked call never executes.
         </p>
       )}
-      {!toolSteps.length && (
+      {!toolSteps.length && (discovered.length > 0 || !routeStep?.servers?.length) && (
         <p style={{ fontFamily: FONT.prose, fontSize: 10.5, color: t.inkFaint }}>
-          Servers were reached and their manifests scanned, but the model answered
-          without calling a tool.
+          {discovered.length
+            ? 'Servers were reached and their manifests scanned, but the model answered without calling a tool.'
+            : 'Auto-route found no MCP topic in the question, so no server was offered and the model answered on its own. Pick a server in the MCP panel to force one.'}
         </p>
       )}
     </Block>

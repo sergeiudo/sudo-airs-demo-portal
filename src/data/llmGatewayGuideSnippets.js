@@ -373,7 +373,7 @@ if data["action"] == "block":
   const body = {
     tr_id: \`citadel-\${Date.now()}\`,
     ai_profile: { profile_name: process.env.AIRS_PROFILE_NAME },
-    metadata: { app_name: 'SUDO AIRS Demo', ai_model: model, app_user: 'demo-user' },
+    metadata: { app_name: 'SUDO AIRS Demo', ai_model: model, app_user: 'sudo-airs-demo-portal' },
     contents: [{ prompt, ...(response != null ? { response } : {}) }],
   }
   const res = await fetch(process.env.AIRS_BASE_URL + '/v1/scan/sync/request', {

@@ -501,7 +501,7 @@ function ScmTransactionCard({ trace, telemetry, isDark }) {
     { label: 'Profile',    value: inputScan?.profile_name ?? trace.profile },
     { label: 'Model',      value: trace.model ?? trace.backend },
     { label: 'Environment', value: 'dev' },
-    { label: 'User ID',    value: 'demo-user' },
+    { label: 'User ID',    value: 'sudo-airs-demo-portal' },
   ].filter(f => f.value)
 
   const cardBg     = isDark ? 'rgba(10,15,28,0.7)'      : 'rgba(0,48,135,0.04)'
