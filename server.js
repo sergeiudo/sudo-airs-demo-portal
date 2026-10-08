@@ -2620,6 +2620,9 @@ app.get('/api/health', (_req, res) => {
     aigw: { configured: !!(process.env.AIGW_API_KEY && process.env.AIGW_CONFIG_PROTECTED) },
     azure: { configured: !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY) },
     traces: (() => { try { return countTraces() } catch { return null } })(),
+    // Which machine answered — read from the process, no shell-out. PM2 sets
+    // pm_id on every process it runs; a bare `npm run dev` has none.
+    host: { hostname: os.hostname(), platform: process.platform, node: process.version, uptimeSec: Math.round(process.uptime()), pm2: process.env.pm_id != null },
   })
 })
 
@@ -3009,22 +3012,216 @@ function scrapeReleaseNotes() {
   return RN_INFLIGHT
 }
 
+// ─── AI Gateway changelog (Portkey Enterprise Gateway) ────────────────────────
+// The second source in the feed. Portkey's Enterprise Gateway is the Prisma AIRS
+// AI Gateway, and its changelog versions are the gateway_enterprise image tags
+// the airs-gw Helm chart deploys. Mintlify serves every docs page as markdown at
+// <page>.md (~190 KB, against 2.3 MB of HTML), one <Update label="2.27.0"
+// description="2026-10-06"> block per release. Each release becomes one feature
+// in its month, under the product area "AI Gateway", carrying the full notes as
+// sections. Own cache, own failure: a dead changelog never blanks the PA feed.
+// Read from the Prisma AIRS-branded host (docs.gw.prismaairs.com), which serves
+// the same pages, anchors and .md as portkey.ai/docs.
+const GW_DOCS_ORIGIN = 'https://docs.gw.prismaairs.com'
+const GW_CHANGELOG_URL = `${GW_DOCS_ORIGIN}/docs/changelog/enterprise`
+const GW_AREA = 'AI Gateway'
+const GW_CACHE = { releases: null, fetchedAt: 0, attemptedAt: 0, error: null }
+
+const rnMonthIdx = (slug) => RN_MONTHS.indexOf(slug.split('-')[0]) + 12 * parseInt(slug.split('-')[1])
+
+// Inline markdown is kept (bold, `code`, links) for the client to render as
+// React nodes. Links are made absolute and only https:// survives — scraped
+// markup is not trusted to pick a scheme; anything else keeps its label only.
+function gwInline(s) {
+  return s
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => {
+      const url = href.startsWith('/') ? `${GW_DOCS_ORIGIN}${href}` : href.startsWith('#') ? `${GW_CHANGELOG_URL}${href}` : href
+      return /^https:\/\//.test(url) ? `[${label}](${url})` : label
+    })
+    .replace(/\\([_#|<>[\]()])/g, '$1')
+    .trim()
+}
+const gwPlain = (s) => s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\*\*|`/g, '').replace(/\s+/g, ' ').trim()
+const GW_LINKS_LINE = /^(?:\[[^\]]+\]\([^)\s]+\)\s*(?:·\s*)?)+$/
+
+/** One release body → [{ heading, kind, blocks }]; blocks are p | li | links | table | note | code. */
+function gwSections(body) {
+  const lines = body.split('\n')
+  const base = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^\s*/)[0].length))
+  const sections = []
+  let sec = null
+  const push = (b) => {
+    if (!sec) { sec = { heading: null, kind: 'intro', blocks: [] }; sections.push(sec) }
+    sec.blocks.push(b)
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    const s = raw.trim()
+    if (!s || s === '***' || /^##\s/.test(s)) continue
+    if (/^###\s/.test(s)) {
+      const heading = gwInline(s.slice(4))
+      const kind = /^provider updates?$/i.test(heading) ? 'providers'
+        : /^(fixes( and improvements)?|bug fixes|improvements)$/i.test(heading) ? 'fixes' : 'feature'
+      sec = { heading, kind, blocks: [] }
+      sections.push(sec)
+      continue
+    }
+    if (s.startsWith('```')) {
+      const code = []
+      while (++i < lines.length && !lines[i].trim().startsWith('```')) code.push(lines[i].trim())
+      push({ type: 'code', text: code.join('\n') })
+      continue
+    }
+    const callout = s.match(/^<(Note|Warning|Info|Tip|Check)>/)
+    if (callout) {
+      const close = `</${callout[1]}>`
+      const inner = [s.slice(callout[0].length)]
+      while (!inner[inner.length - 1].includes(close) && ++i < lines.length) inner.push(lines[i].trim())
+      const text = gwInline(inner.join(' ').replace(close, ''))
+      if (text) push({ type: 'note', tone: callout[1] === 'Warning' ? 'warning' : 'note', text })
+      continue
+    }
+    if (s.startsWith('|')) {
+      const rows = []
+      for (; i < lines.length && lines[i].trim().startsWith('|'); i++) {
+        const row = lines[i].trim()
+        if (/^\|[\s:|-]*-[\s:|-]*\|?$/.test(row)) continue // the | - | - | divider
+        rows.push(row.replace(/^\||\|$/g, '').split('|').map((c) => gwInline(c)))
+      }
+      i--
+      if (rows.length) push({ type: 'table', rows })
+      continue
+    }
+    const li = raw.match(/^(\s*)[*-]\s+(.*)$/)
+    if (li) { push({ type: 'li', depth: li[1].length - base >= 2 ? 1 : 0, text: gwInline(li[2]) }); continue }
+    if (GW_LINKS_LINE.test(s)) {
+      const links = [...gwInline(s).matchAll(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g)].map((m) => ({ label: m[1], url: m[2] }))
+      if (links.length) push({ type: 'links', links })
+      continue
+    }
+    if (/^<\/?[A-Za-z][^>]*>$/.test(s)) continue // any other MDX component's own tag line
+    push({ type: 'p', text: gwInline(s) })
+  }
+  return sections.filter((x) => x.blocks.length || x.kind === 'feature')
+}
+
+function parseGatewayChangelog(md) {
+  const out = []
+  const re = /<Update\b([^>]*)>([\s\S]*?)<\/Update>/g
+  let m
+  while ((m = re.exec(md)) !== null) {
+    const version = m[1].match(/\blabel="([^"]+)"/)?.[1]
+    const date = m[1].match(/\bdescription="(\d{4})-(\d{2})-(\d{2})"/)
+    if (!version || !date) continue
+    const sections = gwSections(m[2])
+    const top = (k) => sections.filter((x) => x.kind === k).flatMap((x) => x.blocks.filter((b) => b.type === 'li' && !b.depth))
+    const highlights = sections.filter((x) => x.kind === 'feature').map((x) => x.heading)
+    const providers = top('providers')
+    const fixes = top('fixes')
+    // "**Amazon Bedrock**: …" → "Amazon Bedrock"
+    const leads = (bs) => [...new Set(bs.map((b) => b.text.match(/^\*\*([^*]+?):?\*\*/)?.[1]).filter(Boolean).map(gwPlain))]
+    const slug = `${RN_MONTHS[parseInt(date[2]) - 1]}-${date[1]}`
+    const month = rnLabelFromSlug(slug)
+    const iso = `${date[1]}-${date[2]}-${date[3]}`
+    const n = (k, one, many) => (k ? `${k} ${k === 1 ? one : many}` : null)
+
+    const lead = highlights.length ? highlights.map(gwPlain).join(' · ') : providers.length ? `Provider updates: ${leads(providers).join(', ')}` : ''
+    // With no feature sections the provider list is already the lead; do not count it twice.
+    const counts = [highlights.length ? n(providers.length, 'provider update', 'provider updates') : null, n(fixes.length, 'fix or improvement', 'fixes and improvements')].filter(Boolean).join(' and ')
+    const summary = [lead, counts && (lead ? `plus ${counts}` : counts)].filter(Boolean).join(' — ')
+
+    // Plain paragraphs for the views that render text only (Classic, the wire's
+    // sheet): one line per feature, one per update list.
+    const paragraphs = sections.map((x) => {
+      if (x.kind === 'providers') return `Provider updates — ${leads(providers).join(', ') || `${providers.length} updates`}.`
+      if (x.kind === 'fixes') return `Fixes and improvements — ${leads(fixes).join(', ') || `${fixes.length} items`}.`
+      const first = x.blocks.find((b) => b.type === 'p')
+      return [x.heading && gwPlain(x.heading), first && gwPlain(first.text)].filter(Boolean).join(' — ')
+    }).filter(Boolean)
+
+    out.push({
+      slug,
+      feature: {
+        source: 'gateway', version, date: iso,
+        title: `${GW_AREA} ${version}${highlights.length ? ` — ${gwPlain(highlights[0])}${highlights.length > 1 ? ` +${highlights.length - 1} more` : ''}` : ''}`,
+        category: GW_AREA, tags: [['Prisma AIRS', GW_AREA, month]],
+        releaseDate: new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
+        lastUpdated: '', summary, paragraphs,
+        highlights, counts: { features: highlights.length, providers: providers.length, fixes: fixes.length },
+        sections, url: `${GW_CHANGELOG_URL}#${version.replace(/\./g, '-')}`,
+      },
+    })
+  }
+  return out
+}
+
+let GW_INFLIGHT = null
+/** Reads the changelog when its cache is stale. Never rejects: a failure keeps the last good read and records why. */
+function loadGatewayChangelog(force = false) {
+  const ttl = GW_CACHE.error ? 10 * 60 * 1000 : RN_TTL_MS
+  if (!force && GW_CACHE.attemptedAt && Date.now() - GW_CACHE.attemptedAt < ttl) return Promise.resolve()
+  if (!GW_INFLIGHT) {
+    GW_INFLIGHT = (async () => {
+      try {
+        const r = await rnFetch(`${GW_CHANGELOG_URL}.md`)
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const releases = parseGatewayChangelog(await r.text())
+        if (!releases.length) throw new Error('no releases parsed — the changelog changed format')
+        Object.assign(GW_CACHE, { releases, fetchedAt: Date.now(), error: null })
+        console.log(`[release-notes] AI Gateway changelog: ${releases.length} releases, latest ${releases[0].feature.version}`)
+      } catch (e) {
+        GW_CACHE.error = `AI Gateway changelog: ${e?.message || e}`
+        console.warn(`[release-notes] ${GW_CACHE.error}`)
+      } finally {
+        GW_CACHE.attemptedAt = Date.now()
+      }
+    })().finally(() => { GW_INFLIGHT = null })
+  }
+  return GW_INFLIGHT
+}
+
+// The Developer Corner's Helm version check (/api/dev/helm/versions) reads the same releases.
+app.locals.gatewayChangelog = { load: loadGatewayChangelog, cache: GW_CACHE, url: GW_CHANGELOG_URL }
+
+/** Folds the gateway releases inside the PA window (its oldest month onward) into the months. Never mutates the cache. */
+function rnWithGateway(payload) {
+  const gateway = {
+    url: GW_CHANGELOG_URL, count: 0, error: GW_CACHE.error,
+    fetchedAt: GW_CACHE.fetchedAt ? new Date(GW_CACHE.fetchedAt).toISOString() : null,
+    latest: GW_CACHE.releases?.[0]?.feature.version ?? null,
+  }
+  if (!GW_CACHE.releases || !payload.months?.length) return { ...payload, gateway }
+  const oldest = Math.min(...payload.months.map((m) => rnMonthIdx(m.slug)))
+  const months = payload.months.map((m) => ({ ...m, features: [...m.features] }))
+  for (const { slug, feature } of GW_CACHE.releases) {
+    if (rnMonthIdx(slug) < oldest) continue
+    let month = months.find((m) => m.slug === slug)
+    if (!month) { month = { label: rnLabelFromSlug(slug), slug, url: null, features: [] }; months.push(month) }
+    month.features.push(feature)
+    gateway.count++
+  }
+  months.sort((a, b) => rnMonthIdx(b.slug) - rnMonthIdx(a.slug))
+  return { ...payload, months, totalFeatures: payload.totalFeatures + gateway.count, gateway }
+}
+
 app.get('/api/release-notes', async (req, res) => {
   const force = req.query.force === '1'
   // A partial fetch (a month never answered) is retried after 10 minutes, not a day.
   const ttl = RN_CACHE.data?.failedMonths?.length ? 10 * 60 * 1000 : RN_TTL_MS
   const fresh = RN_CACHE.data && (Date.now() - RN_CACHE.fetchedAt) < ttl
-  if (!force && fresh) {
-    return res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true })
+  // The changelog is read alongside the PA scrape, never instead of it.
+  const gateway = loadGatewayChangelog(force)
+  const send = async (extra) => {
+    await gateway
+    res.json(rnWithGateway({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), ...extra }))
   }
+  if (!force && fresh) return send({ cached: true })
   try {
     await scrapeReleaseNotes()
-    res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: false })
+    await send({ cached: false })
   } catch (err) {
     // A refresh that failed still answers with the last good fetch, and says why.
-    if (RN_CACHE.data) {
-      return res.json({ ...RN_CACHE.data, fetchedAt: new Date(RN_CACHE.fetchedAt).toISOString(), cached: true, refreshError: err.message })
-    }
+    if (RN_CACHE.data) return send({ cached: true, refreshError: err.message })
     console.error('[release-notes]', err)
     res.status(500).json({ error: err.message })
   }
@@ -3176,5 +3373,8 @@ app.listen(PORT, () => {
   console.log(`  ╚══════════════════════════════════════════════╝\n`)
   // Warm the release-notes cache so the home page's release wire has data on
   // the first visit after a restart instead of waiting on a cold scrape.
-  setTimeout(() => scrapeReleaseNotes().catch((err) => console.warn('[release-notes] warm-up failed:', err.message)), 2000)
+  setTimeout(() => {
+    scrapeReleaseNotes().catch((err) => console.warn('[release-notes] warm-up failed:', err.message))
+    loadGatewayChangelog()
+  }, 2000)
 })

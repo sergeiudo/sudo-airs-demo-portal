@@ -199,6 +199,39 @@ export const LIVE = {
     },
     explain: () => 'Two calls: an OAuth client-credentials token (scope `tsg_id:<TSG_ID>`), then the data-plane list. `search_query` is a **prefix** match on `model_uri`.',
   },
+
+  'helm.versions': {
+    endpoint: 'GET portkey-ai.github.io/airs-gw-helm/index.yaml',
+    sub: 'The airs-gw chart index vs the Enterprise Gateway changelog · public',
+    needs: 'nothing — both sources are public',
+    ready: (s) => !!s?.helm?.ready,
+    runLabel: 'Check the versions',
+    presets: [{ id: 'check', label: 'Latest chart vs latest gateway', tone: 'ok', vars: {} }],
+    fields: [],
+    canRun: () => true,
+    run: () => get('/api/dev/helm/versions'),
+    verdict: (r) => {
+      const v = r.versions
+      if (!r.ok || !v?.chart) return { tone: 'warn', title: `HTTP ${r.response?.status || 'error'}`, sub: r.error || 'The Helm repo index did not answer.' }
+      const head = `Chart ${v.chart.version} installs gateway ${v.chart.appVersion}`
+      if (!v.gateway) return { tone: 'warn', title: head, sub: `The changelog did not answer, so there is nothing to compare with${v.changelogError ? ` (${v.changelogError})` : ''}.` }
+      if (!v.behind.length) return { tone: 'pass', title: `${head} — the latest release`, sub: `Gateway ${v.gateway.latest} · ${v.gateway.date}` }
+      return { tone: 'warn', title: `${head} — ${v.behind.length} release${v.behind.length === 1 ? '' : 's'} behind ${v.gateway.latest}`, sub: `Newest gateway ${v.gateway.latest} · ${v.gateway.date} — pin it with images.gatewayImage.tag, or wait for a chart release` }
+    },
+    explain: (r) => {
+      const v = r.versions
+      if (!v?.chart || !v.gateway) return null
+      if (!v.behind.length) return `Nothing to do: the default \`images.gatewayImage.tag\` of chart ${v.chart.version} is the newest gateway. Re-run this after the next changelog entry.`
+      const warned = v.behind.filter((b) => b.warnings.length)
+      return [
+        `Newer than the chart's default: ${v.behind.map((b) => `\`${b.version}\``).join(', ')}.`,
+        warned.length
+          ? `**Read before upgrading:** ${warned.map((b) => `${b.version} — ${b.warnings.join(' ')}`).join(' · ')}`
+          : 'None of them carries an upgrade warning in the changelog.',
+        `To run ${v.gateway.latest} on chart ${v.chart.version}: set \`images.gatewayImage.tag: "${v.gateway.latest}"\` in your values file and \`helm upgrade\` with \`--version ${v.chart.version}\`.`,
+      ].join(' ')
+    },
+  },
 }
 
 /** "Copy as cURL" for an echoed request — masked secrets become env-var placeholders. */

@@ -4,6 +4,7 @@ import { ArrowUpRight, ChevronDown, ExternalLink } from 'lucide-react'
 import { FONT } from '../api-intercept-2027/tokens'
 import { shade } from '../home-2027/band'
 import { ReleaseIcon } from '../home-2027/ReleaseWire'
+import { GatewayHighlights } from './GatewayNotes'
 
 const focusCls = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
 const pad = (n) => String(n).padStart(2, '0')
@@ -19,8 +20,11 @@ function extraTags(item) {
  * the product area in the pillar's colour, the first paragraph (all of them on
  * "Read more"), and a footer that says where the portal demos the product area
  * — never that it demos this exact feature — plus the feature's own docs page.
+ *
+ * An AI Gateway release (source 'gateway') is a whole gateway version: the
+ * body lists its highlights and counts, and `onNotes` opens its full notes.
  */
-export function ReleaseCard({ t, item, onDemo, index = 0 }) {
+export function ReleaseCard({ t, item, onDemo, onNotes, index = 0 }) {
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
   const [hot, setHot] = useState(false)
@@ -32,6 +36,7 @@ export function ReleaseCard({ t, item, onDemo, index = 0 }) {
   const tags = extraTags(item)
   const updated = item.lastUpdated && item.lastUpdated !== item.releaseDate ? item.lastUpdated : null
   const p = item.pillar
+  const gateway = item.source === 'gateway'
 
   return (
     <motion.article initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -53,12 +58,15 @@ export function ReleaseCard({ t, item, onDemo, index = 0 }) {
               <span className="rounded-full px-2" style={{ fontFamily: FONT.prose, fontSize: 11, fontWeight: 700, lineHeight: '19px', color: '#fff', background: t.live }}>new</span>
             )}
             {updated && <span style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkFaint }}>updated {updated}</span>}
+            {gateway && item.releaseDate && <span style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkDim }}>{item.releaseDate}</span>}
           </div>
-          <h3 style={{ fontFamily: FONT.display, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.3, color: t.ink, marginTop: 6 }}>{item.title}</h3>
+          <h3 style={{ fontFamily: FONT.display, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.3, color: t.ink, marginTop: 6 }}>{gateway ? `AI Gateway ${item.version}` : item.title}</h3>
         </div>
       </div>
 
-      {paras.length > 0 && (
+      {gateway && <GatewayHighlights t={t} item={item} onNotes={onNotes} />}
+
+      {!gateway && paras.length > 0 && (
         <div className="px-4 pt-2">
           <p style={{
             fontFamily: FONT.prose, fontSize: 13, lineHeight: 1.6, color: t.inkDim,
@@ -118,7 +126,7 @@ export function ReleaseCard({ t, item, onDemo, index = 0 }) {
            className={`inline-flex items-center gap-1 rounded-full px-2.5 flex-shrink-0 ${focusCls}`}
            style={{ height: 28, fontFamily: FONT.prose, fontSize: 12, fontWeight: 600, color: t.inkDim, background: t.sunken, border: `1px solid ${t.hairline}` }}
            onMouseEnter={(e) => { e.currentTarget.style.color = t.ink }} onMouseLeave={(e) => { e.currentTarget.style.color = t.inkDim }}>
-          Docs <ExternalLink size={11} aria-hidden="true" />
+          {gateway ? 'Changelog' : 'Docs'} <ExternalLink size={11} aria-hidden="true" />
         </a>
       </div>
     </motion.article>

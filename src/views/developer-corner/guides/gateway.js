@@ -1,4 +1,4 @@
-import { Terminal, Fingerprint, Braces, Shuffle, ShieldCheck, Activity, Network, Code2, KeyRound, Building2 } from 'lucide-react'
+import { Terminal, Fingerprint, Braces, Shuffle, ShieldCheck, Activity, Network, Code2, KeyRound, Building2, Server } from 'lucide-react'
 import { pick } from './links'
 import { gatewayChat, gatewayBlockCheck } from '../snippets'
 
@@ -195,7 +195,7 @@ export const GATEWAY = [
         ],
       },
       {
-        type: 'code', title: 'Hybrid data plane on your Kubernetes',
+        type: 'code', title: 'Hybrid data plane on your Kubernetes — the full walkthrough is in "Hybrid deployment"',
         tabs: [{ id: 'bash', lang: 'bash', code: `helm repo add airs-gw https://portkey-ai.github.io/airs-gw-helm
 helm repo update
 helm upgrade --install airs-gw airs-gw/airs-gw \\
@@ -227,6 +227,7 @@ helm upgrade --install airs-gw airs-gw/airs-gw \\
           { icon: Activity, tone: '#EC4899', title: 'Observability', kicker: 'Logs · traces · OTel', text: 'Trace ids, metadata, feedback, exports and OpenTelemetry.', go: 'gw-observability' },
           { icon: Network, tone: '#EC4899', title: 'MCP Gateway', kicker: 'Registry · auth · tools', text: 'Broker MCP servers with per-tool access and logs.', go: 'gw-mcp' },
           { icon: Code2, tone: '#EC4899', title: 'Coding agents', kicker: 'Claude Code · Codex · Cursor', text: 'Per-developer keys, budgets and guardrails.', go: 'gw-coding' },
+          { icon: Server, tone: '#EC4899', title: 'Hybrid deployment', kicker: 'Helm · your Kubernetes', text: 'The data plane in your cluster — install, and upgrade when a gateway release ships.', go: 'gw-hybrid' },
           { icon: KeyRound, tone: '#d946ef', title: 'Keys, budgets, rate limits', kicker: 'Governance', text: 'Scopes, rotation, limits and what callers cannot opt out of.', go: 'gw-governance' },
           { icon: Building2, tone: '#d946ef', title: 'Org admin', kicker: 'Governance', text: 'Workspaces, roles, SSO, SCIM and CIE Directory Sync.', go: 'gw-admin' },
         ],

@@ -10,7 +10,9 @@ import { RefreshTile, useJustRefreshed, fetchedLabel, spanLabel } from '../home-
 import { DesignSwitch } from '../../components/shared/DesignSwitch'
 import { Tip } from '../../components/shared/Tip'
 import { ReleaseCard } from './ReleaseCard'
-import { ServerHealth, VisitorsDrawer } from './ServerHealth'
+import { GatewayNotesDrawer } from './GatewayNotes'
+import { VisitorsDrawer } from './ServerHealth'
+import { ServerStatusButton } from '../../components/shared/ServerStatus'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 /**
@@ -22,7 +24,12 @@ import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
  * feed is and when it was read, a rail to jump between months and filter by
  * product area, and the releases as cards in their pillar's colour — each one
  * saying where the portal demos its product area and linking to its own docs
- * page. Server health and the visitor log sit at the foot, as before.
+ * page. Server status sits in the app bar (as on the home page); the
+ * visitor log stays at the foot.
+ *
+ * Two sources, one feed: PA's by-date docs and the AI Gateway (Portkey
+ * Enterprise Gateway) changelog, whose releases sit in their month under the
+ * product area "AI Gateway" and open their full notes in a drawer.
  *
  * Classic (ReleaseNotesView) is kept behind the Design switch.
  */
@@ -91,6 +98,7 @@ export function ReleaseNotesLaunch() {
   const [onlyDemo, setOnlyDemo] = useState(false)
   const [activeMonth, setActiveMonth] = useState(null)
   const [visitors, setVisitors] = useState(false)
+  const [notes, setNotes] = useState(null)
   const sections = useRef(new Map())
 
   // globals.css locks #root; this page scrolls.
@@ -117,7 +125,7 @@ export function ReleaseNotesLaunch() {
     (!area || i.category === area)
     && (!onlyNew || i.fresh)
     && (!onlyDemo || i.pillar)
-    && (!needle || [i.title, i.summary, i.category, ...(i.paragraphs ?? [])].some((x) => x?.toLowerCase().includes(needle)))), [feed, area, onlyNew, onlyDemo, needle])
+    && (!needle || i.haystack.includes(needle))), [feed, area, onlyNew, onlyDemo, needle])
 
   const groups = useMemo(() => {
     if (!feed) return []
@@ -145,11 +153,13 @@ export function ReleaseNotesLaunch() {
   const bind = (slug) => (el) => { if (el) sections.current.set(slug, el); else sections.current.delete(slug) }
   const demo = useCallback((id) => dispatch({ type: 'SET_VIEW', payload: id }), [dispatch])
   const closeVisitors = useCallback(() => setVisitors(false), [])
+  const closeNotes = useCallback(() => setNotes(null), [])
 
   const demoCount = feed?.items.filter((i) => i.pillar).length ?? 0
   const latest = feed?.months[0]
   const fetched = feed ? fetchedLabel(feed.fetchedAt) : null
   const nextFetch = feed?.fetchedAt ? new Date(new Date(feed.fetchedAt).getTime() + SERVER_TTL_MS) : null
+  const gw = feed?.gateway
 
   return (
     <div className="relative min-h-screen w-full flex flex-col" style={{ background: t.ground, overflowX: 'clip' }}>
@@ -191,6 +201,7 @@ export function ReleaseNotesLaunch() {
           </label>
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <ServerStatusButton t={t} />
             <DesignSwitch />
             <Tip title={state.isDark ? 'Light mode' : 'Dark mode'} text={`Switch the whole portal to the ${state.isDark ? 'light' : 'dark'} theme`}>
               <button type="button" onClick={() => dispatch({ type: 'TOGGLE_THEME' })} aria-label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -221,7 +232,7 @@ export function ReleaseNotesLaunch() {
                     <Loader2 size={16} className="animate-spin" style={{ color: '#fff' }} aria-hidden="true" />
                   </span>}
               <div className="min-w-0">
-                <div style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>From docs.paloaltonetworks.com</div>
+                <div style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>From docs.paloaltonetworks.com{gw?.count ? ' and the AI Gateway changelog' : ''}</div>
                 <h1 style={{ fontFamily: FONT.display, fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1.1, marginTop: 3 }}>What’s new in Prisma AIRS</h1>
                 <p style={{ fontFamily: FONT.prose, fontSize: 13, color: 'rgba(255,255,255,0.92)', marginTop: 5 }} aria-live="polite">
                   {feed
@@ -236,6 +247,12 @@ export function ReleaseNotesLaunch() {
                   <p className="inline-flex items-center gap-1.5 mt-2 rounded-full px-2.5" style={{ fontFamily: FONT.prose, fontSize: 12, lineHeight: '24px', color: '#fff', background: 'rgba(0,0,0,0.24)' }}>
                     <AlertTriangle size={12} style={{ color: '#FCD34D' }} aria-hidden="true" />
                     {refreshError ? `The last refresh failed — showing the previous fetch (${refreshError})` : `${feed.failedMonths.join(', ')} did not answer — retried automatically`}
+                  </p>
+                )}
+                {gw?.error && !refreshing && (
+                  <p className="inline-flex items-center gap-1.5 mt-2 rounded-full px-2.5" style={{ fontFamily: FONT.prose, fontSize: 12, lineHeight: '24px', color: '#fff', background: 'rgba(0,0,0,0.24)' }} title={gw.error}>
+                    <AlertTriangle size={12} style={{ color: '#FCD34D' }} aria-hidden="true" />
+                    {gw.count ? `The AI Gateway changelog did not answer — showing the last read (${fetchedLabel(gw.fetchedAt)})` : 'The AI Gateway changelog did not answer — retried automatically'}
                   </p>
                 )}
               </div>
@@ -334,16 +351,16 @@ export function ReleaseNotesLaunch() {
                     )}
                   </div>
                   <div className="grid gap-3 items-stretch" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))' }}>
-                    {g.items.map((item, i) => <ReleaseCard key={item.key} t={t} item={item} onDemo={demo} index={gi === 0 ? i : 0} />)}
+                    {g.items.map((item, i) => <ReleaseCard key={item.key} t={t} item={item} onDemo={demo} onNotes={setNotes} index={gi === 0 ? i : 0} />)}
                   </div>
                 </section>
               ))}
 
               <div className="space-y-3 pt-2">
-                <ServerHealth t={t} />
                 <div className="flex items-center gap-2 px-1">
                   <span style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkFaint }}>
                     Read from <a href={feed.indexUrl || 'https://docs.paloaltonetworks.com/ai-runtime-security/new-features/by-date/prisma-airs'} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}>docs.paloaltonetworks.com</a>
+                    {gw?.url && <> and the <a href={gw.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}>AI Gateway changelog</a>{gw.latest ? ` (latest ${gw.latest})` : ''}</>}
                     {' '}· cached a day on the server{nextFetch ? ` · next automatic read after ${nextFetch.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}
                   </span>
                   {/* The visitor log is the portal owner's — kept as quiet as it was. */}
@@ -360,6 +377,7 @@ export function ReleaseNotesLaunch() {
         )}
       </main>
       <VisitorsDrawer t={t} open={visitors} onClose={closeVisitors} />
+      <GatewayNotesDrawer t={t} item={notes} onClose={closeNotes} onDemo={demo} />
     </div>
   )
 }

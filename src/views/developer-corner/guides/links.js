@@ -162,6 +162,23 @@ export const L = {
   agGatewayUrls: { title: 'Gateway URLs', url: `${AIGW}/product/enterprise-offering/org-management/gateway-urls`, source: 'aigw', what: 'Custom endpoints for the AI and MCP gateways.' },
   agGwRegister:  { title: 'Gateway registration (hybrid)', url: `${AIGW}/self-hosting/hybrid-deployments/gateway-registration`, source: 'aigw', what: 'Register a self-hosted data plane for config sync.' },
 
+  // AI Gateway — hybrid deployment with the airs-gw Helm chart (checked 2026-10-08, all 200)
+  agHybridArch:  { title: 'Hybrid deployment — architecture', url: `${AIGW}/self-hosting/hybrid-deployments/architecture`, source: 'aigw', what: 'Data plane vs management plane, sync, and what leaves the cluster.' },
+  agCacheBehave: { title: 'Data plane cache behaviour', url: `${AIGW}/self-hosting/cache-behavior`, source: 'aigw', what: 'Delta sync every minute, 7-day cache TTL, what is pushed back.' },
+  agPrivateNet:  { title: 'Private network access', url: `${AIGW}/self-hosting/private-network-access`, source: 'aigw', what: 'TRUSTED_CUSTOM_HOSTS for private upstream hosts.' },
+  agChangelog:   { title: 'Enterprise Gateway changelog', url: 'https://docs.gw.prismaairs.com/docs/changelog/enterprise', source: 'aigw', what: 'Every gateway release — the versions images.gatewayImage.tag accepts.' },
+  agDsChangelog: { title: 'Data service changelog', url: 'https://docs.gw.prismaairs.com/docs/changelog/data-service', source: 'aigw', what: 'The optional data-service image and which gateway it needs.' },
+  ghAirsGwHelm:  { title: 'airs-gw Helm chart', url: 'https://github.com/Portkey-AI/airs-gw-helm', source: 'github', what: 'The hybrid data-plane chart and its per-topic docs.' },
+  ghAirsGwRel:   { title: 'airs-gw chart releases', url: 'https://github.com/Portkey-AI/airs-gw-helm/releases', source: 'github', what: 'Chart versions, the gateway each installs, and what changed.' },
+  ghAirsGwValues:{ title: 'airs-gw values.yaml', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/values.yaml', source: 'github', what: 'Every key the chart accepts, with its default.' },
+  ghAirsGwLogs:  { title: 'Log store configuration', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/LogStore.md', source: 'github', what: 'S3, Azure Blob, GCS and S3-compatible stores, with workload identity.' },
+  ghAirsGwRedis: { title: 'Cache store (Redis)', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/Redis.md', source: 'github', what: 'Bundled vs external Redis, ElastiCache IAM, Azure, Memorystore.' },
+  ghAirsGwResil: { title: 'Data plane resiliency', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/Dataplane%20Resiliency.md', source: 'github', what: 'What keeps working when the management plane is unreachable.' },
+  ghAirsGwBedrock:{ title: 'Bedrock assumed role (hybrid)', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/Bedrock.md', source: 'github', what: 'IAM policy, role trust, and the gateway-side credentials.' },
+  ghAirsGwVertex:{ title: 'Vertex AI workload identity (hybrid)', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/VertexAI.md', source: 'github', what: 'GCP_AUTH_MODE workload — no service-account key on the integration.' },
+  ghAirsGwSecrets:{ title: 'Secrets: existingSecret, Vault, CSI', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/SecretManager.md', source: 'github', what: 'Keep the client auth key and store credentials out of values.yaml.' },
+  ghAirsGwOutbound:{ title: 'Outbound APIs', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/docs/OutboundAPIs.md', source: 'github', what: 'Every call the data plane makes to the management plane.' },
+
   // AIGW — MCP Gateway, Agent Gateway
   agMcp:         { title: 'MCP Gateway', url: `${AIGW}/product/mcp-gateway`, source: 'aigw', what: 'Central auth, access control and observability for MCP servers.' },
   agMcpQuick:    { title: 'MCP Gateway — quickstart', url: `${AIGW}/product/mcp-gateway/quickstart`, source: 'aigw', what: 'Add a server and connect it to Claude.' },

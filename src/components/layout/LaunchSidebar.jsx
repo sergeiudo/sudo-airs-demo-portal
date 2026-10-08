@@ -7,7 +7,7 @@ import { tokens, FONT, label as LBL } from '../../views/api-intercept-2027/token
 import { shade, bandBg } from '../../views/home-2027/band'
 import { RUN_OF_SHOW, DEEP_DIVES, OPERATE, HOME_PILLARS, markOpened } from '../../views/home-2027/homeData'
 import { CommandPalette } from '../../views/home-2027/overlays'
-import { usePreflight, PreflightPanel } from '../../views/home-2027/Preflight'
+import { useServerStatus, ServerStatusCard } from '../shared/ServerStatus'
 import { NAV_ITEMS } from './Sidebar'
 
 /**
@@ -111,7 +111,7 @@ function FooterRow({ t, icon: Icon, tone, title, sub, open, onClick, expanded, c
 export function LaunchSidebar() {
   const { state, dispatch } = useAppContext()
   const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
-  const pf = usePreflight(t)
+  const pf = useServerStatus()
 
   const [pinned, setPinned] = useState(() => { try { return localStorage.getItem(PIN_KEY) === '1' } catch { return false } })
   const [hover, setHover] = useState(false)
@@ -158,12 +158,13 @@ export function LaunchSidebar() {
     return () => window.removeEventListener('keydown', onKey)
   }, [pinned, hover, focusIn, preflight])
 
-  const readyTone = !pf.loaded ? t.idle : pf.needsAttention ? t.warn : t.pass
-  const readyLabel = !pf.loaded ? 'Checking setup…' : pf.needsAttention ? 'Check setup' : 'Ready to demo'
+  const readyTone = !pf.loaded ? t.idle : pf.warn ? t.warn : t.pass
+  const readyLabel = !pf.loaded ? 'Checking the server…' : pf.warn ? 'Server · check setup' : 'Server · ready'
 
   const openPreflight = (e) => {
     if (preflight) { setPreflight(null); return }
     const r = e.currentTarget.getBoundingClientRect()
+    if (!pf.sys && !pf.sysBusy) pf.readHost()
     setPreflight({ left: (panelRef.current?.getBoundingClientRect().right ?? r.right) + 10, bottom: window.innerHeight - r.bottom })
   }
   useEffect(() => {
@@ -255,7 +256,7 @@ export function LaunchSidebar() {
 
         {/* footer: the real readiness check */}
         <div className="px-2.5 pb-3 pt-2 flex-shrink-0" style={{ width: OPEN, borderTop: `1px solid ${t.hairline}` }}>
-          <FooterRow t={t} icon={Activity} tone={readyTone} title={readyLabel} sub="Configuration on this host" open={open}
+          <FooterRow t={t} icon={Activity} tone={readyTone} title={readyLabel} sub="Services, host, processes" open={open}
                      onClick={openPreflight} expanded={!!preflight}>
             <ChevronRight size={14} style={{ color: t.inkDim, transform: preflight ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} aria-hidden="true" />
           </FooterRow>
@@ -265,10 +266,10 @@ export function LaunchSidebar() {
       {createPortal(
         <AnimatePresence>
           {preflight && (
-            <motion.div data-preflight-pop role="dialog" aria-label="Pre-flight"
+            <motion.div data-preflight-pop role="dialog" aria-label="Server status"
                         initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -6 }} transition={{ duration: 0.15 }}
-                        className="fixed z-[60]" style={{ left: preflight.left, bottom: preflight.bottom, width: 440 }}>
-              <PreflightPanel t={t} pf={pf} />
+                        className="fixed z-[60]" style={{ left: preflight.left, bottom: preflight.bottom, width: 'min(560px, calc(100vw - 24px))' }}>
+              <ServerStatusCard t={t} st={pf} onClose={() => setPreflight(null)} maxHeight={`calc(100vh - ${preflight.bottom + 16}px)`} />
             </motion.div>
           )}
         </AnimatePresence>,

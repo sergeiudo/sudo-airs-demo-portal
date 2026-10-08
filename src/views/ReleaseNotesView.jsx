@@ -13,6 +13,7 @@ const CATEGORY_COLORS = {
   'AI Runtime API':      '#3b82f6',
   'AI Model Security':   '#8b5cf6',
   'AI Red Teaming':      '#f97316',
+  'AI Gateway':          '#ec4899',
   'Core':                '#0ea5e9',
   'Prisma AIRS':         '#64748b',
   'General':             '#64748b',
@@ -55,7 +56,7 @@ function MonthSection({ month, index, defaultOpen }) {
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          <a
+          {month.url && <a
             href={month.url}
             target="_blank"
             rel="noopener noreferrer"
@@ -64,7 +65,7 @@ function MonthSection({ month, index, defaultOpen }) {
             style={{ color: accent, background: `${accent}10`, border: `1px solid ${accent}25` }}
           >
             View month <ExternalLink size={10} />
-          </a>
+          </a>}
           <motion.div animate={{ rotate: open ? 0 : -90 }} transition={{ duration: 0.2 }}>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2 4l4 4 4-4" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -140,7 +141,7 @@ function MonthSection({ month, index, defaultOpen }) {
                 ))}
 
                 {/* View all on docs */}
-                <a
+                {month.url && <a
                   href={month.url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -148,7 +149,7 @@ function MonthSection({ month, index, defaultOpen }) {
                   style={{ color: accent, background: `${accent}08`, border: `1px dashed ${accent}30` }}
                 >
                   View all {month.label} features on docs.paloaltonetworks.com <ExternalLink size={11} />
-                </a>
+                </a>}
               </div>
             )}
           </motion.div>
@@ -235,6 +236,14 @@ export function ReleaseNotesView() {
               <a href={indexUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                 docs.paloaltonetworks.com
               </a>
+              {data?.gateway?.count > 0 && (
+                <>
+                  {' '}and the{' '}
+                  <a href={data.gateway.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                    AI Gateway changelog
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>

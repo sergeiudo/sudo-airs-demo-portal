@@ -105,6 +105,7 @@ router.get('/status', (_req, res) => {
     runtime: { ready: !!(AIRS.key() && AIRS.profile()), base: AIRS.base() },
     gateway: { ready: !!(MOH_ENV.apiKey && MOH_ENV.configProtected), base: MOH_ENV.baseUrl },
     modelSecurity: { ready: !!(process.env.MODEL_SECURITY_CLIENT_ID && process.env.MODEL_SECURITY_CLIENT_SECRET && process.env.TSG_ID), base: AIMS_BASE },
+    helm: { ready: true }, // public sources only — the chart index and the gateway changelog
   })
 })
 
@@ -216,6 +217,57 @@ router.get('/model-security/scans', async (req, res) => {
     method: 'POST', url: TOKEN_URL,
     headers: { Authorization: `Basic ${MASK}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=client_credentials&scope=tsg_id:${process.env.TSG_ID}`,
+  }
+  res.json(out)
+})
+
+// ─── AI Gateway hybrid: the Helm chart vs the latest gateway release ────────
+// The airs-gw chart pins a gateway image (appVersion); the Enterprise Gateway
+// changelog moves faster. This reads the chart repo's index.yaml for real and
+// lists every gateway release newer than the latest chart's default, with the
+// changelog's own upgrade warnings. Public data — no credential involved.
+const HELM_INDEX = 'https://portkey-ai.github.io/airs-gw-helm/index.yaml'
+
+/** The airs-gw entries of a Helm repo index.yaml: version, appVersion, created. */
+function helmEntries(yaml) {
+  const block = String(yaml).split(/^ {2}airs-gw:\s*$/m)[1] ?? ''
+  const field = (e, k) => e.match(new RegExp(`^\\s*${k}:\\s*"?([^"\\s]+)"?\\s*$`, 'm'))?.[1] ?? null
+  return block.split(/^ {2}- /m).slice(1)
+    .map((e) => ({ version: field(e, 'version'), appVersion: field(e, 'appVersion'), created: field(e, 'created') }))
+    .filter((e) => e.version)
+}
+const semver = (v) => String(v).split('.').map((n) => parseInt(n, 10) || 0)
+const isNewer = (a, b) => {
+  const x = semver(a), y = semver(b)
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0)
+  return false
+}
+const plainMd = (s) => String(s).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\*\*|`/g, '')
+
+router.get('/helm/versions', async (req, res) => {
+  if (limited(req, res)) return
+  const changelog = req.app.locals.gatewayChangelog
+  const [out] = await Promise.all([
+    exchange({ url: HELM_INDEX, headers: { Accept: 'application/x-yaml, text/yaml, */*' } }),
+    changelog?.load(),
+  ])
+  const charts = out.ok ? helmEntries(out.response.body).sort((a, b) => (isNewer(a.version, b.version) ? -1 : isNewer(b.version, a.version) ? 1 : 0)) : []
+  const chart = charts[0] ?? null
+  const releases = (changelog?.cache.releases ?? []).map((r) => r.feature)
+  const latest = releases[0] ?? null
+  const behind = chart?.appVersion ? releases.filter((f) => isNewer(f.version, chart.appVersion)) : []
+  out.versions = {
+    chart,
+    charts,
+    gateway: latest ? { latest: latest.version, date: latest.date, changelog: changelog.url } : null,
+    changelogError: changelog?.cache.error ?? (changelog ? null : 'changelog not loaded on this host'),
+    behind: behind.map((f) => ({
+      version: f.version,
+      date: f.date,
+      highlights: f.highlights.map(plainMd),
+      // The changelog's own <Warning> callouts — what it says to do before upgrading.
+      warnings: f.sections.flatMap((s) => s.blocks.filter((b) => b.type === 'note' && b.tone === 'warning').map((b) => plainMd(b.text))),
+    })),
   }
   res.json(out)
 })

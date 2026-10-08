@@ -3,6 +3,7 @@ import { START } from './start'
 import { RUNTIME, AGENTS } from './runtime'
 import { GATEWAY, INTEGRATIONS } from './gateway'
 import { AIGW_GATEWAY, AIGW_GOVERNANCE } from './aigw'
+import { AIGW_HYBRID } from './hybrid'
 import { MODELS, REDTEAM, NETWORK } from './models'
 import { LIBRARY } from './library'
 
@@ -29,10 +30,10 @@ export const GROUPS = [
 // is also what Previous / Next follows.
 const GATEWAY_ORDER = [
   'gw-overview', 'gw-connect', 'gw-universal', 'gw-routing', 'gw-guardrail', 'gw-guardrails',
-  'gw-observability', 'gw-mcp', 'gw-agents', 'gw-coding',
+  'gw-observability', 'gw-mcp', 'gw-agents', 'gw-coding', 'gw-hybrid',
   'gw-governance', 'gw-jwt', 'gw-admin',
 ]
-const gatewayPool = Object.fromEntries([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_GOVERNANCE].map((g) => [g.id, g]))
+const gatewayPool = Object.fromEntries([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_HYBRID, ...AIGW_GOVERNANCE].map((g) => [g.id, g]))
 const GATEWAY_ALL = GATEWAY_ORDER.map((id) => gatewayPool[id])
 
 export const GUIDES = [...START, ...RUNTIME, ...AGENTS, ...GATEWAY_ALL, ...INTEGRATIONS, ...MODELS, ...REDTEAM, ...NETWORK, ...LIBRARY]

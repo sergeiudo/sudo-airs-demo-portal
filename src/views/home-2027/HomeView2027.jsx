@@ -6,7 +6,7 @@ import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, WHATS_NEW, readLastOpened, markOpened } from './homeData'
 import { PillarTile } from './PillarTile'
-import { ReadinessPill } from './Preflight'
+import { ServerStatusButton } from '../../components/shared/ServerStatus'
 import { LiveProof } from './LiveProof'
 import { DetailsSheet, CommandPalette } from './overlays'
 import { WhatsNew } from './WhatsNew'
@@ -136,7 +136,7 @@ export function HomeView2027({ homeSwitch }) {
           </button>
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
-            <ReadinessPill t={t} />
+            <ServerStatusButton t={t} />
             {homeSwitch}
             <button type="button" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' })}
                     className="hidden sm:inline-flex items-center gap-2 rounded-full px-3.5"

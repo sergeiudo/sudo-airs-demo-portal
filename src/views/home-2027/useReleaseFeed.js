@@ -5,7 +5,10 @@ import { HOME_PILLARS } from './homeData'
  * useReleaseFeed — Prisma AIRS release notes for the home page's release wire.
  *
  * Reads the same /api/release-notes the Release Notes view does (scraped from
- * docs.paloaltonetworks.com, cached a day on the server). Two browser-side
+ * docs.paloaltonetworks.com, cached a day on the server). The server folds in
+ * a second source: the AI Gateway (Portkey Enterprise Gateway) changelog, one
+ * release per gateway version under the product area "AI Gateway", carrying
+ * its full notes as `sections` (source: 'gateway'). Two browser-side
  * layers keep the wire instant, because a cold server scrape takes ~10–20s:
  *   • a module cache, so Home → pillar → Home does not refetch;
  *   • the last good payload in localStorage, painted first on a new page load
@@ -30,6 +33,7 @@ const SEEN_KEY = 'sudo-airs.home.releasesSeen'
 
 export const AREA_PILLAR = {
   'AI Runtime API': 'apiIntercept',
+  'AI Gateway': 'apiIntercept',
   'AI Agent Security': 'apiIntercept',
   'AI Model Security': 'modelScanning',
   'AI Red Teaming': 'redTeaming',
@@ -46,6 +50,13 @@ function previousSeen() {
   return prevSeen
 }
 
+/** Everything a search can match, lower-cased once: a gateway release's full notes too. */
+function haystack(f) {
+  const notes = (f.sections ?? []).flatMap((s) => [s.heading, ...s.blocks.flatMap((b) =>
+    b.type === 'table' ? b.rows.flat() : b.type === 'links' ? b.links.map((l) => l.label) : [b.text])])
+  return [f.title, f.summary, f.category, f.version, ...(f.paragraphs ?? []), ...notes].filter(Boolean).join(' ').toLowerCase()
+}
+
 function shape(data) {
   if (!data?.months?.length) return null
   const seen = previousSeen()
@@ -58,6 +69,9 @@ function shape(data) {
       title: f.title, category: f.category, summary: f.summary, paragraphs: f.paragraphs ?? [],
       tags: f.tags ?? [], url: f.url || m.url,
       releaseDate: f.releaseDate ?? null, lastUpdated: f.lastUpdated ?? null,
+      source: f.source ?? 'pa', version: f.version ?? null, date: f.date ?? null,
+      highlights: f.highlights ?? [], counts: f.counts ?? null, sections: f.sections ?? null,
+      haystack: haystack(f),
       pillar, tone: pillar?.accent ?? NEUTRAL,
       fresh: !!seenSet && !seenSet.has(key),
     }
@@ -72,6 +86,7 @@ function shape(data) {
     oldest: data.months[data.months.length - 1].label,
     fetchedAt: data.fetchedAt ?? null,
     failedMonths: data.failedMonths ?? [],
+    gateway: data.gateway ?? null,
   }
 }
 

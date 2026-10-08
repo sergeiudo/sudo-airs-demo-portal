@@ -4,11 +4,11 @@ import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, markOpened } from './homeData'
-import { ReadinessPill } from './Preflight'
 import { DetailsSheet, CommandPalette, ReleaseSheet } from './overlays'
 import { LauncherTile, LauncherRow } from './LauncherTile'
 import { Tip } from '../../components/shared/Tip'
 import { RegionsButton } from '../../components/shared/RegionsPanel'
+import { ServerStatusButton } from '../../components/shared/ServerStatus'
 
 // Literal class names, so Tailwind's scan finds every one it may need.
 const ROW_COLS = { 5: 'xl:grid-cols-5', 6: '2xl:grid-cols-6' }
@@ -140,10 +140,10 @@ export function HomeLauncher({ homeSwitch }) {
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
             <RegionsButton t={t} variant="bar" />
-            <ReadinessPill t={t} />
+            <ServerStatusButton t={t} />
             {homeSwitch}
             <IconButton t={t} label="Prisma AIRS release notes" onClick={openNotes}
-                        tip={{ title: 'Release notes', text: 'Every Prisma AIRS feature, month by month — read from docs.paloaltonetworks.com' }}>
+                        tip={{ title: 'Release notes', text: 'Every Prisma AIRS feature and AI Gateway release, month by month — read from docs.paloaltonetworks.com and the gateway changelog' }}>
               <FileText size={15} />
             </IconButton>
             <IconButton t={t} label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
