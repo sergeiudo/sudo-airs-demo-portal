@@ -1364,7 +1364,8 @@ app.get('/api/models/vertex', (_req, res) => {
 // been invoked yet — the picker labels those UNVERIFIED rather than implying
 // they work. Confirm with the CloudShell reachability loop, then flip the flag.
 //
-// One entry per model family per purpose — no two versions of the same model.
+// One entry per model family per purpose — no two versions of the same model,
+// except Claude 5.5 beside Claude 5 (added at the user's request, 2026-10-08).
 // Where a vendor appears twice (Llama, Mistral) the two entries are deliberately
 // at opposite ends of the capability range, because the contrast between a
 // model that refuses an injection and one that complies IS the demo.
@@ -1372,6 +1373,10 @@ app.get('/api/models/vertex', (_req, res) => {
 // GET /api/models/bedrock?all=1 returns the unfiltered catalogue.
 const BEDROCK_CURATED = [
   // ── frontier: resist injection unaided — the clean baseline ──
+  { id: 'anthropic.claude-opus-5-5',                label: 'Claude Opus 5.5',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
+  // Answered through the AI-GW's @sudo-bedrock (same AWS account) on 2026-10-08;
+  // a direct call was not possible then (local STS token expired) — flip once one lands.
+  { id: 'anthropic.claude-sonnet-5-5',              label: 'Claude Sonnet 5.5',  provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: false },
   { id: 'anthropic.claude-opus-5',                  label: 'Claude Opus 5',      provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
   { id: 'anthropic.claude-sonnet-5',                label: 'Claude Sonnet 5',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
   { id: 'anthropic.claude-opus-4-8',                label: 'Claude Opus 4.8',    provider: 'Anthropic',   tier: 'frontier', status: 'available', verified: true },
@@ -1406,7 +1411,7 @@ const BEDROCK_CURATED = [
 // id and answers only as a `us.` inference profile. Seeding them means
 // callBedrock() goes straight to the profile instead of paying a refusal first.
 for (const id of [
-  'anthropic.claude-opus-5', 'anthropic.claude-opus-5-5', 'anthropic.claude-sonnet-5', 'anthropic.claude-opus-4-8',
+  'anthropic.claude-opus-5', 'anthropic.claude-opus-5-5', 'anthropic.claude-sonnet-5', 'anthropic.claude-sonnet-5-5', 'anthropic.claude-opus-4-8',
   'anthropic.claude-opus-4-7', 'anthropic.claude-opus-4-6-v1', 'anthropic.claude-sonnet-4-6',
   'anthropic.claude-opus-4-5-20251101-v1:0', 'anthropic.claude-sonnet-4-5-20250929-v1:0', 'anthropic.claude-haiku-4-5-20251001-v1:0',
   'openai.gpt-6-astra', 'openai.gpt-6-sol', 'openai.gpt-6-luna', 'openai.gpt-5.6-terra', 'openai.gpt-5.6-sol', 'openai.gpt-5.6-luna',

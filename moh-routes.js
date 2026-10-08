@@ -394,6 +394,9 @@ const MOH_MODELS = [
   // modelId. Sonnet 5 replaced Kimi K2.5 in Sep 2026, when the org SCP started
   // denying Moonshot — 5/5 calls through the gateway succeeded on the switch.
   { id: 'us.anthropic.claude-sonnet-5', displayName: 'Claude Sonnet 5', status: 'verified', note: 'Default. Cross-region profile — keep the us. prefix.' },
+  // Provisioned on @sudo-bedrock and answered through the gateway on 2026-10-08.
+  { id: 'us.anthropic.claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', status: 'verified', note: 'Newest Sonnet. Cross-region profile — keep the us. prefix.' },
+  { id: 'us.anthropic.claude-opus-5-5', displayName: 'Claude Opus 5.5', status: 'verified', note: 'Newest Opus — strongest model here, and slower than Sonnet (~7s for a short answer).' },
   { id: 'us.anthropic.claude-opus-4-8', displayName: 'Claude Opus 4.8', status: 'verified', note: 'Best Hebrew prose, resists every runtime attack unaided. Slowest: ~50 chars/s, ~19s for a full answer.' },
   {
     id: 'nvidia.nemotron-nano-12b-v2', displayName: 'Nemotron Nano 12B', status: 'leaky',

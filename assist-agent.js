@@ -13,17 +13,24 @@
  * [K] so the reader knows to verify it. Every step is reported through onEvent
  * as it happens, so the client can show the research live.
  *
- * Models: Claude Sonnet 5 on Amazon Bedrock (Converse + toolConfig); on a
- * credential error the run switches to Claude Sonnet 5 on Vertex AI
- * (Anthropic Messages API via :rawPredict). One neutral message format,
- * translated per provider.
+ * Models, tried in order — the first that answers carries the rest of the run:
+ *   1. Claude Sonnet 5.5 through the Prisma AIRS AI Gateway (@sudo-bedrock,
+ *      OpenAI-style tool calling, the unprotected lane: Ask AIRS reads docs,
+ *      it does not scan prompts)
+ *   2. Claude Sonnet 5 on Amazon Bedrock (Converse + toolConfig)
+ *   3. Claude Sonnet 5 on Vertex AI (Anthropic Messages API via :rawPredict)
+ * One neutral message format, translated per provider.
  */
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { GoogleAuth } from 'google-auth-library'
 import { performance } from 'perf_hooks'
 import { search as searchDocs, readPage } from './airs-docs.js'
 import { htmlToMd, titleOf } from './airs-text.js'
+import { MOH_ENV as AIGW_ENV, buildAigwClient, resolveAigwConfig, hookVerdictFailed } from './moh-routes.js'
 
+// Sonnet 5.5 is provisioned on the gateway's @sudo-bedrock integration; the
+// direct fallbacks stay on Sonnet 5, the newest Claude both of them serve.
+const AIGW_MODEL = process.env.ASK_AIRS_AIGW_MODEL || 'us.anthropic.claude-sonnet-5-5'
 const BEDROCK_MODEL = 'us.anthropic.claude-sonnet-5'
 const VERTEX_MODEL = 'claude-sonnet-5'
 const MAX_STEPS = 7          // model turns that may call tools
@@ -152,6 +159,44 @@ const toAnthropic = (msgs) => msgs.map((m) => ({
   content: m.parts.map((p) => (p.text != null ? { type: 'text', text: p.text } : p.call ? { type: 'tool_use', id: p.call.id, name: p.call.name, input: p.call.input } : { type: 'tool_result', tool_use_id: p.result.id, content: p.result.text })),
 }))
 
+// OpenAI chat format for the gateway: tool calls ride on the assistant
+// message, each tool result is its own `tool` message, and any text in the
+// same user turn (the forced final answer) follows as a user message.
+const toOpenAI = (msgs) => [{ role: 'system', content: SYSTEM }, ...msgs.flatMap((m) => {
+  const text = m.parts.filter((p) => p.text != null).map((p) => p.text).join('')
+  const calls = m.parts.filter((p) => p.call).map((p) => ({ id: p.call.id, type: 'function', function: { name: p.call.name, arguments: JSON.stringify(p.call.input ?? {}) } }))
+  if (m.role === 'assistant') return [{ role: 'assistant', content: text || null, ...(calls.length ? { tool_calls: calls } : {}) }]
+  const results = m.parts.filter((p) => p.result).map((p) => ({ role: 'tool', tool_call_id: p.result.id, content: p.result.text }))
+  return [...results, ...(text ? [{ role: 'user', content: text }] : [])]
+})]
+const parseArgs = (raw) => { try { return typeof raw === 'string' ? JSON.parse(raw || '{}') : raw ?? {} } catch { return {} } }
+
+async function turnAigw(msgs) {
+  const { configId } = resolveAigwConfig(false)
+  const client = buildAigwClient(configId, { metadata: { demo: 'ask-airs', _user: 'sudo-airs-demo-portal' } })
+  let timer
+  const c = await Promise.race([
+    client.chat.completions.create({
+      model: `${AIGW_ENV.bedrockSlug}/${AIGW_MODEL}`,
+      messages: toOpenAI(msgs),
+      tools: TOOLS.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.schema } })),
+      tool_choice: 'auto',
+      max_tokens: 2500,
+    }),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('AI Gateway timed out after 120 s')), 120000) }),
+  ]).finally(() => clearTimeout(timer))
+  // On this tenant a failed guardrail returns HTTP 200 with the reply replaced
+  // and the model never invoked — a block, read from the hook verdict.
+  if (hookVerdictFailed(c?.hook_results)) throw new Error('a gateway guardrail replaced the reply')
+  const msg = c?.choices?.[0]?.message ?? {}
+  const text = Array.isArray(msg.content) ? msg.content.map((b) => b?.text ?? '').join('') : (msg.content ?? '')
+  const parts = [
+    ...(text ? [{ text }] : []),
+    ...(msg.tool_calls ?? []).map((tc) => ({ call: { id: tc.id, name: tc.function?.name, input: parseArgs(tc.function?.arguments) } })),
+  ]
+  return { parts, stop: c?.choices?.[0]?.finish_reason, usage: { in: c?.usage?.prompt_tokens ?? 0, out: c?.usage?.completion_tokens ?? 0 } }
+}
+
 async function turnBedrock(msgs) {
   const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2', ...(awsCreds() ? { credentials: awsCreds() } : {}) })
   const r = await client.send(new ConverseCommand({
@@ -184,10 +229,19 @@ async function turnVertex(msgs) {
   return { parts, stop: d.stop_reason === 'tool_use' ? 'tool_use' : d.stop_reason, usage: { in: d.usage?.input_tokens ?? 0, out: d.usage?.output_tokens ?? 0 } }
 }
 
-// A Bedrock credential failure is remembered for ten minutes, so an expired
-// laptop token does not cost every question a refused round trip.
-let bedrockDownUntil = 0
-const isCredentialError = (e) => /security token|expired|UnrecognizedClient|AccessDenied|credential|not authorized|signature/i.test(`${e?.name} ${e?.message}`)
+const PROVIDERS = {
+  aigw:    { turn: turnAigw,    step: 'Claude Sonnet 5.5 through the AI Gateway', label: 'Claude Sonnet 5.5 · AI Gateway' },
+  bedrock: { turn: turnBedrock, step: 'Claude Sonnet 5 on Amazon Bedrock',        label: 'Claude Sonnet 5 · Amazon Bedrock' },
+  vertex:  { turn: turnVertex,  step: 'Claude Sonnet 5 on Vertex AI',             label: 'Claude Sonnet 5 · Vertex AI' },
+}
+const ORDER = ['aigw', 'bedrock', 'vertex']
+
+// A credential failure is remembered for ten minutes, so an expired laptop
+// token (or an unset gateway key) does not cost every question a refused
+// round trip.
+const downUntil = { aigw: 0, bedrock: 0, vertex: 0 }
+const isCredentialError = (e) => /security token|expired|UnrecognizedClient|AccessDenied|credential|not authorized|signature|401|AIGW_API_KEY/i.test(`${e?.name} ${e?.message}`)
+const firstProvider = () => ORDER.find((p) => Date.now() >= downUntil[p] && (p !== 'aigw' || AIGW_ENV.apiKey)) ?? 'vertex'
 
 // ─── the run ─────────────────────────────────────────────────────────────────
 
@@ -214,19 +268,20 @@ export async function runSidekick(question, onEvent) {
   const readUrls = new Map()         // page url → id it was read under (no second read)
   const usage = { in: 0, out: 0 }
   let calls = 0
-  let model = Date.now() < bedrockDownUntil ? 'vertex' : 'bedrock'
+  let model = firstProvider()
 
+  // Any failure moves the rest of the run to the next provider (the message
+  // format is neutral); a credential failure is also remembered.
   const turn = async (msgs) => {
-    if (model === 'bedrock') {
-      try { return await turnBedrock(msgs) } catch (e) {
-        // Any Bedrock failure falls back to Vertex for the rest of the run (the
-        // message format is neutral); a credential failure is also remembered.
-        if (isCredentialError(e)) bedrockDownUntil = Date.now() + 10 * 60 * 1000
-        model = 'vertex'
-        onEvent({ type: 'step', kind: 'think', label: `Bedrock did not answer (${String(e?.message || e).slice(0, 60)}) — continuing on Claude via Vertex AI` })
+    for (;;) {
+      try { return await PROVIDERS[model].turn(msgs) } catch (e) {
+        const next = ORDER[ORDER.indexOf(model) + 1]
+        if (!next) throw e
+        if (isCredentialError(e)) downUntil[model] = Date.now() + 10 * 60 * 1000
+        onEvent({ type: 'step', kind: 'think', label: `${PROVIDERS[model].step} did not answer (${String(e?.message || e).slice(0, 70)}) — continuing on ${PROVIDERS[next].step}` })
+        model = next
       }
     }
-    return turnVertex(msgs)
   }
 
   const runTool = async (call) => {
@@ -280,7 +335,7 @@ export async function runSidekick(question, onEvent) {
     const toolCalls = r.parts.filter((p) => p.call).map((p) => p.call)
     if (!toolCalls.length) {
       const text = r.parts.filter((p) => p.text != null).map((p) => p.text).join('').trim()
-      onEvent({ type: 'answer', text, model: model === 'bedrock' ? 'Claude Sonnet 5 · Amazon Bedrock' : 'Claude Sonnet 5 · Vertex AI', usage, elapsedMs: Math.round(performance.now() - t0), calls })
+      onEvent({ type: 'answer', text, model: PROVIDERS[model].label, usage, elapsedMs: Math.round(performance.now() - t0), calls })
       return
     }
     const results = []
@@ -294,5 +349,5 @@ export async function runSidekick(question, onEvent) {
   const r = await turn(msgs)
   usage.in += r.usage.in
   usage.out += r.usage.out
-  onEvent({ type: 'answer', text: r.parts.filter((p) => p.text != null).map((p) => p.text).join('').trim(), model: model === 'bedrock' ? 'Claude Sonnet 5 · Amazon Bedrock' : 'Claude Sonnet 5 · Vertex AI', usage, elapsedMs: Math.round(performance.now() - t0), calls })
+  onEvent({ type: 'answer', text: r.parts.filter((p) => p.text != null).map((p) => p.text).join('').trim(), model: PROVIDERS[model].label, usage, elapsedMs: Math.round(performance.now() - t0), calls })
 }
