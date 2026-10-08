@@ -42,6 +42,7 @@ import mohRouter, {
 } from './moh-routes.js'
 import accessRouter from './access-routes.js'
 import devRouter from './dev-routes.js'
+import { ensureDocs } from './aigw-docs.js'
 
 const app = express()
 app.use(cors())
@@ -3020,9 +3021,9 @@ function scrapeReleaseNotes() {
 // description="2026-10-06"> block per release. Each release becomes one feature
 // in its month, under the product area "AI Gateway", carrying the full notes as
 // sections. Own cache, own failure: a dead changelog never blanks the PA feed.
-// Read from the Prisma AIRS-branded host (docs.gw.prismaairs.com), which serves
-// the same pages, anchors and .md as portkey.ai/docs.
-const GW_DOCS_ORIGIN = 'https://docs.gw.prismaairs.com'
+// Read from portkey.ai/docs, the host the Developer Corner cites too
+// (docs.gw.prismaairs.com serves the same pages, anchors and .md).
+const GW_DOCS_ORIGIN = 'https://portkey.ai'
 const GW_CHANGELOG_URL = `${GW_DOCS_ORIGIN}/docs/changelog/enterprise`
 const GW_AREA = 'AI Gateway'
 const GW_CACHE = { releases: null, fetchedAt: 0, attemptedAt: 0, error: null }
@@ -3377,4 +3378,6 @@ app.listen(PORT, () => {
     scrapeReleaseNotes().catch((err) => console.warn('[release-notes] warm-up failed:', err.message))
     loadGatewayChangelog()
   }, 2000)
+  // The Developer Corner's docs index: read from disk, re-fetched in the background once a day.
+  setTimeout(() => ensureDocs(), 6000)
 })

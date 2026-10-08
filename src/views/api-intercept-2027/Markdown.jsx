@@ -16,11 +16,18 @@ import { FONT } from './tokens'
  * inside a chat bubble whose type scale is already set by the caller.
  */
 
-/** **bold**, *italic*, `code`, [text](url) — flat, non-nesting, good enough. */
-function inline(text, t, keyBase) {
-  const parts = String(text).split(/(\*\*[^*]+\*\*|(?<!\*)\*[^*\n]+\*(?!\*)|`[^`]+`|\[[^\]]+\]\([^)]+\))/g).filter(Boolean)
+/**
+ * **bold**, *italic*, `code`, [text](url) — flat, non-nesting, good enough.
+ * With `cite` (the Developer Corner's docs answers): `[3]` / `[P]` render
+ * (`[C]` too) through it as citation chips, and only http(s) links become anchors.
+ */
+const INLINE = /(\*\*[^*]+\*\*|(?<!\*)\*[^*\n]+\*(?!\*)|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
+const INLINE_CITE = /(\*\*[^*]+\*\*|(?<!\*)\*[^*\n]+\*(?!\*)|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[(?:\d{1,2}|P|C)\])/g
+function inline(text, t, keyBase, cite) {
+  const parts = String(text).split(cite ? INLINE_CITE : INLINE).filter(Boolean)
   return parts.map((p, i) => {
     const k = `${keyBase}-${i}`
+    if (cite && /^\[(?:\d{1,2}|P|C)\]$/.test(p)) return <React.Fragment key={k}>{cite(p.slice(1, -1))}</React.Fragment>
     if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={k} style={{ fontWeight: 700, color: t.ink }}>{p.slice(2, -2)}</strong>
     if (/^\*[^*]+\*$/.test(p)) return <em key={k}>{p.slice(1, -1)}</em>
     if (/^`[^`]+`$/.test(p)) {
@@ -32,6 +39,7 @@ function inline(text, t, keyBase) {
       )
     }
     const link = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
+    if (link && cite && !/^https?:\/\//.test(link[2])) return <React.Fragment key={k}>{link[1]}</React.Fragment>
     if (link) {
       return (
         <a key={k} href={link[2]} target="_blank" rel="noreferrer"
@@ -48,7 +56,7 @@ const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l)
 const isDivider  = (l) => /^\s*\|?[\s:-]*-{2,}[\s:|-]*\|?\s*$/.test(l) && l.includes('-')
 const cells      = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
 
-function Table({ rows, t }) {
+function Table({ rows, t, cite }) {
   const [head, ...body] = rows
   return (
     <div className="my-2 overflow-x-auto" style={{ borderRadius: 12, border: `1px solid ${t.hairline}` }}>
@@ -60,7 +68,7 @@ function Table({ rows, t }) {
                 textAlign: 'left', padding: '7px 10px', whiteSpace: 'nowrap',
                 fontFamily: FONT.display, fontWeight: 700, fontSize: '0.92em', color: t.ink,
                 borderBottom: `1px solid ${t.hairline}`,
-              }}>{inline(c, t, `th${i}`)}</th>
+              }}>{inline(c, t, `th${i}`, cite)}</th>
             ))}
           </tr>
         </thead>
@@ -71,7 +79,7 @@ function Table({ rows, t }) {
                 <td key={ci} style={{
                   padding: '6px 10px', verticalAlign: 'top', color: ci === 0 ? t.ink : t.inkDim,
                   borderTop: `1px solid ${t.hairline}`,
-                }}>{inline(c, t, `td${ri}-${ci}`)}</td>
+                }}>{inline(c, t, `td${ri}-${ci}`, cite)}</td>
               ))}
             </tr>
           ))}
@@ -81,7 +89,7 @@ function Table({ rows, t }) {
   )
 }
 
-export const Markdown = React.memo(function Markdown({ text, t }) {
+export const Markdown = React.memo(function Markdown({ text, t, cite }) {
   const lines = String(text ?? '').split('\n')
   const out = []
   let i = 0
@@ -118,7 +126,7 @@ export const Markdown = React.memo(function Markdown({ text, t }) {
       const rows = [cells(line)]
       i += 2
       while (i < lines.length && isTableRow(lines[i])) { rows.push(cells(lines[i])); i++ }
-      out.push(<Table key={`t-${i}`} rows={rows} t={t} />)
+      out.push(<Table key={`t-${i}`} rows={rows} t={t} cite={cite} />)
       continue
     }
 
@@ -138,7 +146,7 @@ export const Markdown = React.memo(function Markdown({ text, t }) {
           fontFamily: FONT.display, fontWeight: 700, color: t.ink,
           fontSize: h[1].length <= 2 ? '1.12em' : '1.02em',
           margin: out.length ? '10px 0 4px' : '0 0 4px',
-        }}>{inline(h[2], t, `h${i}`)}</div>
+        }}>{inline(h[2], t, `h${i}`, cite)}</div>
       )
       i++
       continue
@@ -150,7 +158,7 @@ export const Markdown = React.memo(function Markdown({ text, t }) {
       out.push(
         <div key={`q-${i}`} style={{
           borderLeft: `2px solid ${t.hairline}`, paddingLeft: 10, margin: '4px 0', color: t.inkDim,
-        }}>{inline(q[1], t, `q${i}`)}</div>
+        }}>{inline(q[1], t, `q${i}`, cite)}</div>
       )
       i++
       continue
@@ -165,14 +173,14 @@ export const Markdown = React.memo(function Markdown({ text, t }) {
           <span style={{ color: t.inkFaint, flexShrink: 0, fontWeight: 700, minWidth: num ? 14 : 6 }}>
             {num ? `${num[2]}.` : '•'}
           </span>
-          <span style={{ flex: 1, minWidth: 0 }}>{inline(bullet ? bullet[2] : num[3], t, `li${i}`)}</span>
+          <span style={{ flex: 1, minWidth: 0 }}>{inline(bullet ? bullet[2] : num[3], t, `li${i}`, cite)}</span>
         </div>
       )
       i++
       continue
     }
 
-    out.push(<div key={`p-${i}`} style={{ margin: '1px 0' }}>{inline(line, t, `p${i}`)}</div>)
+    out.push(<div key={`p-${i}`} style={{ margin: '1px 0' }}>{inline(line, t, `p${i}`, cite)}</div>)
     i++
   }
 

@@ -1,4 +1,4 @@
-import { Megaphone, ScrollText } from 'lucide-react'
+import { Braces, Megaphone, Plug, ScrollText } from 'lucide-react'
 import { pick } from './links'
 
 /**
@@ -7,7 +7,8 @@ import { pick } from './links'
  *
  * Read on 2026-10-08: chart 1.2.0 (its values.yaml, templates and docs/), the
  * self-hosting pages of the AI Gateway developer docs, and the Enterprise
- * Gateway changelog. Neither the chart nor the docs has an upgrade page — the
+ * Gateway changelog. There is no Helm upgrade page in the chart or the docs
+ * (only the ECS Terraform page has "Version Pinning and Upgrades") — the Helm
  * upgrade commands here are standard Helm and kubectl, and the guide says so.
  * Where the chart and the docs disagree, the table at the end names it.
  */
@@ -42,6 +43,7 @@ environment:
     PORT: "8787"
     SERVER_MODE: "all"         # gateway + MCP gateway on 8788
     MCP_PORT: "8788"
+    MCP_GATEWAY_BASE_URL: "https://mcp.example.com"   # required for "all" / "mcp"; include the protocol
     LOG_STORE: s3_assume       # keep full logs in your bucket
     LOG_STORE_REGION: us-west-2
     LOG_STORE_GENERATIONS_BUCKET: my-airs-gw-logs
@@ -108,14 +110,24 @@ kubectl get deployment airs-gw -n airs-gw \\
 
 const UPGRADE_CHART = `helm repo update
 helm search repo airs-gw/airs-gw --versions
+NEW="<new chart version>"      # one of the versions listed above
 
 # What the new chart changes in its defaults, and in the rendered manifests
-helm show values airs-gw/airs-gw --version <new> > values-<new>.default.yaml
-diff <(helm show values airs-gw/airs-gw --version 1.2.0) values-<new>.default.yaml
-helm diff upgrade airs-gw airs-gw/airs-gw --version <new> -f values.yaml -n airs-gw   # helm-diff plugin
+helm show values airs-gw/airs-gw --version "$NEW" > "values-$NEW.default.yaml"
+diff <(helm show values airs-gw/airs-gw --version 1.2.0) "values-$NEW.default.yaml"
+helm diff upgrade airs-gw airs-gw/airs-gw --version "$NEW" -f values.yaml -n airs-gw   # helm-diff plugin
 
-helm upgrade airs-gw airs-gw/airs-gw --version <new> -f values.yaml -n airs-gw
+helm upgrade airs-gw airs-gw/airs-gw --version "$NEW" -f values.yaml -n airs-gw
 kubectl rollout status deployment/airs-gw -n airs-gw`
+
+const TRUSTED_HOSTS = `# values.yaml — the list REPLACES the defaults, so re-add the local names you still need
+environment:
+  data:
+    TRUSTED_CUSTOM_HOSTS: "localhost,127.0.0.1,::1,host.docker.internal,*.corp.example.net"
+
+# Read at startup only: roll the pods, then check what the container actually has
+kubectl rollout restart deployment/airs-gw -n airs-gw
+kubectl exec -n airs-gw deploy/airs-gw -- printenv TRUSTED_CUSTOM_HOSTS`
 
 const ROLLBACK = `helm history airs-gw -n airs-gw
 helm rollback airs-gw <revision> -n airs-gw
@@ -127,11 +139,12 @@ export const AIGW_HYBRID = [
     group: 'gateway',
     title: 'Hybrid deployment: the data plane on your Kubernetes',
     sub: 'Install the airs-gw Helm chart — and upgrade it when a gateway release ships',
-    minutes: 12,
+    minutes: 15,
     level: 'Setup',
     live: 'helm.versions',
     docs: pick('agGwRegister', 'agHybridArch', 'agCacheBehave', 'ghAirsGwHelm', 'ghAirsGwValues', 'ghAirsGwRel', 'agChangelog', 'agDsChangelog',
-      'ghAirsGwLogs', 'ghAirsGwRedis', 'ghAirsGwSecrets', 'ghAirsGwResil', 'ghAirsGwBedrock', 'ghAirsGwVertex', 'ghAirsGwOutbound', 'agPrivateNet', 'gwDeploy', 'ghGwDocker'),
+      'ghAirsGwLogs', 'ghAirsGwRedis', 'ghAirsGwSecrets', 'ghAirsGwResil', 'ghAirsGwBedrock', 'ghAirsGwVertex', 'ghAirsGwOutbound', 'agPrivateNet',
+      'agPrometheus', 'agEks', 'agGke', 'agAks', 'agEcs', 'agAca', 'ghGwInfra', 'ghGwInfraBedrock', 'gwDeploy', 'ghGwDocker'),
     blocks: [
       {
         type: 'prose',
@@ -150,7 +163,7 @@ export const AIGW_HYBRID = [
           ['Cache store', 'Your cluster', 'A bundled Redis StatefulSet (persistence off by default), or your own Redis 6.2+, ElastiCache, Azure Redis or Memorystore.'],
           ['Data service', 'Your cluster — optional', 'Fine-tuning, batches, data exports. Its own image and tag (`data-service:1.9.0`).'],
           ['MinIO + Milvus', 'Your cluster — optional', 'Only for the semantic cache.'],
-          ['Dashboard, configs, keys, guardrails, analytics', 'Strata Cloud Manager', 'The SCM API gateway is the only authentication authority; the data plane never touches its databases.'],
+          ['Dashboard, configs, keys, guardrails, analytics', 'Strata Cloud Manager', 'The SCM API gateway is the only authentication authority. The data plane never connects to the management plane\'s MySQL, but it writes request metrics and guardrail results **directly** to its ClickHouse (outbound HTTPS, bypassing the backend).'],
         ],
       },
       {
@@ -160,13 +173,28 @@ export const AIGW_HYBRID = [
         minWidth: 640,
         rows: [
           ['Config sync', 'Gateway → SCM', 'A delta sync every minute; changed entries are dropped from cache and re-fetched on next use. Cache TTL 7 days.'],
-          ['Usage counters', 'Gateway → SCM', 'Pushed back for budgets and rate limits. Configs, prompts and responses are not.'],
-          ['Metrics', 'Gateway → SCM', 'Tokens, cost, latency, model — always.'],
-          ['Full request logs', 'Wherever `LOG_STORE` points', 'The chart default `control_plane` encrypts and forwards them to SCM. Point it at your own bucket and they stay in your account; SCM fetches one when someone opens it.'],
+          ['Usage counters', 'Gateway → SCM', 'A resync every minute pushes **token and cost** counters only — for API keys, virtual keys, integration workspaces and usage-limit policies. Rate-limit counters stay in your local Redis. Configs, prompts, guardrails and responses are never pushed back.'],
+          ['Metrics', 'Gateway → SCM ClickHouse', 'Always: model, provider, tokens, cost, latency, cache status, trace ids, guardrail results and a pointer to the log body.'],
+          ['Full request logs', 'Wherever `LOG_STORE` points', 'The chart default `control_plane` encrypts and forwards them to SCM — no inbound connection needed. Point it at your own bucket and they stay in your account, but then the management plane **requests a log from the gateway** when someone opens it, so it needs inbound reach to the data plane (the architecture page\'s "Option A").'],
           ['Model traffic', 'Gateway → your providers', 'Direct from your cluster. A Prisma AIRS guardrail still sends the prompt and response to the AIRS API for scanning — that is its job.'],
         ],
-        note: 'Egress to allow: `aigw.portkey.ai`, `mp.us.prod.airs-gw.portkey.ai` (the chart\'s default management-plane URL), `albus.portkey.ai` (named by the docs, and the data service\'s fallback), `registry.portkey.ai`, and your providers. Inbound only if the management plane must reach the data plane — the IPs come from Palo Alto Networks.',
+        note: 'Egress: the deployment pages list only `https://aigw.portkey.ai` and `https://albus.portkey.ai`, with images from Docker Hub. Chart 1.2.0 instead defaults to `mp.us.prod.airs-gw.portkey.ai` and pulls from `registry.portkey.ai` — allow the hosts your values actually use, plus your providers (see the last table). Inbound only if the management plane must reach the data plane — logs in your own bucket — and the IPs come from Palo Alto Networks.',
       },
+      {
+        type: 'table',
+        title: 'Where the data plane can run',
+        columns: ['Target', 'How', 'Notes from the docs'],
+        minWidth: 680,
+        rows: [
+          ['EKS · AKS (Helm)', 'This guide: the `airs-gw` chart', 'EKS: `t4g.medium` nodes, two or more across two AZs; IRSA or EKS Pod Identity; `service.containerPort` must equal `PORT`. AKS: `B2ms` nodes, Azure Managed Redis, Blob with workload identity.'],
+          ['GKE (Helm)', 'The same chart', 'A `REGIONAL_MANAGED_PROXY` subnet and the HTTP Load Balancing add-on first; ingress health check on `/v1/health`; nodes with 2 vCPU / 4 GiB or more, two or more across zones.'],
+          ['ECS (Terraform)', 'Module `portkey-gateway-infrastructure//terraform/ecs`, pinned with `?ref=`', 'Secrets Manager holds the registry login and client auth — the module takes their **ARNs**. `server_mode` `gateway`, `mcp` or `all`; `all` needs `mcp_gateway_base_url` and ALB host routing. 1 vCPU / 2 GiB per task. The only target with a documented upgrade procedure.'],
+          ['Azure Container Apps (Terraform)', 'Module `…//terraform/aca`', 'Key Vault secret **names**. `server_mode: all` deploys separate gateway and MCP apps. The examples pin image tag `2.2.2` — far behind the changelog.'],
+          ['Docker Compose on a VM', '`setup-panw-ai-gateway.sh --from-values values.yaml` (the `airs-ai-gateway-docker` repo)', 'Settings live in three files — `values.yaml`, `.env`, `.env.runtime` — each with its own syntax. Apply with `docker compose up -d --force-recreate`; a plain restart does not reload the environment.'],
+        ],
+        note: 'The architecture page adds Kubernetes 1.20+ with Helm 3.x, and 1–2 cores / 2–4 GB per gateway instance. The EKS, GKE and AKS pages install the legacy chart — see the last table.',
+      },
+      { type: 'links', title: 'Deployment pages', items: pick('agEks', 'agGke', 'agAks', 'agEcs', 'agAca', 'agPrivateNet', 'ghGwDocker', 'ghGwInfra') },
       {
         type: 'steps',
         title: 'Install',
@@ -194,7 +222,10 @@ export const AIGW_HYBRID = [
           },
           {
             title: 'Write values.yaml',
-            text: 'Start from the downloaded file and add what your cluster needs. A production-shaped example:',
+            text: [
+              'Start from the downloaded file and add what your cluster needs. A production-shaped example follows.',
+              '`SERVER_MODE` `all` or `mcp` needs `MCP_GATEWAY_BASE_URL` — the URL clients use to reach the MCP gateway, with `http://` or `https://`. The EKS page allows leaving it out of the first install: set it once the MCP load balancer has a hostname, then upgrade again.',
+            ],
             code: [{ id: 'yaml', lang: 'yaml', code: HELM_VALUES, file: 'values.yaml' }],
           },
           {
@@ -215,10 +246,42 @@ export const AIGW_HYBRID = [
         columns: ['Provider', 'On the gateway', 'On the integration in SCM'],
         minWidth: 660,
         rows: [
-          ['Amazon Bedrock', 'An assumed-role access key (`AWS_ASSUME_ROLE_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` / `_REGION`), IRSA, or the instance profile (IMDS)', 'Role ARN, External ID and region. The role needs `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` — plus `bedrock:GetInferenceProfile` for `us.*` profiles.'],
-          ['Google Vertex AI', '`GCP_AUTH_MODE: workload`, the service account annotated `iam.gke.io/gcp-service-account` (`GCP_WIF_AUDIENCE` outside GKE)', 'Auth type **workload**, service-account JSON left empty. The Google SA needs `roles/aiplatform.user`; the Kubernetes SA binding `roles/iam.workloadIdentityUser`.'],
+          ['Amazon Bedrock — same account', 'The pod\'s role (IRSA or EKS Pod Identity), or the instance/task role (IMDS)', 'Auth type **AWS Service Role** — no ARN, no key. Named in the ECS Terraform module\'s Bedrock doc and on the Bedrock Mantle and Claude Platform pages; the Bedrock page itself lists only Access Key, Assumed Role and Bedrock API Key.'],
+          ['Amazon Bedrock — cross account', 'Credentials that may assume the role: an assumed-role access key (`AWS_ASSUME_ROLE_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` / `_REGION`), IRSA or IMDS', 'Auth type **AWS Assumed Role**: role ARN, External ID and region.'],
+          ['Google Vertex AI', '`GCP_AUTH_MODE: workload`, the service account annotated `iam.gke.io/gcp-service-account`. From EKS: `GCP_WIF_AUDIENCE`, plus `GCP_WIF_SERVICE_ACCOUNT_EMAIL` to impersonate, and `sts:GetCallerIdentity` on the gateway role', 'Auth type **Workload Identity Federation** (the docs\' label), project id, no service-account JSON. The Google SA needs `roles/aiplatform.user`; the Kubernetes SA binding `roles/iam.workloadIdentityUser`.'],
+          ['Azure OpenAI · Foundry', 'Managed identity (IMDS), AKS workload identity (the `AZURE_*` variables the webhook injects), or AWS → Entra federation', '`azureAuthMode` `managed`, `workload` or `entraFederated` — all three hybrid-only. Role on the resource: Cognitive Services OpenAI User.'],
         ],
-        note: 'Either way, set `serviceAccount.automount: true` — the chart defaults to false, and both identities need the projected token.',
+        note: 'Bedrock permissions: `GetInferenceProfile` alone does not make `us.*` profiles work — `InvokeModel` and `InvokeModelWithResponseStream` must also allow the inference-profile ARN and the foundation-model ARN in every region the profile routes to. The EKS and ECS example policies scope Invoke to one regional foundation model, which would refuse a `us.*` call. And set `serviceAccount.automount: true` for any pod identity — the chart defaults to false.',
+      },
+      {
+        type: 'table',
+        title: 'Private upstreams: TRUSTED_CUSTOM_HOSTS',
+        columns: ['Rule', 'Detail'],
+        rows: [
+          ['Why', 'A self-hosted gateway refuses private IP ranges and internal hostnames (SSRF protection). The log line: "Outbound request rejected by SSRF policy: <host> resolves to <ip>, which is blocked"; MCP clients may see only "Failed to restore session".'],
+          ['Match the hostname', 'The list is checked against the **hostname in the URL**, not the IP it resolves to. `*.example.net` covers subdomains; a bare `example.net` does not.'],
+          ['It replaces the defaults', 'Comma-separated, no spaces. With `NODE_ENV=production` the default list is empty, so re-add `localhost,127.0.0.1,::1,host.docker.internal` if you need them.'],
+          ['Restart to apply', 'Read at startup only — roll the pods (Compose: `--force-recreate`).'],
+          ['Never trusted', 'Cloud metadata endpoints, suffixes such as `cluster.local`, and non-HTTP ports like `5432` — even when listed.'],
+          ['Hybrid only', 'On SaaS, upstream URLs must be publicly reachable. Since 2.23.0 Azure Storage and Key Vault Private Link domains are trusted by default.'],
+        ],
+      },
+      { type: 'code', tabs: [{ id: 'bash', lang: 'bash', code: TRUSTED_HOSTS }] },
+      {
+        type: 'table',
+        title: 'Prometheus metrics',
+        columns: ['Setting', 'Default', 'Effect'],
+        minWidth: 640,
+        rows: [
+          ['`GET /metrics`', 'on', 'Prometheus text format. The page calls it "typically open" and names no port — keep it on your monitoring network.'],
+          ['`ENABLE_PROMETHEUS`', '`true`', '`false` removes the metrics middleware; `/metrics` then returns 404.'],
+          ['Labels on every metric', '—', '`app` (`SERVICE_NAME`), `env` (`NODE_ENV`), `method`, `endpoint`, `code`, `provider`, `source`, `stream`, `cacheStatus`.'],
+          ['`PROMETHEUS_INCLUDE_MODEL_LABEL`', '`false`', 'Adds `model` — high cardinality.'],
+          ['`PROMETHEUS_INCLUDE_METADATA_LABELS` + `PROMETHEUS_LABELS_METADATA_ALLOWED_KEYS`', 'off', 'Allow-listed `x-portkey-metadata` keys become `metadata_<key>` labels.'],
+          ['`PROMETHEUS_INCLUDE_CONFIG_NAME_LABEL` · `PROMETHEUS_INCLUDE_API_KEY_NAME_LABEL`', '`false`', '`config_name` and `api_key_name` (2.22.0). The same page\'s configuration section names `PROMETHEUS_EXTRA_LABELS=apiKeyName,configName` instead.'],
+          ['`providerSlug` label', 'opt-in', 'The Model Catalog provider that served the request — changelog 2.23.0; the metrics page does not mention it or its switch.'],
+        ],
+        note: 'Metrics: `request_count` (counter); `llm_cost_sum` and `llm_token_sum` (gauges); histograms `http_request_duration_seconds`, `llm_request_duration_milliseconds`, `portkey_request_duration_milliseconds`, `portkey_processing_time_excluding_last_byte_ms`, `llm_last_byte_diff_duration_milliseconds`, `authentication_duration_milliseconds`, `api_key_rate_limit_check_duration_milliseconds`, `pre_request_processing_duration_milliseconds`, `post_request_processing_duration_milliseconds`, `llm_cache_processing_duration_milliseconds`, `grpc_req_conversion_duration_milliseconds`; plus Node runtime `node_*` metrics.',
       },
       {
         type: 'prose',
@@ -256,7 +319,7 @@ export const AIGW_HYBRID = [
         steps: [
           { title: 'See what changed', text: 'The release notes on GitHub, then a diff of the defaults and of the rendered manifests (`helm diff` is a plugin).', code: [{ id: 'bash', lang: 'bash', code: UPGRADE_CHART }] },
           { title: 'Decide on the tag', text: 'A tag pinned in your values.yaml overrides the new chart\'s `appVersion`. Raise the pin, or remove it to take the chart\'s default.' },
-          { title: 'Upgrade and verify', text: 'As above, with `--version <new>`.' },
+          { title: 'Upgrade and verify', text: 'As above, with the new chart\'s `--version`.' },
         ],
       },
       {
@@ -269,9 +332,10 @@ export const AIGW_HYBRID = [
       {
         type: 'callout', tone: 'docs', title: 'What the docs leave out',
         text: [
-          'There is no upgrade page in the chart or in the developer docs; the commands above are standard Helm and kubectl. The chart\'s docs only re-run `helm upgrade --install`.',
+          'There is no Helm upgrade page in the chart or in the developer docs; the commands above are standard Helm and kubectl, and the chart\'s docs only re-run `helm upgrade --install`. The one documented upgrade procedure is the ECS page\'s **Version Pinning and Upgrades**: pin the Terraform module with `?ref=`, read the module\'s releases, run `terraform init -upgrade`, `terraform plan`, `terraform apply`; roll back by reverting `ref` and applying again.',
           'Leave `dataservice` on its own tag: blanked, it falls back to the chart\'s `appVersion` — a gateway version number. Data service 1.7.0 and later need gateway 2.8.0 or later.',
-          'When the management plane is unreachable the gateway keeps serving from cache — routing, rate limits, guardrails, response caching and log writes — and queues analytics. New or changed integrations, keys, configs and prompts wait until it is back.',
+          'When the management plane is unreachable the gateway keeps serving from cache — routing, rate limits, guardrails, response caching and log writes. ("Queues analytics" is in the chart\'s resiliency doc, not the AIGW pages.) New or changed integrations, keys, configs and prompts wait until it is back.',
+          'The cache is **lazy**: an object enters it the first time a request uses it. So a key, config or provider used for the first time during a management-plane outage cannot be served — warm the paths you depend on. (Since 2.24.0, disabled MCP tools, resources and prompts stay disabled when the management plane is briefly unreachable; before, they became callable again for up to 5 minutes.)',
         ],
       },
       {
@@ -286,6 +350,7 @@ export const AIGW_HYBRID = [
           ['Log residency', 'Resiliency page: logs never leave your VPC', '`LOG_STORE` defaults to `control_plane` — logs go to SCM until you set a store'],
           ['Sync interval', '30 s (resiliency page)', '1 minute (architecture and cache pages)'],
           ['Service account token', 'Every IRSA / workload identity example sets `automount: true`', 'Defaults to `automount: false`'],
+          ['Management-plane hosts and images', 'Allow `https://aigw.portkey.ai` and `https://albus.portkey.ai`; images from Docker Hub. One EKS example points `ALBUS_BASEPATH`, `CONTROL_PLANE_BASEPATH`, `SOURCE_SYNC_API_BASEPATH` and `CONFIG_READER_PATH` at `aws-cp.portkey.ai`', 'Defaults to `mp.us.prod.airs-gw.portkey.ai`, a host no doc page names; images from `registry.portkey.ai`'],
           ['Configuration.md', 'Registry `registry.airs-gw.portkey.ai`, tag 1.15.8, `NodePort`', 'Stale — values.yaml is the reference'],
           ['Linked pages', 'The chart README links CacheStore.md and DataService.md', 'Neither file exists — Redis.md covers the cache'],
         ],
@@ -298,6 +363,10 @@ export const AIGW_HYBRID = [
             text: 'The Enterprise Gateway changelog, read live — each release with its features, provider updates and fixes.', go: 'pillar:releaseNotes', goLabel: 'Open the release notes' },
           { icon: ScrollText, tone: '#EC4899', title: 'Org settings for hybrid', kicker: 'Governance',
             text: 'Gateway URLs, registration and the rest of the admin side.', go: 'gw-admin' },
+          { icon: Plug, tone: '#EC4899', title: 'Every auth type, SaaS vs hybrid', kicker: 'Model providers',
+            text: 'Bedrock, Vertex, Azure and Claude Platform on AWS — which credentials each accepts, and which need your own data plane.', go: 'gw-providers' },
+          { icon: Braces, tone: '#d946ef', title: 'Register a data plane from code', kicker: 'Admin API',
+            text: '`POST /deployments` returns the client auth key; `GET /deployments/{id}/ping` checks the connection.', go: 'gw-admin-api' },
         ],
       },
     ],

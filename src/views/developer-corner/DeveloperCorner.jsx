@@ -10,6 +10,7 @@ import { LangPref } from './CodeTabs'
 import { Block, DocLinks } from './Blocks'
 import { LivePanel, useDevStatus } from './LivePanel'
 import { GROUPS, GUIDES, GROUP_BY_ID, GUIDE_BY_ID, guideHaystack } from './guides'
+import { useAskDocs, AskRailCard, AskView, AskSources } from './AskDocs'
 
 /**
  * DeveloperCorner — the integration hub, in the launch design.
@@ -18,6 +19,9 @@ import { GROUPS, GUIDES, GROUP_BY_ID, GUIDE_BY_ID, guideHaystack } from './guide
  *   middle the guide: a band, then prose, steps, code, tables and callouts
  *   right  "Run it live": the guide's API call sent for real from this portal
  *          (/api/dev/*), request and response shown — or its references
+ *
+ * "Ask the AI Gateway docs" (AskDocs.jsx) takes over the middle and right
+ * panes: a question answered from the official docs, with its sources.
  *
  * Content is data (guides/*.js); code blocks can be built from the live
  * panel's inputs, so the snippet on the left is the request on the right.
@@ -142,7 +146,7 @@ function GroupCard({ t, group, items, total, open, onToggle, activeId, onPick, s
   )
 }
 
-function GuideRail({ t, activeId, onPick, query, setQuery, matches }) {
+function GuideRail({ t, activeId, onPick, query, setQuery, matches, ask }) {
   const inputRef = useRef(null)
   const counts = useMemo(() => Object.fromEntries(GROUPS.map((g) => [g.id, GUIDES.filter((x) => x.group === g.id).length])), [])
   const visible = GROUPS.map((g) => ({ g, items: GUIDES.filter((x) => x.group === g.id && (!matches || matches.has(x.id))) })).filter((x) => x.items.length)
@@ -203,6 +207,7 @@ function GuideRail({ t, activeId, onPick, query, setQuery, matches }) {
         </div>
       </div>
       <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-3 space-y-2" aria-label="Guides">
+        <AskRailCard t={t} active={ask.active} status={ask.status} query={query} onOpen={ask.open} onAskQuery={ask.askQuery} />
         {visible.length === 0 && <p className="px-2 py-6 text-center" style={{ fontFamily: FONT.prose, fontSize: 12.5, color: t.inkDim }}>Nothing matches. Try “oauth”, “429” or “helm”.</p>}
         {visible.map(({ g, items }) => (
           <GroupCard key={g.id} t={t} group={g} items={items} total={counts[g.id]} searching={!!matches}
@@ -374,12 +379,20 @@ export function DeveloperCorner() {
     return new Set(GUIDES.filter((g) => words.every((w) => haystacks[g.id].includes(w))).map((g) => g.id))
   }, [query, haystacks])
 
+  const [mode, setMode] = useState('guide') // guide | ask
+  const askDocs = useAskDocs()
   const pick = useCallback((id) => {
     if (!GUIDE_BY_ID[id]) return
-    setGuideId(id); store(GUIDE_KEY, id); setVars({}); setPreset(null)
+    setGuideId(id); store(GUIDE_KEY, id); setVars({}); setPreset(null); setMode('guide')
   }, [])
+  const railAsk = useMemo(() => ({
+    active: mode === 'ask', status: askDocs.status,
+    open: () => setMode('ask'),
+    askQuery: (q) => { setMode('ask'); setQuery(''); askDocs.ask(q) },
+  }), [mode, askDocs.status, askDocs.ask])
   const go = useCallback((target) => {
     if (typeof target === 'string' && target.startsWith('pillar:')) dispatch({ type: 'SET_VIEW', payload: target.slice(7) })
+    else if (target === 'ask') setMode('ask')
     else pick(target)
   }, [dispatch, pick])
   const run = useCallback((presetId) => setPreset({ id: presetId ?? null, n: Date.now() }), [])
@@ -400,15 +413,19 @@ export function DeveloperCorner() {
         {isNew && <PillarHeader pillarId="developerCorner" actions={<LiveReadiness t={t} status={status} />} />}
         <div className="relative flex-1 min-h-0 flex">
           <div className="relative flex-shrink-0 overflow-hidden py-3 pl-3" style={{ width: leftW }}>
-            <GuideRail t={t} activeId={guideId} onPick={pick} query={query} setQuery={setQuery} matches={matches} />
+            <GuideRail t={t} activeId={mode === 'guide' ? guideId : null} onPick={pick} query={query} setQuery={setQuery} matches={matches} ask={railAsk} />
           </div>
           <Handle t={t} side="left" dragging={dragL} onDrag={{ width: leftW, setWidth: setLeftW, setDragging: setDragL }} />
           <div className="relative flex-1 min-w-0">
-            <GuideView t={t} guide={guide} status={status} vars={vars} onGo={go} onRun={run} lang={lang} setLang={setLang} />
+            {mode === 'ask'
+              ? <AskView t={t} ask={askDocs} onGo={go} />
+              : <GuideView t={t} guide={guide} status={status} vars={vars} onGo={go} onRun={run} lang={lang} setLang={setLang} />}
           </div>
           <Handle t={t} side="right" dragging={dragR} onDrag={{ width: rightW, setWidth: setRightW, setDragging: setDragR }} />
           <div className="relative flex-shrink-0 overflow-hidden py-3 pr-3" style={{ width: rightW }}>
-            <LivePanel t={t} guide={guide} status={status} preset={preset} onVars={setVars} onGo={go} />
+            {mode === 'ask'
+              ? <AskSources t={t} ask={askDocs} />
+              : <LivePanel t={t} guide={guide} status={status} preset={preset} onVars={setVars} onGo={go} />}
           </div>
         </div>
       </div>

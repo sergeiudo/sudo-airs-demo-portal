@@ -14,7 +14,7 @@ export const START = [
     sub: 'Five ways Prisma AIRS plugs into an AI stack — and how they combine',
     minutes: 4,
     level: 'Orientation',
-    docs: pick('docsHub', 'pandev', 'pdfRuntime', 'pdfGateway'),
+    docs: pick('docsHub', 'pandev', 'pdfRuntime', 'agGateway', 'agGuardCaps'),
     blocks: [
       {
         type: 'prose',
@@ -59,8 +59,8 @@ export const START = [
         rows: [
           ['Where it enforces', 'In your code, around each model call', 'Inside the gateway, on every request through it', 'On the wire, at a Prisma AIRS firewall'],
           ['Code change', 'Add a scan call (or the SDK)', 'Change base URL + key', 'None'],
-          ['What it can see', 'Exactly what you send — prompts, answers, tool calls, context', 'Everything routed through the gateway (LLM, MCP, A2A)', 'All decrypted AI traffic on the segment'],
-          ['You decide on a block', 'Fully — your code handles the verdict', 'Gateway denies or logs, per guardrail', 'Firewall policy (block, alert)'],
+          ['What it can see', 'Exactly what you send — prompts, answers, tool calls, context', 'Everything routed through the gateway (LLM, MCP, A2A) — but the AIRS guardrail reads only the text of chat, messages and responses calls (embeddings: input; decisions: `state`). Images, audio, files, batches and MCP tool calls are not scanned.', 'All decrypted AI traffic on the segment'],
+          ['You decide on a block', 'Fully — your code handles the verdict', 'Per guardrail: deny, or let it through and mark it. Async (log only) is the default per the Guardrails pages — run it synchronously to block.', 'Firewall policy (block, alert)'],
           ['Typical first step', 'Get an API key and profile, then one cURL', 'Create an integration and a config in SCM', 'Terraform from SCM, or Helm on Kubernetes'],
         ],
       },
@@ -82,7 +82,7 @@ export const START = [
     sub: 'What you need in Strata Cloud Manager before writing code',
     minutes: 6,
     level: 'Setup',
-    docs: pick('pdfRuntime', 'scmTokens', 'rbac', 'docsHub'),
+    docs: pick('pdfRuntime', 'scmTokens', 'rbac', 'docsHub', 'agKeys', 'agAdminAuth'),
     blocks: [
       {
         type: 'prose',
@@ -94,7 +94,7 @@ export const START = [
         items: [
           { label: 'Runtime API (API intercept)', value: 'API key', sub: 'Sent as `x-pan-token`. Created per app in SCM; an OAuth token (1 h – 30 d) can replace it.' },
           { label: 'AI Gateway', value: 'Gateway API key', sub: 'Sent as `Authorization: Bearer` (or `x-portkey-api-key`). A signed JWT can stand in for it.' },
-          { label: 'Model Security · Red Teaming · Mgmt APIs', value: 'Service account', sub: 'Client ID + secret → OAuth2 token from `auth.apps.paloaltonetworks.com` with scope `tsg_id:<TSG>`.' },
+          { label: 'Model Security · Red Teaming · Mgmt APIs', value: 'Service account', sub: 'Client ID + secret → OAuth2 token from `auth.apps.paloaltonetworks.com` with scope `tsg_id:<TSG>`. The AI Gateway Admin API takes the same token; a gateway key gets 401 there.' },
           { label: 'Monthly quota (Runtime API)', value: 'Tokens', sub: 'Billions of tokens per month; 1 token ≈ 4 characters of prompt, response or tool call.', accent: true },
         ],
       },
@@ -123,7 +123,7 @@ curl -sS -X POST https://auth.apps.paloaltonetworks.com/oauth2/access_token \\
           ['Model Security SDK / CLI', 'Service account role with `ai_ms_pypi_auth`, `ai_ms.scans`, `ai_ms.security_groups`'],
           ['AI Red Teaming', 'Superuser, a read-only role with AI Red Teaming, or a custom role'],
           ['Red Teaming network-channel client', 'Service account with `airt.network_channels_client`'],
-          ['AI Gateway', 'Workspace-scoped access in SCM; gateway keys have ORGANISATION_SERVICE, WORKSPACE_SERVICE or WORKSPACE_USER roles'],
+          ['AI Gateway', 'Workspace-scoped access in SCM. Gateway keys are organisation (admin) keys or workspace Service / User keys; inference needs `completions.write`, MCP `mcp.invoke`. The Admin API takes a service-account token instead.'],
         ],
       },
       {
@@ -146,7 +146,9 @@ curl -sS -X POST https://auth.apps.paloaltonetworks.com/oauth2/access_token \\
           '`auth.apps.paloaltonetworks.com` — OAuth tokens for service accounts',
           '`api.sase.paloaltonetworks.com` — Model Security (`/aims`), Red Teaming, management APIs',
           '`*.pkg.dev`, `pypi.org`, `files.pythonhosted.org` — installing the Model Security client',
-          '`aigw.portkey.ai` — the SaaS AI Gateway',
+          '`aigw.portkey.ai` — the SaaS AI Gateway (`/v1`, realtime over `wss`, and the docs\' default MCP base `/m`)',
+          '`mcp-aigw.portkey.ai` — the MCP Gateway host this portal\'s tenant uses, and the Registry API\'s host in the docs',
+          '`api.apps.paloaltonetworks.com` — the AI Gateway Admin API (`/ai_gw/v2`, `/ai_gw/admin/v2`)',
           '`registry.ai-red-teaming.paloaltonetworks.com` — the Red Teaming network-channel client images',
         ],
       },

@@ -67,3 +67,6 @@ vertex-wif*.json
 private_key*
 jwks.json
 jwt-keys/
+
+# Local caches (AI Gateway docs corpus for the Developer Corner)
+.cache/

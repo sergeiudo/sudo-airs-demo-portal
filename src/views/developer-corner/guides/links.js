@@ -4,7 +4,7 @@
  * README, its PyPI metadata and older pan.dev pages still carry return 404
  * today (e.g. pan.dev/prisma-airs/scan/api/) — they are deliberately absent.
  */
-const AIGW = 'https://docs.gw.prismaairs.com/docs/aigw'
+const AIGW = 'https://portkey.ai/docs/aigw'
 
 export const L = {
   // pan.dev — AI Runtime (API intercept)
@@ -41,7 +41,6 @@ export const L = {
   // docs.paloaltonetworks.com
   docsHub:       { title: 'Prisma AIRS documentation', url: 'https://docs.paloaltonetworks.com/prisma-airs', source: 'docs', what: 'The product documentation hub.' },
   pdfRuntime:    { title: 'AI Runtime Security guide (PDF)', url: 'https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/prisma-airs/prisma-airs-ai-runtime-security.pdf', source: 'docs', what: 'API intercept onboarding, security profiles, rate limits, MCP threat detection, network intercept.' },
-  pdfGateway:    { title: 'AI Gateway guide (PDF)', url: 'https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/prisma-airs/ai-gateway.pdf', source: 'docs', what: 'The whole SCM AI Gateway admin guide.' },
   pdfAgentId:    { title: 'AI Agent Identity guide (PDF)', url: 'https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/prisma-airs/ai-agent-identity.pdf', source: 'docs', what: 'Includes the Prisma AIRS MCP server.' },
   pdfSupply:     { title: 'AI Supply Chain Security guide (PDF)', url: 'https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/prisma-airs/ai-supply-chain-security.pdf', source: 'docs', what: 'Model Security and Skill Security.' },
   pdfRedTeam:    { title: 'AI Red Teaming guide (PDF)', url: 'https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/prisma-airs/ai-red-teaming.pdf', source: 'docs', what: 'Targets, network channels, the Adapter SDK, reports.' },
@@ -54,9 +53,9 @@ export const L = {
   msInstall:     { title: 'Install AI Model Security', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/ai-model-security/model-security-to-secure-your-ai-models/get-started-with-ai-model-security/install-ai-model-security', source: 'docs', what: 'Private index script, environment variables, requirements.' },
   msScanning:    { title: 'Scanning models', url: 'https://docs.paloaltonetworks.com/ai-runtime-security/ai-model-security/model-security-to-secure-your-ai-models/get-started-with-ai-model-security/scanning-models', source: 'docs', what: 'Hugging Face, local and object-storage scans; options.' },
 
-  // Prisma AIRS AI Gateway developer docs — docs.gw.prismaairs.com (the same
-  // pages are also served under docs.portkey.ai/docs/aigw/, which now redirects
-  // to portkey.ai). Checked on 2026-10-01: each returned HTTP 200.
+  // Prisma AIRS AI Gateway developer docs — portkey.ai/docs/aigw (docs.portkey.ai
+  // redirects there; docs.gw.prismaairs.com serves the identical pages). Moved
+  // to portkey.ai on 2026-10-08 at the user's request; every link re-checked.
   gwDevSetup:    { title: 'AI Gateway developer docs — simple setup', url: `${AIGW}/introduction/simple-setup`, source: 'aigw', what: 'Workspace, integration, key, first request, logs — the minimal path.' },
   gwDevJwt:      { title: 'AI Gateway — JWT authentication', url: `${AIGW}/product/enterprise-offering/org-management/jwt`, source: 'aigw', what: 'JWKS, RS256, required claims.' },
   gwDevGuard:    { title: 'AI Gateway — PANW Prisma AIRS guardrail', url: `${AIGW}/integrations/guardrails/palo-alto-panw-prisma`, source: 'aigw', what: 'Guardrail parameters: profile, scan scope, strip scaffolding.' },
@@ -90,7 +89,7 @@ export const L = {
   agBeta:        { title: 'Beta features', url: `${AIGW}/product/ai-gateway/beta-features`, source: 'aigw', what: 'Opt in with the x-portkey-beta header.' },
 
   // AIGW — routing and reliability
-  agGateway:     { title: 'AI Gateway — routing and reliability', url: `${AIGW}/product/ai-gateway`, source: 'aigw', what: 'Routing, fallbacks, retries, caching and guardrails.' },
+  agGateway:     { title: 'AI Gateway — features', url: `${AIGW}/product/ai-gateway`, source: 'aigw', what: 'Universal API, cache, fallbacks, routing, retries, circuit breaker, load balancing, canary, gRPC, timeouts, custom hosts.' },
   agConfigs:     { title: 'Configs', url: `${AIGW}/product/ai-gateway/configs`, source: 'aigw', what: 'The pc- config object and how a request picks it up.' },
   agConditional: { title: 'Conditional routing', url: `${AIGW}/product/ai-gateway/conditional-routing`, source: 'aigw', what: 'Route on metadata and request parameters.' },
   agFallbacks:   { title: 'Fallbacks', url: `${AIGW}/product/ai-gateway/fallbacks`, source: 'aigw', what: 'Switch to a backup target when the primary fails.' },
@@ -166,8 +165,8 @@ export const L = {
   agHybridArch:  { title: 'Hybrid deployment — architecture', url: `${AIGW}/self-hosting/hybrid-deployments/architecture`, source: 'aigw', what: 'Data plane vs management plane, sync, and what leaves the cluster.' },
   agCacheBehave: { title: 'Data plane cache behaviour', url: `${AIGW}/self-hosting/cache-behavior`, source: 'aigw', what: 'Delta sync every minute, 7-day cache TTL, what is pushed back.' },
   agPrivateNet:  { title: 'Private network access', url: `${AIGW}/self-hosting/private-network-access`, source: 'aigw', what: 'TRUSTED_CUSTOM_HOSTS for private upstream hosts.' },
-  agChangelog:   { title: 'Enterprise Gateway changelog', url: 'https://docs.gw.prismaairs.com/docs/changelog/enterprise', source: 'aigw', what: 'Every gateway release — the versions images.gatewayImage.tag accepts.' },
-  agDsChangelog: { title: 'Data service changelog', url: 'https://docs.gw.prismaairs.com/docs/changelog/data-service', source: 'aigw', what: 'The optional data-service image and which gateway it needs.' },
+  agChangelog:   { title: 'Enterprise Gateway changelog', url: 'https://portkey.ai/docs/changelog/enterprise', source: 'aigw', what: 'Every gateway release — the versions images.gatewayImage.tag accepts.' },
+  agDsChangelog: { title: 'Data service changelog', url: 'https://portkey.ai/docs/changelog/data-service', source: 'aigw', what: 'The optional data-service image and which gateway it needs.' },
   ghAirsGwHelm:  { title: 'airs-gw Helm chart', url: 'https://github.com/Portkey-AI/airs-gw-helm', source: 'github', what: 'The hybrid data-plane chart and its per-topic docs.' },
   ghAirsGwRel:   { title: 'airs-gw chart releases', url: 'https://github.com/Portkey-AI/airs-gw-helm/releases', source: 'github', what: 'Chart versions, the gateway each installs, and what changed.' },
   ghAirsGwValues:{ title: 'airs-gw values.yaml', url: 'https://github.com/Portkey-AI/airs-gw-helm/blob/main/charts/airs-gw/values.yaml', source: 'github', what: 'Every key the chart accepts, with its default.' },
@@ -229,6 +228,67 @@ export const L = {
   ghRag:         { title: 'airs-api-intercept-rag-app', url: 'https://github.com/PaloAltoNetworks/airs-api-intercept-rag-app', source: 'github', what: 'Sample RAG app on Bedrock with API intercept.' },
   litellm:       { title: 'LiteLLM — PANW Prisma AIRS guardrail', url: 'https://docs.litellm.ai/docs/proxy/guardrails/panw_prisma_airs', source: 'other', what: 'Native guardrail in the LiteLLM proxy.' },
   kong:          { title: 'Kong — Prisma AIRS API Intercept plugin', url: 'https://developer.konghq.com/plugins/prisma-airs-intercept/', source: 'other', what: 'Kong Plugin Hub entry.' },
+  // AI Gateway docs added with the 2026-10-08 docs audit (each checked: HTTP 200)
+  agAb03:        { title: 'Error AB03 — not enough permissions', url: `${AIGW}/help-center/you-do-not-have-enough-permissions`, source: 'aigw', what: 'Scopes each endpoint needs, key types and roles.' },
+  agAca:         { title: 'Hybrid on Azure Container Apps (Terraform)', url: `${AIGW}/self-hosting/hybrid-deployments/azure/aca`, source: 'aigw', what: 'Terraform module, Key Vault secret names, App Gateway ingress.' },
+  agAdminAuth:   { title: 'Admin API — authentication', url: `${AIGW}/api-reference/admin-api/authentication`, source: 'aigw', what: 'SCM service-account token; gateway keys get 401.' },
+  agAgentServers: { title: 'Agent Gateway — agent servers', url: `${AIGW}/product/agent-gateway/servers`, source: 'aigw', what: 'The gateway address callers use for a registered agent.' },
+  agAgentcore:   { title: 'AWS AgentCore', url: `${AIGW}/integrations/agents/agentcore`, source: 'aigw', what: 'Agents in Bedrock AgentCore with the AI Gateway as LLM gateway.' },
+  agAks:         { title: 'Hybrid on Azure Kubernetes Service', url: `${AIGW}/self-hosting/hybrid-deployments/azure/aks`, source: 'aigw', what: 'Helm on AKS: Azure Managed Redis, Blob, workload identity.' },
+  agAzureAuth:   { title: 'Azure — authentication modes', url: `${AIGW}/integrations/llms/azure-openai/authentication`, source: 'aigw', what: 'apiKey, entra, managed, workload, entraFederated — which are hybrid-only.' },
+  agAzureFoundry: { title: 'Azure AI Foundry integration', url: `${AIGW}/integrations/llms/azure-foundry`, source: 'aigw', what: 'Foundry deployment kinds, including Claude on Foundry.' },
+  agAzureOpenai: { title: 'Azure OpenAI integration', url: `${AIGW}/integrations/llms/azure-openai/azure-openai`, source: 'aigw', what: 'Resource, deployments and API versions through the gateway.' },
+  agBedrock:     { title: 'AWS Bedrock integration', url: `${AIGW}/integrations/llms/bedrock/aws-bedrock`, source: 'aigw', what: 'Auth types, inference profiles, PrivateLink, GovCloud, Bedrock Guardrails.' },
+  agBedrockLlm:  { title: 'Amazon Bedrock integration', url: `${AIGW}/integrations/llms/bedrock/aws-bedrock`, source: 'aigw', what: 'Bedrock auth types, inference profiles, reasoning_effort mapping.' },
+  agBedrockMantle: { title: 'Amazon Bedrock Mantle', url: `${AIGW}/integrations/llms/bedrock-mantle`, source: 'aigw', what: 'OpenAI-compatible Bedrock: chat, Responses and Messages.' },
+  agByoa:        { title: 'MCP Gateway — bring your own auth', url: `${AIGW}/product/mcp-gateway/authentication/external-oauth`, source: 'aigw', what: 'IdP tokens checked per server, on top of a gateway credential.' },
+  agClaudeAnthropic: { title: 'Claude Code with Anthropic', url: `${AIGW}/integrations/libraries/claude-code-anthropic`, source: 'aigw', what: 'Claude Code → gateway → Anthropic, with forward_headers config.' },
+  agClaudeAws:   { title: 'Claude Platform on AWS', url: `${AIGW}/integrations/llms/claude-platform-aws/claude-platform-aws`, source: 'aigw', what: 'Anthropic\'s platform via AWS: SigV4, IAM namespace, model ids.' },
+  agClaudeAwsBeta: { title: 'Claude Platform (AWS) — beta page', url: `${AIGW}/integrations/llms/claude-platform-aws`, source: 'aigw', what: 'aws_auth_type fields; workspace id required; Backend 1.17.0+.' },
+  agClaudeAwsRole: { title: 'Claude Platform on AWS — assumed role', url: `${AIGW}/integrations/llms/claude-platform-aws/setup-assumed-role`, source: 'aigw', what: 'IAM role and trust policy for the SaaS gateway.' },
+  agCreateGuard: { title: 'Admin API — create a guardrail', url: `${AIGW}/api-reference/guardrails/create-guardrail`, source: 'aigw', what: 'Check ids, Prisma AIRS parameters and the actions object.' },
+  agDecisionsGuard: { title: 'Guardrails on the Decisions API', url: `${AIGW}/product/guardrails/decisions-guardrails`, source: 'aigw', what: 'State-only scanning, hard deny and softDeny200 shapes.' },
+  agEcs:         { title: 'Hybrid on Amazon ECS (Terraform)', url: `${AIGW}/self-hosting/hybrid-deployments/aws/ecs`, source: 'aigw', what: 'Terraform module, secrets as ARNs, version pinning and upgrades.' },
+  agEks:         { title: 'Hybrid on Amazon EKS', url: `${AIGW}/self-hosting/hybrid-deployments/aws/eks`, source: 'aigw', what: 'Helm on EKS: sizing, IRSA or Pod Identity, ElastiCache, load balancers.' },
+  agGke:         { title: 'Hybrid on Google Kubernetes Engine', url: `${AIGW}/self-hosting/hybrid-deployments/gcp`, source: 'aigw', what: 'Helm on GKE: proxy subnet, Memorystore, GCS, workload identity.' },
+  agGuardBatches: { title: 'Guardrails for batches', url: `${AIGW}/product/guardrails/guardrails-for-batches`, source: 'aigw', what: 'Guardrails on provider batch files via portkey_options.' },
+  agGuardMcpSync: { title: 'Admin API — map a guardrail to MCP servers', url: `${AIGW}/api-reference/guardrails/bulk-sync-guardrail-mcp-servers`, source: 'aigw', what: 'Replace the MCP servers and tools a guardrail runs on.' },
+  agHelpAb03:    { title: 'Error AB03: not enough permissions', url: `${AIGW}/help-center/you-do-not-have-enough-permissions`, source: 'aigw', what: 'Scopes per endpoint, key types, and the AB03 error body.' },
+  agHelpMcp:     { title: 'MCP Gateway troubleshooting', url: `${AIGW}/help-center/mcp-gateway-troubleshooting`, source: 'aigw', what: 'Status triage, URL pattern, OAuth and key-type failures.' },
+  agMantle:      { title: 'Amazon Bedrock Mantle integration', url: `${AIGW}/integrations/llms/bedrock-mantle`, source: 'aigw', what: 'Bedrock\'s OpenAI- and Anthropic-native endpoints through the gateway.' },
+  agMcpAuthz:    { title: 'MCP Gateway — authorization', url: `${AIGW}/product/mcp-gateway/authorization`, source: 'aigw', what: 'Server access by JWT claims; tool-level rules coming soon.' },
+  agMcpTrouble:  { title: 'MCP Gateway troubleshooting', url: `${AIGW}/help-center/mcp-gateway-troubleshooting`, source: 'aigw', what: 'Status triage, key types, OAuth registration failures, hybrid limits.' },
+  agOtelLogs:    { title: 'OpenTelemetry — complete logs export', url: `${AIGW}/product/enterprise-offering/otel/complete-logs`, source: 'aigw', what: 'Experimental GenAI-semconv log export, self-hosted only.' },
+  agPrometheus:  { title: 'Prometheus metrics (self-hosted)', url: `${AIGW}/self-hosting/prometheus-metrics`, source: 'aigw', what: 'GET /metrics: metric names, labels and the switches.' },
+  agResponseSchema: { title: 'Inference API — response headers', url: `${AIGW}/api-reference/inference-api/response-schema`, source: 'aigw', what: 'Trace id, retry count, cache status, which config target served.' },
+  agVertex:      { title: 'Google Vertex AI integration', url: `${AIGW}/integrations/llms/vertex-ai`, source: 'aigw', what: 'Auth paths, regions, workload identity, Anthropic model naming.' },
+  agVertexLlm:   { title: 'Google Vertex AI integration', url: `${AIGW}/integrations/llms/vertex-ai`, source: 'aigw', what: 'Vertex auth, regions, Claude on Vertex, thought signatures.' },
+  arAdminAuth:   { title: 'Admin API — authentication', url: `${AIGW}/api-reference/admin-api/authentication`, source: 'aigw', what: 'SCM service account, 15-minute token, TSG hierarchy, access policies.' },
+  arAdminErrors: { title: 'Admin API — errors', url: `${AIGW}/api-reference/admin-api/error`, source: 'aigw', what: 'AB01–AB09 and their usual causes.' },
+  arAdminIntro:  { title: 'Admin API — introduction', url: `${AIGW}/api-reference/admin-api/introduction`, source: 'aigw', what: 'Base URLs, organisation vs workspace scoping, common multi-call tasks.' },
+  arAnalyticsCost: { title: 'Admin API — cost analytics graph', url: `${AIGW}/api-reference/analytics/graphs/get-analytics-graphs-cost`, source: 'aigw', what: 'Spend over time; needs workspace_slug and a time window.' },
+  arConfigObject: { title: 'Inference API — config object', url: `${AIGW}/api-reference/inference-api/config-object`, source: 'aigw', what: 'JSON schema of a gateway config: routing, retries, cache, guardrails.' },
+  arCreateApiKey: { title: 'Admin API — create API key', url: `${AIGW}/api-reference/api-keys/post-api-keys-by-sub-type`, source: 'aigw', what: 'POST /api-keys/{user|service}: scopes, defaults, limits, rotation.' },
+  arCreateConfig: { title: 'Admin API — create config', url: `${AIGW}/api-reference/configs/create-config`, source: 'aigw', what: 'POST /configs: name, config object, workspace_id.' },
+  arCreateDeployment: { title: 'Admin API — create deployment', url: `${AIGW}/api-reference/deployments/create-deployment`, source: 'aigw', what: 'Register a hybrid data plane; returns its client auth.' },
+  arCreateGuard: { title: 'Create guardrail (API reference)', url: `${AIGW}/api-reference/guardrails/create-guardrail`, source: 'aigw', what: 'Workspace guardrail schema: checks, actions, target, check ids.' },
+  arCreateGuardrail: { title: 'Admin API — create guardrail', url: `${AIGW}/api-reference/guardrails/create-guardrail`, source: 'aigw', what: 'Workspace guardrail schema, including the panw-prisma-airs.intercept check.' },
+  arCreateIntegration: { title: 'Admin API — create integration', url: `${AIGW}/api-reference/integrations/post-integrations`, source: 'aigw', what: 'Provider credentials as code; per-provider configuration variants.' },
+  arCreateMcpIntegration: { title: 'Admin API — create MCP integration', url: `${AIGW}/api-reference/mcp-integrations/mcp-integrations-create`, source: 'aigw', what: 'Org-level MCP registry entry: URL, auth type, transport.' },
+  arCreateMcpServer: { title: 'Admin API — create MCP server', url: `${AIGW}/api-reference/mcp-servers/mcp-servers-create`, source: 'aigw', what: 'Workspace MCP server; requires an MCP integration id.' },
+  arCreateOrgGuardrail: { title: 'Admin API — create org guardrail', url: `${AIGW}/api-reference/org-guardrails/create-org-guardrail`, source: 'aigw', what: 'Organisation-wide guardrails on the admin base.' },
+  arDeployments: { title: 'Create deployment (hybrid data plane)', url: `${AIGW}/api-reference/deployments/create-deployment`, source: 'aigw', what: 'Register a hybrid gateway by API; returns client auth.' },
+  arErrorCodes:  { title: 'Inference API — error codes', url: `${AIGW}/api-reference/inference-api/error-codes`, source: 'aigw', what: '408, 412, 429 and the guardrail 446 / 246.' },
+  arErrors:      { title: 'Inference API — error codes', url: `${AIGW}/api-reference/inference-api/error-codes`, source: 'aigw', what: 'HTTP codes the gateway returns, including 246, 446, 408, 412.' },
+  arGetLog:      { title: 'API reference — get a log', url: `${AIGW}/api-reference/logs/get-logs-by-log-id`, source: 'aigw', what: 'GET /logs/{logId} on the gateway host.' },
+  arLogsInsert:  { title: 'Insert a log (POST /logs)', url: `${AIGW}/api-reference/logs/post-logs`, source: 'aigw', what: 'Write calls made outside the gateway into its logs.' },
+  arOrgGuard:    { title: 'Create organisation guardrail', url: `${AIGW}/api-reference/org-guardrails/create-org-guardrail`, source: 'aigw', what: 'Org-wide guardrails on the /ai_gw/admin/v2 Admin API.' },
+  arRatePolicy:  { title: 'Admin API — create rate-limit policy', url: `${AIGW}/api-reference/rate-limit-policies/create-rate-limits-policy`, source: 'aigw', what: 'Rate policies for LLM calls or MCP tools.' },
+  arResponseSchema: { title: 'Inference API — response schema', url: `${AIGW}/api-reference/inference-api/response-schema`, source: 'aigw', what: 'Gateway response headers: trace id, cache status, retries, target index.' },
+  arSupportedProviders: { title: 'Inference API — supported providers', url: `${AIGW}/api-reference/inference-api/supported-providers`, source: 'aigw', what: 'Provider capability matrix — unreliable, see the guide.' },
+  arUsagePolicy: { title: 'Admin API — create usage-limit policy', url: `${AIGW}/api-reference/usage-limit-policies/create-usage-limits-policy`, source: 'aigw', what: 'Budget policies: flat body, cost or tokens.' },
+  ghGwInfra:     { title: 'portkey-gateway-infrastructure', url: `https://github.com/Portkey-AI/portkey-gateway-infrastructure`, source: 'github', what: 'The Terraform modules behind the ECS and ACA pages.' },
+  ghGwInfraBedrock: { title: 'ECS Terraform — Bedrock access', url: `https://github.com/Portkey-AI/portkey-gateway-infrastructure/blob/main/terraform/ecs/docs/Bedrock.md`, source: 'github', what: 'Same-account AWS Service Role and cross-account assumed role.' },
 }
 
 export const pick = (...keys) => keys.map((k) => L[k]).filter(Boolean)

@@ -1,8 +1,8 @@
-import { Activity, Fingerprint, Network, Terminal } from 'lucide-react'
+import { Activity, Fingerprint, Layers, Network, Terminal } from 'lucide-react'
 import { pick } from './links'
 
 /**
- * Prisma AIRS AI Gateway — the developer docs at docs.gw.prismaairs.com, read
+ * Prisma AIRS AI Gateway — the developer docs at portkey.ai/docs/aigw, read
  * end to end on 2026-10-01 and folded into guides: the Universal API, routing
  * and reliability, the guardrail framework, observability, the MCP and Agent
  * gateways, coding agents, and the governance / admin side.
@@ -44,6 +44,7 @@ const CFG_BREAKER = `{
   "strategy": {
     "mode": "fallback",
     "cb_config": {
+      "failure_threshold": 5,
       "failure_threshold_percentage": 20,
       "minimum_requests": 10,
       "cooldown_interval": 60000,
@@ -65,7 +66,7 @@ const CFG_CONDITIONAL = `{
           { "metadata.env": { "$eq": "prod" } },
           { "params.temperature": { "$lte": 0.3 } }
         ] }, "then": "large" },
-      { "query": { "url.pathname": { "$regex": "^/v1/embeddings" } }, "then": "embed" }
+      { "query": { "url.pathname": { "$regex": "/embeddings$" } }, "then": "embed" }
     ],
     "default": "small"
   },
@@ -260,6 +261,25 @@ curl -s -X POST $GW/logs/exports/$ID/start -H "Authorization: Bearer $PORTKEY_AP
 until curl -s $GW/logs/exports/$ID -H "Authorization: Bearer $PORTKEY_API_KEY" | jq -e '.status | test("success|failure")' >/dev/null; do sleep 5; done
 curl -s $GW/logs/exports/$ID/download -H "Authorization: Bearer $PORTKEY_API_KEY"   # → a signed URL to a JSONL file`
 
+const LOG_INSERT = `# Log a call that did not go through the gateway — one object or an array of them.
+# Scopes (AB03 help page): completions.write AND logs.write.
+curl https://aigw.portkey.ai/v1/logs \\
+  -H "Authorization: Bearer $PORTKEY_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "request": {
+      "url": "https://llm.internal.example.com/v1/chat/completions",
+      "method": "POST",
+      "body": { "model": "in-house-llm", "messages": [{ "role": "user", "content": "Hi" }] }
+    },
+    "response": {
+      "status": 200,
+      "response_time": 412,
+      "body": { "choices": [{ "message": { "role": "assistant", "content": "Hello" } }] }
+    },
+    "metadata": { "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "_user": "u-123" }
+  }'`
+
 // ─── Universal API ───────────────────────────────────────────────────────────
 
 const ASK = 'Summarise our refund policy in one line.'
@@ -273,7 +293,7 @@ const UNIVERSAL_TABS = [
     "max_tokens": 300,
     "messages": [{ "role": "user", "content": "${ASK}" }]
   }'` },
-  { id: 'messages', label: 'Messages', lang: 'curl', code: `# Anthropic's format — native for Claude on Anthropic and Bedrock, translated for the rest
+  { id: 'messages', label: 'Messages', lang: 'curl', code: `# Anthropic's format — native for Claude (Anthropic, Bedrock and other Claude hosts), translated for the rest
 curl https://aigw.portkey.ai/v1/messages \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $PORTKEY_API_KEY" \\
@@ -453,7 +473,11 @@ model = "@openai-prod/gpt-4o"            # always @slug/model
 name = "Prisma AIRS AI Gateway"
 base_url = "https://aigw.portkey.ai/v1"
 env_key = "PORTKEY_API_KEY"              # export PORTKEY_API_KEY=<gateway key>
-# wire_api = "responses"                 # default "chat"`
+wire_api = "responses"                   # the only value current Codex accepts (and its default)
+
+# Optional gateway headers on every request
+http_headers = { "x-portkey-config" = "pc-codex-prod" }
+env_http_headers = { "x-portkey-metadata" = "PORTKEY_METADATA" }   # value read from $PORTKEY_METADATA`
 
 export const AIGW_GATEWAY = [
   {
@@ -461,9 +485,9 @@ export const AIGW_GATEWAY = [
     group: 'gateway',
     title: 'Fallbacks, retries, load balancing and caching',
     sub: 'Reliability in a saved config — the app keeps calling one model',
-    minutes: 8,
+    minutes: 10,
     level: 'Build',
-    docs: pick('agConfigs', 'agFallbacks', 'agRetries', 'agLoadBalance', 'agConditional', 'agCircuit', 'agCache', 'agTimeouts', 'agCanary', 'agDefaultCfg', 'agSavedOnly'),
+    docs: pick('agConfigs', 'agFallbacks', 'agRetries', 'agLoadBalance', 'agConditional', 'agCircuit', 'agCache', 'agTimeouts', 'agCanary', 'agDefaultCfg', 'agSavedOnly', 'arConfigObject', 'arResponseSchema', 'agChangelog'),
     blocks: [
       {
         type: 'prose',
@@ -493,8 +517,9 @@ export const AIGW_GATEWAY = [
           ['Fallback', '`strategy.mode: "fallback"`', 'Next target on **any non-2xx**; narrow it with `strategy.on_status_codes`.'],
           ['Load balance', '`strategy.mode: "loadbalance"`, `weight` per target', 'Weights are relative and normalised (unset = 1; 0 parks a target without removing it). Optional sticky sessions: `strategy.sticky` with `hash_fields` and `ttl` (seconds, default 3600).'],
           ['Conditional', '`strategy.mode: "conditional"`', '`conditions` and `default` are required; the first matching condition wins.'],
-          ['Retry', '`retry.attempts`, `retry.on_status_codes`', 'Up to **5**. Default codes `429, 500, 502, 503, 504, 529` — setting your own replaces them. Backoff 1, 2, 4, 8, 16 s, or the provider\'s `retry-after` with `use_retry_after_headers`. Total wait is capped at **60 s**.'],
-          ['Circuit breaker', '`strategy.cb_config`', '`failure_threshold` or `failure_threshold_percentage` (+ `minimum_requests`), `failure_status_codes`, `cooldown_interval` in **ms** (minimum 30 s). Open targets are skipped; if every target is open, all are used.'],
+          ['Passthrough target', '`"passthrough": true` on a target', 'No `provider`: the target takes it from the request — `x-portkey-provider: @slug`, else the `@slug/` in `model` — so one fallback chain can front whichever provider the caller names. The documented answer to the provider-pin pitfall below; untested on this tenant.'],
+          ['Retry', '`retry.attempts`, `retry.on_status_codes`', 'Up to **5**. Default codes `429, 500, 502, 503, 504, 529` — setting your own replaces them. Backoff 1, 2, 4, 8, 16 s, or the provider\'s `retry-after` with `use_retry_after_headers` (a single value over 60 s fails the request at once). Total wait is capped at **60 s**.'],
+          ['Circuit breaker', '`cb_config` (under `strategy` on the product page)', '`failure_threshold` and/or `failure_threshold_percentage` (+ `minimum_requests` before the rate counts), `failure_status_codes` (default "> 500"), `cooldown_interval` in **ms** (minimum 30 s). A strategy without `cb_config` inherits its parent\'s; targets inherit their strategy\'s. State is kept per strategy path; an open target is skipped and closes by itself after the cooldown (no half-open probe is documented); if every target is open, the breaker is bypassed and all are used.'],
           ['Timeout', '`request_timeout` (ms) or `x-portkey-request-timeout`', 'Returns **408**, per attempt. A stream that has delivered its first chunk is not timed out.'],
           ['Cache', '`cache.mode` (`simple` or `semantic`), `max_age` (s)','Minimum 60 s, default 7 days, maximum 90 days; an organisation-level TTL caps it.'],
           ['Request shaping', '`default_params` → `override_params` → `drop_params`', 'Fill a missing field, force a field, or delete one (dot paths, `[n]` and `[*]`). Applied in that order; inherited by nested targets.'],
@@ -513,16 +538,21 @@ export const AIGW_GATEWAY = [
         ],
       },
       {
-        type: 'callout', tone: 'docs', title: 'Status codes chain together',
+        type: 'callout', tone: 'docs', title: 'The circuit breaker has two published shapes',
+        text: 'The Circuit Breaker page nests `cb_config` under `strategy`, and its example uses only `failure_threshold_percentage` + `minimum_requests`. The Gateway Config Object schema puts `cb_config` at the config root, requires `failure_threshold` **and** `cooldown_interval`, and lists neither `failure_threshold_percentage` nor `minimum_requests`. The tab above follows the product page and adds `failure_threshold`, so it carries both required fields — test the placement on your tenant. The default "> 500" read literally leaves out 500 itself; list the codes you mean.',
+      },
+      {
+        type: 'callout', tone: 'warn', title: 'Status codes chain together — with three catches',
         text: [
-          'Three things produce a status the other blocks can act on: a **timeout** gives `408`, a failed sync guardrail gives `246` (allowed) or `446` (denied), and the provider gives its own. So `"on_status_codes": [408]` on a fallback means "fall back only on timeout", and `[246, 446]` means "try the next model when the guardrail fails".',
-          '`408` is **not** in the default retry list — add it explicitly. The three keys are spelled differently: `strategy.on_status_codes` (fallback), `retry.on_status_codes` (retry), `strategy.cb_config.failure_status_codes` (circuit breaker).',
+          'Three things produce a status the other blocks can act on: a **timeout** gives `408`, a failed sync guardrail gives `246` (let through) or `446` (denied), and the provider gives its own. So `"on_status_codes": [408]` on a fallback means "fall back only on timeout", and the Guardrails page uses `[246, 446]` for "try the next model when the guardrail fails".',
+          '`246` is a 2xx, so the default any-non-2xx fallback never fires on it — list it. A denied request on this portal\'s SCM tenant comes back as **HTTP 200** (the `soft_deny_200` shape, gateway 2.14.0 — see "Guardrail actions, verdicts and PII redaction"), so a fallback on `446` may never fire there; that combination is untested. And output-guardrail results on a stream are informational only — no fallback, no retry.',
+          '`408` is **not** in the default retry list — add it explicitly. The three keys are spelled differently: `strategy.on_status_codes` (fallback), `retry.on_status_codes` (retry), `cb_config.failure_status_codes` (circuit breaker). Over gRPC (self-run gateway only) the call itself returns OK and the HTTP status sits in the response\'s `status_code`.',
         ],
       },
       {
         type: 'code',
         title: 'Conditional routing',
-        text: 'Route on `metadata.<key>` (from `x-portkey-metadata` or the key/JWT defaults), `params.<key>` (any top-level body field with a primitive value) or `url.pathname`. Operators: `$eq` `$ne` `$in` `$nin` `$regex` `$gt` `$gte` `$lt` `$lte`, combined with `$and` / `$or`.',
+        text: 'Route on `metadata.<key>` (from `x-portkey-metadata` or the key/JWT defaults), `params.<key>` (any top-level body field with a primitive value — and, since gateway 2.25.0, text fields of multipart/form-data requests such as image edits and transcriptions) or `url.pathname`. Operators: `$eq` `$ne` `$in` `$nin` `$regex` `$gt` `$gte` `$lt` `$lte`, combined with `$and` / `$or`. The page does not say whether `url.pathname` includes `/v1` (its intro says "route `/v1/embeddings`", its one example matches `^/responses`), so the sample uses an unanchored `/embeddings$`, which matches either way — untested.',
         tabs: [{ id: 'json', lang: 'json', file: 'pc-conditional', code: CFG_CONDITIONAL }],
       },
       {
@@ -531,12 +561,18 @@ export const AIGW_GATEWAY = [
         columns: ['Rule', 'What it means'],
         rows: [
           ['Two-segment paths only', '`metadata.tier` works; `metadata.features.beta` does not.'],
-          ['Primitive values only', 'Metadata values are strings; `params.*` can be string, number or boolean — not arrays or objects.'],
-          ['Missing key = false', 'A condition on a key the caller did not send is simply false — no error, the next condition is tried.'],
+          ['Primitive values only', 'Metadata values are strings (Metadata page: strings of at most 128 characters — yet the Conditional Routing page matches `{"$eq": true}` on metadata); `params.*` can be string, number or boolean — not arrays or objects.'],
+          ['Missing key = false', 'A condition on a key the caller did not send is simply false — no error, the next condition is tried. Malformed conditions are skipped the same way.'],
           ['`$regex`', 'A JavaScript regex with no flags — case-sensitive; an invalid pattern evaluates to false.'],
-          ['Order matters', 'Conditions are evaluated top to bottom; put specific ones first and make `default` the most restricted target.'],
+          ['Order matters', 'Conditions are evaluated top to bottom; put specific ones first. Making `default` the cheapest or most restricted target is this guide\'s advice, not the docs\'.'],
           ['No circuit breaker', '`cb_config` is not evaluated for conditional strategies.'],
+          ['Fan-out caps', 'At most 100 root targets (1,000 for a conditional strategy) and 50 nested targets per root target; a bigger config is rejected at request time (gateway 2.14.0).'],
         ],
+      },
+      {
+        type: 'prose',
+        title: 'Canary releases',
+        text: 'A canary is a `loadbalance` config with a small weight on the new target — 0.95 / 0.05, or the 0.9 / 0.1 of the "Weighted + sticky" tab above. The app sends the same request; compare cost, latency, errors and feedback in Analytics. Keep `strategy.sticky` so each user stays on one side, or route an opt-in cohort with a conditional rule on a metadata key (`metadata.user_group` = `beta`) instead of a random slice. Do not copy the Canary Testing page\'s JSON — it is missing a closing brace.',
       },
       {
         type: 'table',
@@ -546,21 +582,37 @@ export const AIGW_GATEWAY = [
           ['Matches', 'The exact body, metadata and cache namespace', 'User text above a similarity threshold (default 0.95) **and** identical model and parameters'],
           ['Endpoints', 'All, including image generation', '`/chat/completions` and `/completions` only'],
           ['Limits', '—', 'Under 8,191 tokens and at most 4 messages; the system prompt is ignored'],
-          ['Force a fresh answer', '`x-portkey-cache-force-refresh: true` on the request (needs a cache config)', 'Same — refreshes every matching entry'],
+          ['Force a fresh answer', '`x-portkey-cache-force-refresh: true` on the request (needs a cache config; cannot be set in a config)', 'Same — refreshes every matching entry'],
           ['Partition', '`x-portkey-cache-namespace: <string>` instead of all headers', 'Same'],
+          ['Scope', 'Top level or per target — a target\'s own `cache` wins. A target with `override_params` hits only once that exact parameter combination is cached.', 'Same'],
+          ['TTL', '`max_age` from 60 s to 90 days, default 7 days. The organisation TTL (Admin Settings → Organisation Properties → Cache Settings, at most 25,923,000 s) wins when a request asks for longer.', 'Same'],
+          ['Status', 'Header `x-portkey-cache-status`: `HIT`, `MISS`, `DISABLED`, `REFRESH`. Logs: Cache Hit, Cache Miss, Cache Refreshed, Cache Disabled', '`SEMANTIC HIT` / `SEMANTIC MISS`; Logs: Cache Semantic Hit'],
+          ['Never cached', 'A stream that ends without its terminal event — the gateway appends a `stream_incomplete` error event and keeps it out of the cache (2.24.0)', 'Same'],
         ],
-        note: 'The docs describe semantic-cache setup (a vector database and an embedding provider) only for self-hosted gateways and do not say whether the SaaS gateway offers it. `x-portkey-debug: false` disables caching for that request.',
+        note: 'The docs describe semantic-cache setup (a vector database and an embedding provider) only for self-hosted gateways and do not say whether the SaaS gateway offers it. `x-portkey-debug: false` disables caching for that request; Nitro mode ignores `cache` silently.',
+      },
+      {
+        type: 'table',
+        title: 'Recent gateway releases that change routing',
+        columns: ['Version', 'Change'],
+        rows: [
+          ['2.24.0 (22 Sep 2026)', 'Every retry attempt is logged as its own row under the same trace id — the Retries page still says attempts are not logged individually.'],
+          ['2.25.0 (24 Sep)', 'Conditional routing reads text fields of multipart/form-data requests.'],
+          ['2.25.1 (29 Sep)', 'Streamed Responses API errors from non-native providers carry the real upstream status instead of 200, so fallback and retry now trigger.'],
+          ['2.27.0 (6 Oct)', 'Bedrock model allow-lists accept cross-region inference profiles (`us.anthropic.…`) when the base model is allowed, and application inference-profile ARNs.'],
+        ],
+        note: 'From the Enterprise Gateway changelog. A hybrid data plane gets a change only when it is upgraded.',
       },
       {
         type: 'callout', tone: 'observed', title: 'Which target answered — and three pitfalls',
         text: [
-          'The docs name no "which target served" header, but the SCM AI Gateway returns `x-portkey-last-used-option-index` (e.g. `config.targets[2]`) together with `x-portkey-provider`, `x-portkey-cache-status` and `x-portkey-retry-attempt-count` — Enterprise AI Access reads the first, the Ministry of Health pillar the cache status.',
+          'The SCM AI Gateway returns `x-portkey-last-used-option-index` (e.g. `config.targets[2]`) together with `x-portkey-provider`, `x-portkey-cache-status` and `x-portkey-retry-attempt-count` — Enterprise AI Access reads the first, the Ministry of Health pillar the cache status. The API reference\'s Response Schema page documents all of them except `x-portkey-provider`.',
           'A `targets` / `strategy` provider pin overrides the `@slug/` in the model name; remove the pair **together** (an empty fallback chain fails every request); and configs are versioned in the console, so a bad edit is one rollback away.',
         ],
       },
       {
         type: 'callout', tone: 'warn', title: 'Copying examples from the docs',
-        text: 'Two examples on the official pages are not valid JSON as published: the canary-testing config is missing a closing brace, and the nested request-timeout example has a misplaced quote and trailing commas. The shapes on this page are corrected. The docs also do not state whether retries run inside each fallback target or around the whole chain.',
+        text: 'Some examples on the official pages are not valid JSON as published: the canary-testing config never closes the second target\'s `override_params`, and the Request Timeouts page has a misplaced quote in its nested example (`"provider:"@openai"`) and trailing commas in its target-level and "Triggering Fallbacks" examples. The shapes on this page are corrected. The docs also do not state whether retries run inside each fallback target or around the whole chain.',
       },
     ],
   },
@@ -570,9 +622,9 @@ export const AIGW_GATEWAY = [
     group: 'gateway',
     title: 'Guardrail actions, verdicts and PII redaction',
     sub: 'How any gateway guardrail runs, blocks and reports — beyond AIRS',
-    minutes: 8,
+    minutes: 10,
     level: 'Build',
-    docs: pick('agGuardrails', 'agGuardCaps', 'agGuardList', 'agGuardRaw', 'agPii', 'agByo', 'agOrgGuard', 'agWsGuard', 'agGuardHdrs', 'agModelRules', 'agReqParams'),
+    docs: pick('agGuardrails', 'agGuardCaps', 'agGuardList', 'agGuardRaw', 'agPii', 'agByo', 'agOrgGuard', 'agWsGuard', 'agGuardHdrs', 'agModelRules', 'agReqParams', 'agGuardBatches', 'agDecisionsGuard', 'arCreateGuard', 'arOrgGuard', 'agChangelog'),
     blocks: [
       {
         type: 'prose',
@@ -591,6 +643,7 @@ export const AIGW_GATEWAY = [
           ['Sequential', '`sequential`', '`false`', 'Run the checks one after another instead of in parallel.'],
           ['Feedback', '`on_success` / `on_fail`', '—', '`{ "feedback": { "value", "weight" } }` appended to the request\'s feedback — builds an evaluation dataset.'],
         ],
+        note: 'The Guardrails and Capabilities pages give `async: true` as the default; the create-guardrail API schema gives `false`. Set it explicitly whichever way you create the guardrail.',
       },
       {
         type: 'table',
@@ -600,24 +653,36 @@ export const AIGW_GATEWAY = [
           ['Pass', 'either', '200', 'Normal response + `hook_results`'],
           ['Fail', '`false`', '**246**', 'Normal response + `hook_results` with `verdict: false`'],
           ['Fail', '`true`', '**446**', '`error.type: "hooks_failed"` + `hook_results`; the model was not called (input) or the answer withheld (output)'],
+          ['Fail, soft deny', '`true` + `soft_deny_200`', '**200**', 'A chat-completion-shaped answer carrying the denial message + `hook_results`; as with 446, an input deny stops the model call'],
           ['Any (async)', 'either', 'the provider\'s', 'No `hook_results` in the response — logs only'],
         ],
-        note: 'Streaming: input guardrails run before the stream (a deny returns 446 before any token); output guardrails run on the assembled answer after `[DONE]` and arrive as an extra `hook_results` chunk — informational only, no fallback or retry. Both need `x-portkey-strict-open-ai-compliance: false`.',
+        note: 'Soft deny comes from changelog 2.14.0: "a guardrail denial returns HTTP 200 … instead of the standard HTTP 446", for clients that treat 4xx as fatal, such as Claude Code. The Decisions guardrails page spells it `softDeny200`; neither the Guardrails page nor the create-guardrail schema lists it. Streaming: input guardrails run before the stream (a deny returns 446 before any token); output guardrails run on the assembled answer after `[DONE]` and arrive as an extra `hook_results` chunk — informational only, no fallback or retry. With strict OpenAI compliance on, output guardrails still run (2.7.0) but that chunk is not sent; set `x-portkey-strict-open-ai-compliance: false` to see it.',
       },
       {
         type: 'callout', tone: 'observed', title: 'This portal\'s SCM tenant blocks with HTTP 200',
-        text: 'A denied request on the SCM AI Gateway used here came back as **HTTP 200** with the content replaced by "The guardrail checks defined in the config failed…" — the shape the docs describe only as a "soft deny" on `/v1/decisions`. Do not branch on the status code alone: read `hook_results.*_hooks[].verdict`, and treat 200-with-a-false-verdict, 246 and 446 as the three outcomes.',
+        text: 'A denied request on the SCM AI Gateway used here came back as **HTTP 200** with the content replaced by "The guardrail checks defined in the config failed…" and the model never called — the soft-deny row above. Do not branch on the status code alone: read `hook_results.*_hooks[].verdict`, and treat 200-with-a-false-verdict, 246 and 446 as the three outcomes.',
       },
-      { type: 'code', title: 'Reading `hook_results`', text: 'Trimmed to the documented fields. `verdict` on the guardrail is true only if every check passed; a check can also carry an `error`.', tabs: [{ id: 'json', lang: 'json', code: HOOK_RESULTS }] },
+      { type: 'code', title: 'Reading `hook_results`', text: 'Trimmed to the documented fields. `verdict` on the guardrail is true only if every check passed — but the docs\' own streaming example shows a guardrail with `verdict: true` whose check failed with an `error` and `fail_on_error: false`, so a check that errors does not fail the guardrail unless it fails on error.', tabs: [{ id: 'json', lang: 'json', code: HOOK_RESULTS }] },
+      {
+        type: 'table',
+        title: 'Three stages a check can run in',
+        columns: ['Stage', 'Config key', 'Runs'],
+        rows: [
+          ['Start (gateway 2.25.0)', '`startHooks`', 'At the very start — before authentication, routing and every other hook. Two checks were added for it: **Header Check** (allow or block on header key-value pairs, matching `all`, `any` or `none`) and **Header Transform** (remove, set or rewrite headers; `x-portkey-*` and other protected headers cannot be changed). `allowedRequestTypes`, `webhook` and JWT header lookup can run here too.'],
+          ['Input', '`input_guardrails` (= `before_request_hooks`)', 'Before the model is called'],
+          ['Output', '`output_guardrails` (= `after_request_hooks`)', 'Before the caller sees the answer'],
+        ],
+        note: '`startHooks` is described only in the changelog so far — the Guardrails page and the config-object schema do not list it.',
+      },
       {
         type: 'table',
         title: 'Where guardrails run',
         columns: ['Coverage', 'Endpoints'],
         rows: [
-          ['Input and output', '`/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `POST /v1/responses`, `/v1/prompts/{id}/completions`'],
+          ['Input and output', '`/v1/chat/completions`, `/v1/completions`, `/v1/messages`, `POST /v1/responses`'],
           ['Input only', '`/v1/embeddings`; `/v1/decisions` (the `state` field only)'],
           ['Not covered', 'audio, images, files, fine-tuning, moderations, models, assistants and threads, `GET /v1/responses/*`'],
-          ['Batches', 'Applied asynchronously to the input and output files — only through a config in `portkey_options` (gateway 2.9.0+)'],
+          ['Batches', 'Applied asynchronously to the input and output files, through a config passed in `portkey_options` — needs gateway 2.9.0+ **and** Data Service 1.8.0+. The Capabilities page still lists batches as not covered.'],
         ],
         note: 'Text only: images are not evaluated, the text parts of a multimodal message are. Tool-call JSON is evaluated as text — the model\'s tool call by output guardrails, the tool result on the follow-up request by input guardrails.',
       },
@@ -629,15 +694,16 @@ export const AIGW_GATEWAY = [
         rows: [
           ['BASIC — deterministic', 'Regex match / replace, sentence, word and character count, JSON schema, JSON keys, contains, valid URLs, contains code, uppercase / lowercase, ends with, not null · **Model Rules**, model whitelist, allowed request types, **Request Parameters Check**, required metadata keys and values, JWT token validator · inline image URLs · webhook, log'],
           ['PRO — LLM-based', 'Detect PII (with redaction), moderate content, check language, detect gibberish'],
-          ['PARTNER', '**Palo Alto Networks Prisma AIRS**, Acuvity, Akto, Aporia, AWS Bedrock Guardrails, Azure, CrowdStrike AIDR, F5, Javelin, Lasso, Mistral, Pangea, Patronus, Pillar, Prompt Security, Qualifire, Walled AI, Zscaler'],
+          ['PARTNER', '**Palo Alto Networks Prisma AIRS**, Acuvity, Akto, Aporia, AWS Bedrock Guardrails, Azure, Cato Networks, CrowdStrike AIDR, F5, Javelin, Lakera, Lasso, Mistral, Pangea, Patronus, Pillar, Prompt Security, Qualifire, Zscaler'],
         ],
-        note: 'Developer plans get BASIC; Production adds PRO and PARTNER; Enterprise adds custom guardrails.',
+        note: 'The check-list page still shows Walled AI, whose card links outside the AI Gateway docs, and leaves out Cato Networks and Lakera, which have pages. The changelog also names Singulr (2.18.0) and Alibaba Cloud content safety (2.13.0, 2.22.0), neither with a page.',
       },
       {
         type: 'prose',
         title: 'PII redaction',
         text: [
-          'A guardrail with **Redact PII** on rewrites the request before it is forwarded, so the model never sees the value: `"reach me at {{EMAIL_ADDRESS_1}} or {{PHONE_NUMBER_1}}"`. Each instance is numbered; redaction is irreversible and `transformed: true` marks it in `hook_results`. Redaction comes from the PRO PII check, AWS Bedrock Guardrails, Pangea, Patronus and Azure — or from a **Regex Replace** check with your own pattern and replacement text (`[SSN_REDACTED]`).',
+          'A guardrail with **Redact PII** on rewrites the request before it is forwarded, so the model never sees the value: `"reach me at {{EMAIL_ADDRESS_1}} or {{PHONE_NUMBER_1}}"`. Each instance is numbered; redaction is irreversible and `transformed: true` marks it in `hook_results`. Since gateway 2.26.0 it applies to embedding requests too. Or use a **Regex Replace** check with your own pattern and replacement text (`[SSN_REDACTED]`).',
+          'Which providers redact depends on the page: the PII Redaction page names five — the PRO PII check, Patronus, Pangea, AWS Bedrock Guardrails and Promptfoo — while redact or anonymise options also appear on the Azure PII, CrowdStrike AIDR, F5, Prompt Security, Lakera (when only PII categories fire), Cato Networks and Acuvity pages. The Patronus page itself shows an output-only check with no redact switch.',
           'The Prisma AIRS guardrail **blocks, it does not redact** — pair it with a redacting check if the requirement is "mask and continue".',
         ],
       },
@@ -665,12 +731,12 @@ export const AIGW_GATEWAY = [
         title: 'Enforce guardrails centrally',
         columns: ['Level', 'Where', 'Notes'],
         rows: [
-          ['Organisation', 'Admin Settings → **Organisation Guardrails**', 'Input and/or output guardrails on every request in the organisation. Workspace exclusions are API-only: `PUT …/ai_gw/admin/v2/workspace-exclusions/input-guardrails`.'],
-          ['Workspace', 'The workspace → Edit', 'One input and one output guardrail, enforced on every request in the workspace.'],
+          ['Organisation', 'Admin Settings → **Organisation Guardrails**, or the Admin API: `POST https://api.apps.paloaltonetworks.com/ai_gw/admin/v2/guardrails` with an SCM token', 'Input and/or output guardrails on every request in the organisation. Same body as a workspace guardrail (`name`, `target` `llm` or `mcp_tools`, `checks`, `actions`). Workspace exclusions are API-only: `PUT …/ai_gw/admin/v2/workspace-exclusions/input-guardrails` (or `output-guardrails`), body `organisation_id` plus `workspaces: [{ workspace_id, excluded }]`.'],
+          ['Workspace', 'The workspace → Edit', 'One input and one output guardrail, created in that workspace, enforced on every request in it.'],
           ['API key', 'The key\'s default config, with **Allow Config Override** off', 'The caller cannot swap the config away (400).'],
           ['Tenant', '**Block Inline Configs**', 'No request can bring its own raw guardrails or providers.'],
         ],
-        note: 'The docs do not say in what order organisation, workspace and config guardrails run, or how their verdicts combine.',
+        note: 'The docs do not say in what order organisation, workspace and config guardrails run, or how their verdicts combine — only that `startHooks` run before everything else.',
       },
     ],
   },
@@ -680,14 +746,14 @@ export const AIGW_GATEWAY = [
     group: 'gateway',
     title: 'Logs, traces, metadata and OpenTelemetry',
     sub: 'Every request logged — and tied to its AIRS verdict by one id',
-    minutes: 7,
+    minutes: 9,
     level: 'Build',
-    docs: pick('agLogs', 'agTraces', 'agMetadata', 'agFeedback', 'agAnalytics', 'agLogsExport', 'agOtel', 'agOtelExport', 'agReqLogging', 'agEnforceMeta', 'agCost'),
+    docs: pick('agLogs', 'agTraces', 'agMetadata', 'agFeedback', 'agAnalytics', 'agLogsExport', 'agOtel', 'agOtelExport', 'agOtelLogs', 'arLogsInsert', 'agReqLogging', 'agEnforceMeta', 'agCost'),
     blocks: [
       {
         type: 'prose',
         text: [
-          'Every request through the gateway lands in **Observability → Logs** in Strata Cloud Manager: model, provider, tokens (thinking tokens included), cost, latency, the raw request and response, the config used and — if a guardrail ran — its verdict. A status column shows what the config did: `Cache Hit` / `Semantic Hit` / `Miss`, `Retry Success on 2 Tries`, `Fallback Active`, `Loadbalancer Active`.',
+          'Every request through the gateway lands in **Observability → Logs** in Strata Cloud Manager: model, provider, tokens (thinking tokens included), cost, latency, the raw request and response, the config used and — if a guardrail ran — its verdict. A status column shows what the config did: `Cache Hit` / `Cache Semantic Hit` / `Cache Miss`, `Retry Success on {x} Tries`, `Fallback Active`, `Loadbalancer Active`. Since gateway 2.24.0 each retry attempt is also its own log row under the same trace id.',
           'Three headers make those logs useful: a **trace id** to group a session, **spans** to show its shape, and **metadata** to slice it by user, feature or environment.',
         ],
       },
@@ -706,8 +772,11 @@ export const AIGW_GATEWAY = [
       },
       { type: 'code', title: 'A traced request', text: 'Use W3C-shaped ids (32 hex for the trace, 16 for the span) — the OpenTelemetry export keeps only valid ones and generates new ids for anything else.', tabs: TRACE_TABS },
       {
-        type: 'callout', tone: 'tip', title: 'One id, two consoles',
-        text: 'With the Prisma AIRS guardrail on, the gateway trace id resolves on the Prisma AIRS side under **AI Runtime → AI Sessions**. Quote the `x-portkey-trace-id` of a blocked request and both the gateway log and the AIRS scan are one search away.',
+        type: 'callout', tone: 'tip', title: 'One id, two consoles — send it yourself',
+        text: [
+          'With the Prisma AIRS guardrail on, the Simple Setup page says a trace id **passed on the request** resolves on the Prisma AIRS side under **AI Runtime → AI Sessions**. Quote the `x-portkey-trace-id` of a blocked request and both the gateway log and the AIRS scan are one search away.',
+          'Send the header rather than relying on the generated one: the open-source gateway\'s Prisma AIRS plugin uses the caller\'s `x-portkey-trace-id` as the AIRS `tr_id` and a random UUID when there is none. That is from the plugin code, not the docs, and the SaaS build may differ.',
+        ],
       },
       {
         type: 'table',
@@ -720,7 +789,7 @@ export const AIGW_GATEWAY = [
           ['Required keys', 'Admin Settings → Organisation Properties → API Key / Workspace **Metadata Schema** (JSON Schema, string properties). Checked when a key or workspace is created or updated — not per request.'],
         ],
       },
-      { type: 'code', title: 'Feedback on a request', text: '`value` is an integer from -10 to 10 (thumbs up/down = 1 / -1); `weight` 0–1, default 1.', tabs: [{ id: 'curl', lang: 'curl', code: FEEDBACK_CURL }] },
+      { type: 'code', title: 'Feedback on a request', text: '`value` is an integer from -10 to 10 (thumbs up/down = 1 / -1); `weight` 0–1, default 1. This is the Feedback page\'s form — gateway host, gateway key with `logs.write`. The API reference instead serves `POST /feedback` (and `PUT /feedback/{id}`) from the Admin API, `https://api.apps.paloaltonetworks.com/ai_gw/v2`, with an SCM token; test which your tenant accepts.', tabs: [{ id: 'curl', lang: 'curl', code: FEEDBACK_CURL }] },
       {
         type: 'table',
         title: 'Privacy controls',
@@ -738,19 +807,25 @@ export const AIGW_GATEWAY = [
         columns: ['', 'Into the gateway', 'Out of the gateway'],
         minWidth: 620,
         rows: [
-          ['What', 'Your app\'s own OTel traces and logs (Vercel AI SDK, OpenLLMetry, OpenLIT, Logfire, Phoenix, MLflow…) shown next to gateway requests, costed from `gen_ai.usage.*`', '**Analytics** (aggregated counts, latency, tokens, cost — stable) and **Complete logs** (full prompts and completions in GenAI semantic conventions — experimental)'],
-          ['How', 'OTLP/HTTP to `https://aigw.portkey.ai/v1/otel` with `Authorization=Bearer <key>`', 'Environment variables on the gateway (`OTEL_PUSH_ENABLED`, `OTEL_ENDPOINT`; `EXPERIMENTAL_GEN_AI_OTEL_*`) — Complete logs is self-hosted only, over OTLP HTTP/JSON'],
+          ['What', 'Your app\'s own OTel traces and logs (Vercel AI SDK, OpenLLMetry, OpenLIT, Logfire, Phoenix, MLflow…) shown next to gateway requests, costed from `gen_ai.usage.*`', '**Analytics** (aggregated counts, latency, tokens, cost — stable) and **Complete logs** (full prompts and completions in GenAI semantic conventions 1.40.0 — experimental)'],
+          ['How', 'OTLP over HTTP to `https://aigw.portkey.ai/v1/otel` (or `/v1/otel/v1/traces`, `/v1/otel/v1/logs`) with `Authorization=Bearer <key>`; the MLflow page sends `http/protobuf`', 'Environment variables on the gateway process — `OTEL_PUSH_ENABLED`, `OTEL_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL`; `EXPERIMENTAL_GEN_AI_OTEL_*` — then a redeploy'],
+          ['Where', 'SaaS and hybrid', 'In practice hybrid only: both are gateway environment variables, which a SaaS tenant cannot set, and the Complete Logs page says self-hosted only'],
+          ['Delivery', 'Costed and shown in the logs', 'Complete logs: OTLP HTTP/JSON, one push per log (no batching), no retry — logs are lost while the endpoint is down; sent after the response, so no added latency. The same switch emits guardrail spans `portkey.guardrail.*` (2.12.0).'],
         ],
       },
       { type: 'code', title: 'Point an OTel SDK at the gateway', tabs: [{ id: 'bash', lang: 'bash', code: OTEL_ENV }] },
-      { type: 'code', title: 'Export logs', text: 'Up to 50,000 logs per job, as JSONL. The same flow exists in the console under Exports → Request Data.', tabs: [{ id: 'bash', lang: 'bash', code: LOG_EXPORT }] },
+      { type: 'code', title: 'Export logs', text: 'Up to 50,000 logs per job, as JSONL. The same flow exists in the console under Exports → Request Data. From the Logs Export product page; the API reference has no export endpoints.', tabs: [{ id: 'bash', lang: 'bash', code: LOG_EXPORT }] },
+      { type: 'code', title: 'Insert a log from elsewhere', text: 'Calls your app makes outside the gateway can be written into the same logs with `POST /v1/logs` (API reference: `request` with `url` and `body`, `response` with `body`, optional `metadata`). The Admin API introduction lists this endpoint under the Admin API, which takes only SCM tokens, while the AB03 help page gives gateway-key scopes for it — test which credential your tenant accepts.', tabs: [{ id: 'bash', lang: 'bash', code: LOG_INSERT }] },
       {
         type: 'callout', tone: 'warn', title: 'Streamed requests cost 0 unless you ask for usage',
         text: 'For streamed completions the gateway logs tokens and cost only when the request sends `stream_options: { "include_usage": true }` — the usage arrives in the final chunk. This portal\'s gateway chats send it; counting SSE chunks is not a token count. A model with no pricing data shows 0 cents, and budget limits do not apply to it.',
       },
       {
         type: 'callout', tone: 'docs', title: 'What the developer docs leave out',
-        text: 'No request-log retention period is given there (the Palo Alto Networks admin guide gives one year — see "What the AI Gateway is"). The OTLP ingest URL appears both as `/v1/otel` and `/v1/logs/otel`, and the export field names differ between the create example and the denied-fields list — test against your tenant.',
+        text: [
+          'No request-log retention period is given there (the Palo Alto Networks admin guide gives one year — see "What the AI Gateway is"); the only retention claim nearby is the Audit Logs page\'s "indefinite", for audit logs.',
+          'The OTLP ingest URL is `/v1/otel` in the OpenTelemetry page\'s environment block, the OTel Python SDK page and changelog 1.11.1, but `/v1/logs/otel` in the same page\'s Getting Started step and on the Logfire, OpenLIT, MLflow, Phoenix and Traceloop pages. The export field names differ between the create example (`ai_provider`, `request_tokens`, `status_code`…) and the denied-fields list (`ai_org`, `req_units`, `response_status_code`…) — test against your tenant.',
+        ],
       },
       {
         type: 'cards',
@@ -767,9 +842,9 @@ export const AIGW_GATEWAY = [
     group: 'gateway',
     title: 'One endpoint, three API formats',
     sub: 'Chat Completions, Responses or Anthropic Messages — against any provider',
-    minutes: 7,
+    minutes: 10,
     level: 'Build',
-    docs: pick('agUniversal', 'agChat', 'agMessages', 'agResponses', 'agDecisions', 'agMultimodal', 'agThinking', 'agStrict', 'agCustomHosts', 'agRemoteMcp', 'agHeaders', 'agApiRef'),
+    docs: pick('agUniversal', 'agChat', 'agMessages', 'agResponses', 'agDecisions', 'agMultimodal', 'agThinking', 'agStrict', 'agCustomHosts', 'agCustomModels', 'agRemoteMcp', 'agNitro', 'agGrpc', 'agBeta', 'agHeaders', 'agApiRef', 'agBedrockLlm', 'agVertexLlm', 'agMantle'),
     blocks: [
       {
         type: 'prose',
@@ -785,10 +860,10 @@ export const AIGW_GATEWAY = [
         minWidth: 680,
         rows: [
           ['Chat Completions', 'OpenAI-compatible providers', 'Anthropic, Bedrock, Vertex and the rest', 'Provider-only fields, unless strict OpenAI compliance is off (below)'],
-          ['Responses', 'OpenAI, Azure OpenAI, xAI, Groq, OpenRouter, Azure AI, Perplexity', 'Anthropic, Gemini, Vertex AI, Bedrock, Mistral and the rest', 'Anything stateful: `previous_response_id`, `store`, `GET`/`DELETE /responses/{id}`, and the built-in `web_search` / `file_search` / `computer_use` tools — only `function` tools translate'],
-          ['Messages', 'Anthropic, and Claude on Bedrock', 'Everything else, via Chat Completions', '`thinking`, `top_k`, `cache_control`, `mcp_servers`, `service_tier`, `anthropic_beta` — dropped silently, no error'],
+          ['Responses', 'OpenAI, Azure OpenAI, xAI, Groq, OpenRouter, Azure AI, Perplexity — and Bedrock Mantle (its integration page)', 'Anthropic, Gemini, Vertex AI, Bedrock, Mistral and the rest', 'Anything stateful: `previous_response_id`, `store`, `GET`/`DELETE /responses/{id}`, and the built-in `web_search` / `file_search` / `computer_use` tools — only `function` tools translate, except gateway-run MCP tools (Remote MCP, below). Cancel and input-token counting (2.25.1) work only where the upstream has them.'],
+          ['Messages', 'Anthropic; Claude on Bedrock; per the integration pages also Claude on Vertex AI and Azure AI Foundry, Claude Platform on AWS and Bedrock Mantle', 'Everything else, via Chat Completions', '`thinking`, `top_k`, `cache_control`, `container`, `mcp_servers` (except gateway-run MCP), `service_tier`, `anthropic_beta` — dropped silently, no error'],
         ],
-        note: 'The Bedrock and Vertex AI integration pages still say `/messages` works only with Claude models; the Universal API and Messages pages say any provider. Test a non-Claude model on `/messages` before relying on it.',
+        note: 'The Messages page lists only Anthropic and Bedrock Claude as native and calls Vertex AI an adapter, while the Vertex AI page, the Supported Providers matrix and changelog 2.27.0 (`context_management` and `safeguards` for Claude on Vertex) treat Claude on Vertex as native. The Bedrock and Vertex AI pages also still say `/messages` works only with Claude models; the Universal API and Messages pages say any provider. Test a non-Claude model on `/messages` before relying on it.',
       },
       { type: 'code', title: 'The same question, three ways', tabs: UNIVERSAL_TABS },
       {
@@ -803,13 +878,16 @@ export const AIGW_GATEWAY = [
           ['`"model": "@<slug>/<model>"`', 'The default. `@bedrock-prod/us.anthropic.claude-sonnet-5` = that model through the integration with slug `bedrock-prod`.'],
           ['`x-portkey-provider: @<slug>` + a bare model', 'Endpoints with no `model` field (files, batches), image edits, Nitro mode — and Claude Code.'],
           ['A config with `override_params.model`', 'The app cannot change the model name it sends (Cursor, many SaaS tools).'],
-          ['`x-portkey-provider: openai` + your own provider key in `Authorization`', 'Bring-your-own-credential; the gateway key moves to `x-portkey-api-key`. Rejected (`inline_provider_blocked`) when Block Inline Configs is on.'],
+          ['`x-portkey-provider: openai` + your own provider key in `Authorization`', 'Bring-your-own-credential; the gateway key moves to `x-portkey-api-key`. The raw provider name is rejected (`inline_provider_blocked`) when Block Inline Configs is on; the saved-only page still allows your own credential in `Authorization` alongside a saved `@slug`.'],
         ],
       },
       {
         type: 'prose',
         title: 'Decisions — a typed answer instead of text',
-        text: '`/v1/decisions` returns a judgment per question: `noul` (a yes/no probability), `choice` (one label from a set, with probabilities) or `score` (a position on a scale). It is served today only by TypeSafe\'s Jev models, without streaming. Input guardrails scan only the `state` field — never the questions or criteria.',
+        text: [
+          '`/v1/decisions` returns a judgment per question: `noul` (a yes/no probability), `choice` (one label from a set, with probabilities) or `score` (a position on a scale). It is served by TypeSafe\'s Jev models — directly, or through OpenRouter since gateway 2.27.0 — without streaming. Input guardrails scan only the `state` field — never the questions or criteria; a soft deny answers with empty `answers` and the guardrail message.',
+          'The sample sends `x-portkey-provider: @typesafe`, meaning a Model Catalog integration with the slug `typesafe`. The Decisions page writes `typesafe` without the `@` — a raw provider name, which Block Inline Configs rejects with `inline_provider_blocked`.',
+        ],
       },
       { type: 'code', tabs: DECISIONS_TABS },
       {
@@ -819,14 +897,29 @@ export const AIGW_GATEWAY = [
         minWidth: 600,
         rows: [
           ['Embeddings', '`/v1/embeddings` — input guardrails apply'],
+          ['Rerank · OCR · moderations', '`/v1/rerank` (Cohere, Jina, Voyage, Vertex, Bedrock…), `/v1/ocr` (Mistral, Azure AI Foundry; 2.18.0), `/v1/moderations` (no guardrails). The Capabilities page does not mention rerank or OCR.'],
           ['Images', '`/v1/images/generations`, edits, variations — no guardrails; edits need the provider in a header'],
           ['Speech', '`/v1/audio/speech`, `/transcriptions`, `/translations` — no guardrails'],
-          ['Files, batches, fine-tuning', '`/v1/files`, `/v1/batches`, `/v1/fine_tuning/jobs` — provider batch APIs, or gateway-managed batching'],
+          ['Files, batches, fine-tuning', '`/v1/files`, `/v1/batches`, `/v1/fine_tuning/jobs` — provider batch APIs, or gateway-managed batching (needs the Data Service)'],
           ['Function calling', 'OpenAI `tools` / `tool_choice` across providers; guardrails read tool-call JSON as text'],
-          ['Thinking', 'Reasoning arrives in `content_blocks` (needs strict compliance off). On Anthropic and Bedrock, send the signed `thinking` block back on the next turn. Responses `reasoning.effort` maps to each provider\'s budget.'],
+          ['Thinking (beta)', 'Reasoning arrives in `content_blocks` (needs strict compliance off). Send the signed `thinking` block back on the next turn — the docs show it for Anthropic, Bedrock and Claude on Vertex AI. Gemini 3 tool calling needs each `thought_signature` echoed back, which needs `x-portkey-strict-open-ai-compliance: false` on every request. Effort mapping: next table.'],
           ['Realtime', '`wss://aigw.portkey.ai/v1/realtime?model=…` — OpenAI Realtime with logs and cost'],
-          ['Model list', '`GET /v1/models`; `x-portkey-fetch-integrated-models: true` lists the Model Catalog'],
+          ['Model list', '`GET /v1/models`. Any provider signal makes it proxy the provider\'s own list; `x-portkey-fetch-integrated-models: true` forces the Model Catalog. Sent with `anthropic-version`, it answers in Anthropic\'s shape (2.22.0).'],
+          ['Other provider paths', 'Any `/v1/<provider path>` with `x-portkey-provider: @slug` — configs and logging apply, the response is not transformed, and guardrails do not run (except a webhook check with `executeOnProxy`, 2.20.0). Only a card on the AI Gateway page here; the full page is in Portkey\'s own docs.'],
         ],
+      },
+      {
+        type: 'table',
+        title: 'How a reasoning effort is mapped',
+        columns: ['Provider', 'What `reasoning_effort` / `reasoning.effort` becomes'],
+        rows: [
+          ['OpenAI o-series', 'Sent as is'],
+          ['Anthropic', '`thinking.budget_tokens`: low 1,024 · medium 8,192 · high 16,384 · xhigh 32,768'],
+          ['Claude on Bedrock', 'Opus / Sonnet 4.6: adaptive thinking. Other Claude reasoning models: a share of `max_tokens` — minimal 10 %, low 20 %, medium 50 %, high 80 % (at least 1,024; `max_tokens` must exceed 1,024). `none` turns thinking off.'],
+          ['Gemini 2.5 (Vertex)', '`thinking_budget`: low 1,024 · medium 8,192 · high 24,576'],
+          ['Gemini 3.0+ (Vertex)', '`thinkingLevel`: minimal, low, medium, high'],
+        ],
+        note: 'An explicit `thinking` object wins over the effort. Sources: the Responses page (Anthropic, Gemini 2.5, OpenAI), and the Bedrock and Vertex AI integration pages.',
       },
       {
         type: 'callout', tone: 'docs', title: 'Strict OpenAI compliance',
@@ -840,11 +933,11 @@ export const AIGW_GATEWAY = [
         columns: ['Feature', 'How', 'Watch out for'],
         minWidth: 640,
         rows: [
-          ['Custom host', '`x-portkey-custom-host`, or set on the saved provider / model', 'On SaaS the host must be publicly reachable: private ranges, cloud metadata addresses, internal TLDs (`.local`, `.internal`, `.corp`…) and ports like 22 or 5432 are refused. `TRUSTED_CUSTOM_HOSTS` exists only on self-hosted gateways. Inline hosts are blocked by Block Inline Configs.'],
-          ['Remote MCP', '`x-portkey-beta: server-side-mcp-2026-06-01` and an `mcp` tool with `server_label: "@portkey-mcp/<server>"`', 'Runs the MCP tools through the gateway (works for Bedrock and Vertex models). Provider-run MCP (`server_url`, `mcp_servers`) bypasses the gateway\'s audit.'],
-          ['Nitro mode (beta)', '`x-portkey-nitro-mode: true`', 'Streams the body untouched — so no retries, no `override_params` and **no input guardrails, including organisation and workspace defaults**. Incompatible with an AIRS input guardrail.'],
-          ['gRPC (beta)', 'Service `gateway.Gateway`', 'Documented only against a self-run gateway; no SaaS endpoint is given.'],
-          ['Beta flags', '`x-portkey-beta: use-responses-api-2026-07-30`', 'Routes `/messages` for non-Anthropic providers through the Responses adapter.'],
+          ['Custom host', '`x-portkey-custom-host`, a config target\'s `custom_host`, or `custom_host` (+ `custom_headers`) on a Model Catalog model', 'With Block Inline Configs on, a host supplied with the request is refused (`inline_custom_host_blocked`); set it on the saved provider (the saved-only page\'s fix) or per model in the Model Catalog. The URL includes `/v1`, is `http(s)` with no embedded credentials and at most 2,048 characters. On SaaS the host must be publicly reachable: private ranges, cloud metadata addresses and internal names (`.local`, `.internal`, `cluster.local`…) are refused, and so are ports 22, 25, 445, 3306, 5432, 6379, 6443, 9200 and 27017 (80, 443, 8000, 8080, 8443 are fine). `TRUSTED_CUSTOM_HOSTS` exists only on hybrid gateways.'],
+          ['Remote MCP (beta)', '`x-portkey-beta: server-side-mcp-2026-06-01`. Responses: an `mcp` tool with `server_label: "@portkey-mcp/<server>"`. Messages: `mcp_servers: [{ "type": "url", "name": "@portkey-mcp/<server>" }]` plus an `mcp_toolset` tool with `mcp_server_name: "@portkey-mcp/<server>"`', 'The gateway fetches the tools and runs them, so Bedrock and Vertex models can use them; `server_url`, `server_description` and `require_approval` are ignored with the prefix. Only an entry that points at an external URL is provider-run, outside the gateway\'s audit. The page\'s "runs within your own VPC" holds for hybrid only, and its SDK snippets misspell the header `x-portkey-portkey-beta`.'],
+          ['Nitro mode (beta)', '`x-portkey-nitro-mode: true`, provider by header or a single-provider config', 'Streams the body untouched — so no retries, no `override_params`, `cache` silently ignored, one target only, and **no input guardrails, including organisation and workspace defaults** (violations get a 4xx). Incompatible with an AIRS input guardrail. Only chat and embeddings on OpenAI, Fireworks and OpenRouter, `/v1/messages` on Anthropic, `/v1/responses` on OpenAI and OpenRouter — not Bedrock or Vertex. Enabled through the account team.'],
+          ['gRPC (beta)', 'Service `gateway.Gateway` on a self-run gateway (`npm start -- --llm-grpc`, port 8789 by default)', 'No SaaS endpoint is given. Errors come back inside the response\'s `status_code` while the gRPC call itself returns OK; HTTP headers arrive as trailing metadata. No realtime; files and batches only through the HTTP proxy mode.'],
+          ['Beta flags', '`x-portkey-beta: use-responses-api-2026-07-30` (comma-separate several)', 'The Beta Features page: routes `/messages` for non-Anthropic providers through the Responses adapter. Changelog 2.17.0 describes the same flag as opting into the July 2026 Responses API contract.'],
         ],
       },
       {
@@ -859,9 +952,9 @@ export const AIGW_GATEWAY = [
     group: 'gateway',
     title: 'Agent Gateway and agent frameworks',
     sub: 'Frameworks call models through the gateway; A2A agents sit behind it',
-    minutes: 6,
+    minutes: 7,
     level: 'Build',
-    docs: pick('agAgentGw', 'agAgentQuick', 'agAgentReg', 'agAgentCat', 'agOpenaiAgents', 'agLanggraph', 'agStrands', 'agLangchain', 'agVercel', 'agOpenaiCompat'),
+    docs: pick('agAgentGw', 'agAgentQuick', 'agAgentReg', 'agAgentServers', 'agAgentCat', 'agOpenaiAgents', 'agLanggraph', 'agStrands', 'agLangchain', 'agVercel', 'agOpenaiCompat'),
     blocks: [
       {
         type: 'prose',
@@ -882,21 +975,26 @@ export const AIGW_GATEWAY = [
         title: 'Put an A2A agent behind the Agent Gateway',
         steps: [
           { title: 'Register the agent', text: 'Give its URL, then **Fetch Agent Card** to validate the transport and auth schemes. The upstream must be a public `http(s)` endpoint — private addresses, metadata hosts and URLs with `#` fragments are refused.', path: ['AI Gateway', 'Agent Registry', 'Add agent'] },
-          { title: 'Provision it to workspaces', text: 'Choose which workspaces may call it. Per-user access and per-skill access are listed as coming soon.' },
+          { title: 'Provision it to workspaces and set access', text: 'Choose which workspaces may call it, then control access to the agent itself and to each of its skills and capabilities. Access for specific users, and skills per workspace or per user, are listed as coming soon.' },
           { title: 'Create a key that may invoke agents', text: 'A workspace API key with the **Agent Gateway** toggle and the `agents.invoke` scope.' },
-          { title: 'Swap the URL', text: 'Callers use `https://aigw.portkey.ai/agent/{agent-slug}` instead of the agent\'s own URL, with `Authorization: Bearer <gateway key>`.' },
+          { title: 'Swap the URL', text: 'Callers use `https://aigw.portkey.ai/agent/{agent-slug}` instead of the agent\'s own URL, with `Authorization: Bearer <gateway key>`. Copy the exact address from the console — this portal\'s tenant already serves MCP from a different host than the docs show.' },
         ],
       },
-      { type: 'code', title: 'Calling an agent through the gateway', text: 'The docs use the earlier A2A names (`tasks/send`, `/.well-known/agent.json`); current A2A clients may call `message/send` and `agent-card.json`.', tabs: [{ id: 'curl', lang: 'curl', code: A2A_CURL }] },
+      { type: 'code', title: 'Calling an agent through the gateway', text: 'The docs use the earlier A2A names (`tasks/send`, `/.well-known/agent.json`) and POST for the agent card; current A2A clients may call `message/send` and GET `agent-card.json`.', tabs: [{ id: 'curl', lang: 'curl', code: A2A_CURL }] },
       {
         type: 'callout', tone: 'docs', title: 'What the Agent Gateway does not document yet',
-        text: 'No guardrail or rate-limit configuration for agent-to-agent traffic is described, and per-user and per-skill access are "coming soon". Today it is authentication, workspace-level access and logging. To scan what an agent sends and receives, scan its tool calls with the Runtime API.',
+        text: [
+          'No guardrail, rate-limit or budget configuration for agent-to-agent traffic is described. Today it is authentication, access to the agent and its skills per workspace, and logging; per-user access is "coming soon". To scan what an agent sends and receives, scan its tool calls with the Runtime API.',
+          'The route differs too: the Servers and Quickstart pages use `https://aigw.portkey.ai/agent/{agent-slug}`, while changelog 2.6.1 announced the preview as `/v1/agent/:agentServerId/*`. Neither has been tried from this portal.',
+        ],
       },
       {
         type: 'cards',
         items: [
           { icon: Network, tone: '#2dd4bf', title: 'Scan every tool call', kicker: 'Agents & MCP',
             text: 'Two-stage `tool_event` scans — parameters before a tool runs, output before the agent reads it.', go: 'mcp-tool-events', goLabel: 'Open the guide' },
+          { icon: Layers, tone: '#38bdf8', title: 'Frameworks with Prisma AIRS built in', kicker: 'Integrations',
+            text: 'The same frameworks protected without the gateway — SDK hooks, AWS and Microsoft Foundry samples, n8n and coding-assistant hooks.', go: 'int-frameworks', goLabel: 'Open the guide' },
         ],
       },
     ],
@@ -907,9 +1005,9 @@ export const AIGW_GATEWAY = [
     group: 'gateway',
     title: 'Claude Code, Codex and Cursor through the gateway',
     sub: 'Central keys, budgets, logs and guardrails for coding agents',
-    minutes: 6,
+    minutes: 8,
     level: 'Build',
-    docs: pick('agCoding', 'agClaudeCode', 'agClaudeBedrock', 'agClaudeVertex', 'agCodex', 'agCursor', 'agMcpClaude', 'gwDevGuard'),
+    docs: pick('agCoding', 'agClaudeCode', 'agClaudeBedrock', 'agClaudeVertex', 'agClaudeAnthropic', 'agCodex', 'agCursor', 'agMcpClaude', 'gwDevGuard', 'agChangelog'),
     blocks: [
       {
         type: 'prose',
@@ -928,20 +1026,27 @@ export const AIGW_GATEWAY = [
           ['`ANTHROPIC_CUSTOM_HEADERS`', '`x-portkey-provider: @slug` or `x-portkey-config: pc-…`; optionally `x-portkey-trace-id`, `x-portkey-metadata`'],
           ['`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`', 'The provider\'s model ids, so `/model` and sub-agents resolve correctly'],
           ['Non-Claude models on Bedrock', '`DISABLE_PROMPT_CACHING=1` and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` — otherwise a 403 `AccessDeniedException`'],
+          ['Model discovery', 'Since gateway 2.22.0, `/v1/models` answers in Anthropic\'s shape when the caller sends `anthropic-version`, so Claude Code can list models through the gateway.'],
+          ['Guardrail blocks', 'A 446 can end a Claude Code session; the `soft_deny_200` flag (2.14.0) was added for exactly this client and returns the block as an HTTP 200 answer — what this portal\'s tenant does.'],
         ],
       },
       {
         type: 'callout', tone: 'warn', title: 'The two mistakes the docs warn about',
+        text: '`CLAUDE_CODE_USE_BEDROCK` / `CLAUDE_CODE_USE_VERTEX` with `ANTHROPIC_BEDROCK_BASE_URL` pointing at the gateway gives `API Error: 500 fetch failed` — use the plain Anthropic variables above for every provider. A `/v1` on the base URL turns requests into an unprocessed passthrough (a ⚡ in the gateway logs).',
+      },
+      {
+        type: 'callout', tone: 'docs', title: 'Where the pages disagree',
         text: [
-          '`CLAUDE_CODE_USE_BEDROCK` / `CLAUDE_CODE_USE_VERTEX` with `ANTHROPIC_BEDROCK_BASE_URL` pointing at the gateway gives `API Error: 500 fetch failed` — use the plain Anthropic variables above for every provider. A `/v1` on the base URL turns requests into an unprocessed passthrough (a ⚡ in the gateway logs).',
-          'The pages disagree on `anthropic-beta`: the Claude Code page says to add `forward_headers: ["anthropic-beta"]` to the config, the Bedrock and Vertex pages say the gateway remaps it itself. Inline forward headers are blocked by Block Inline Configs, so set them on the saved provider. The Vertex page also uses Anthropic-style model names, while the Vertex AI integration page writes Claude as `anthropic.<model>` — check which your tenant accepts.',
+          '`anthropic-beta`: the Claude Code and Claude Code with Anthropic pages add `forward_headers: ["anthropic-beta"]` to a **saved config** (`{ "provider": "@anthropic-prod", "forward_headers": ["anthropic-beta"] }`); the saved-only page also allows forward headers set by an admin on the saved provider; the Bedrock and Vertex pages say the gateway filters and remaps the header itself. Changelog 2.22.0 settles the Anthropic-direct case: an incoming `anthropic-beta` / `anthropic-version` now reaches Anthropic (and Bedrock Mantle, Claude Platform on AWS) when neither the provider nor the config sets one. Forward headers on the request itself are blocked by Block Inline Configs.',
+          'Model names on Vertex: the Claude Code with Vertex page uses Anthropic-style names (`claude-sonnet-…`), while the Vertex AI integration page writes Claude as `anthropic.<model>` — check which your tenant accepts.',
+          'The Claude Code, Codex and coding-agent pages recommend the `npx portkey` CLI to write these settings, but its own guide writes `https://api.portkey.ai` and expects an app.portkey.ai account — the wrong host for an SCM tenant. Check the result, or write the settings by hand as above.',
         ],
       },
       {
         type: 'callout', tone: 'tip', title: 'The AIRS guardrail for coding agents',
-        text: 'Set the Prisma AIRS guardrail to `scan_scope: "last_user_message"` with `strip_scaffolding: true`: the agent\'s harness text (system reminders, tool instructions) is not scanned as if the user wrote it, while **tool results are always scanned** — that is where indirect prompt injection arrives. See "The AIRS guardrail in the gateway".',
+        text: 'Set the Prisma AIRS guardrail to `scan_scope: "last_user_message"` with `strip_scaffolding: true`: the agent\'s harness text (system reminders, tool instructions) is not scanned as if the user wrote it. The PANW page says `tool_result` content is kept and scanned **regardless of** `strip_scaffolding` — not regardless of `scan_scope`. With `last_user_message`, only the newest user turn is scanned; in the Messages format that is where the latest tool result sits, which is where indirect prompt injection arrives. See "The AIRS guardrail in the gateway".',
       },
-      { type: 'code', title: 'OpenAI Codex', text: 'Codex has no custom-header setting, so policy (fallbacks, cache, guardrails) rides on a config attached to the key.', tabs: [{ id: 'bash', label: 'config.toml', lang: 'bash', code: CODEX_TOML }] },
+      { type: 'code', title: 'OpenAI Codex', text: 'Codex can send headers: `http_headers` (static) and `env_http_headers` (from environment variables) on the provider block can carry `x-portkey-config` — or attach the config to the key and send nothing. Current Codex speaks only the Responses API (`wire_api = "responses"`; the AIGW Codex page still shows `"chat"` as the default), so with a non-OpenAI model the gateway\'s Responses adapter applies — untested here.', tabs: [{ id: 'bash', label: 'config.toml', lang: 'bash', code: CODEX_TOML }] },
       {
         type: 'steps',
         title: 'Cursor',
@@ -981,39 +1086,48 @@ curl -X POST "https://api.apps.paloaltonetworks.com/ai_gw/v2/api-keys/service" \
     "rotation_policy": { "rotation_period": "monthly", "key_transition_period_ms": 86400000 }
   }'`
 
+// Policy bodies in the API reference's flat shape (create schemas for
+// POST /policies/usage-limits and /policies/rate-limits). Not run from here.
 const POLICY_TABS = [
-  { id: 'usage', label: 'Usage limit — $50 per user per month', lang: 'json', code: `{
-  "type": "usage_limits",
-  "policy": {
-    "conditions": [{ "key": "metadata._user", "value": "*" }],
-    "group_by": [{ "key": "metadata._user" }],
-    "credit_limit": 50,
-    "type": "cost",
-    "periodic_reset": "monthly",
-    "status": "active"
-  }
+  { id: 'usage', label: 'Usage limit — $50 per user per month', lang: 'json', file: 'usage-policy.json', code: `{
+  "name": "per-user-50-usd-monthly",
+  "conditions": [{ "key": "metadata._user", "value": "*" }],
+  "group_by": [{ "key": "metadata._user" }],
+  "type": "cost",
+  "credit_limit": 50,
+  "alert_threshold": 40,
+  "periodic_reset": "monthly",
+  "workspace_id": "<workspace-id>"
 }` },
-  { id: 'rate', label: 'Rate limit — 1,000 rpm per workspace', lang: 'json', code: `{
-  "type": "rate_limits",
-  "policy": {
-    "conditions": [{ "key": "api_key", "value": "*" }],
-    "group_by": [{ "key": "workspace_id" }],
-    "value": 1000,
-    "type": "requests",
-    "unit": "rpm",
-    "status": "active"
-  }
+  { id: 'rate', label: 'Rate limit — 1,000 rpm per workspace', lang: 'json', file: 'rate-policy.json', code: `{
+  "name": "workspace-1000-rpm",
+  "conditions": [{ "key": "api_key", "value": "*" }],
+  "group_by": [{ "key": "workspace_id" }],
+  "type": "requests",
+  "unit": "rpm",
+  "value": 1000,
+  "target": "llm",
+  "workspace_id": "<workspace-id>"
 }` },
-  { id: 'exclude', label: 'Exclude one model', lang: 'json', code: `{
-  "type": "usage_limits",
-  "policy": {
-    "conditions": [{ "key": "model", "value": "@openai/*", "excludes": "@openai/gpt-4o" }],
-    "group_by": [{ "key": "api_key" }],
-    "credit_limit": 200,
-    "type": "cost",
-    "periodic_reset": "monthly"
-  }
+  { id: 'exclude', label: 'Exclude one model', lang: 'json', file: 'usage-policy.json', code: `{
+  "name": "openai-except-gpt-4o",
+  "conditions": [{ "key": "model", "value": "@openai/*", "excludes": "@openai/gpt-4o" }],
+  "group_by": [{ "key": "api_key" }],
+  "type": "cost",
+  "credit_limit": 200,
+  "periodic_reset": "monthly",
+  "workspace_id": "<workspace-id>"
 }` },
+  { id: 'curl', label: 'Send it', lang: 'curl', code: `# Admin API: an SCM service-account token — a gateway key gets 401 (AB05)
+curl -X POST https://api.apps.paloaltonetworks.com/ai_gw/v2/policies/usage-limits \\
+  -H "Authorization: Bearer $SCM_ACCESS_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d @usage-policy.json
+
+curl -X POST https://api.apps.paloaltonetworks.com/ai_gw/v2/policies/rate-limits \\
+  -H "Authorization: Bearer $SCM_ACCESS_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d @rate-policy.json` },
 ]
 
 export const AIGW_GOVERNANCE = [
@@ -1022,14 +1136,14 @@ export const AIGW_GOVERNANCE = [
     group: 'gwgov',
     title: 'Keys, budgets and rate limits',
     sub: 'Who may call what, how much and how fast — enforced at the gateway',
-    minutes: 8,
+    minutes: 10,
     level: 'Setup',
-    docs: pick('agKeys', 'agKeyRotation', 'agBudget', 'agRate', 'agKeyLimits', 'agWsLimits', 'agPolicies', 'agDefaultCfg', 'agSavedOnly', 'agCatalog', 'agWsProv', 'agModelProv', 'agPricing', 'agSecretRefs'),
+    docs: pick('agKeys', 'agKeyRotation', 'agBudget', 'agRate', 'agKeyLimits', 'agWsLimits', 'agPolicies', 'arUsagePolicy', 'arRatePolicy', 'arAdminAuth', 'agDefaultCfg', 'agSavedOnly', 'agCatalog', 'agWsProv', 'agModelProv', 'agPricing', 'agSecretRefs', 'agAb03'),
     blocks: [
       {
         type: 'prose',
         text: [
-          'Two kinds of credential, never interchangeable: **gateway API keys** authenticate inference (models, MCP, agents), and the **Admin API** is called with a Strata Cloud Manager access token issued to a service account. A key\'s scopes say what it may do on the inference path.',
+          'Two kinds of credential, never interchangeable: **gateway API keys** authenticate inference (models, MCP, agents), and the **Admin API** is called with a Strata Cloud Manager access token issued to a service account (15 minutes; see "Org admin: workspaces, roles, SSO and directory sync" for the base URLs). A key\'s scopes say what it may do on the inference path.',
           'Keys come in two levels. **Admin keys** belong to the organisation and act across workspaces; **workspace keys** are scoped to one workspace and are either **Service** keys (automation, CI) or **User** keys (one person, so every log line names them). Only workspace keys can call the completion APIs.',
         ],
       },
@@ -1038,13 +1152,13 @@ export const AIGW_GOVERNANCE = [
         title: 'Inference scopes worth knowing',
         columns: ['Scope', 'Allows'],
         rows: [
-          ['`completions.write`', '`/chat/completions`, `/completions`, `/images`, `/audio`'],
+          ['`completions.write`', 'API Keys page: `/chat/completions`, `/completions`, `/images`, `/audio`. The AB03 help page: every data-plane endpoint — also `/responses`, `/messages`, `/embeddings`, files, batches, fine-tuning, `/realtime`, `/models`, `/decisions`'],
           ['`mcp.invoke` · `agents.invoke`', 'Calling MCP servers and A2A agents through the gateway'],
           ['`guardrails.invoke` · `prompts.render`', 'Running guardrails and rendering prompt templates directly'],
           ['`logs.view` · `logs.list` · `logs.export` · `logs.write` · `analytics.view`', 'Reading, exporting and inserting logs; analytics'],
           ['`workspace_user_api_keys.*` · `workspace_service_api_keys.*`', 'Managing other keys — Service keys only'],
         ],
-        note: 'Admin keys carry organisation scopes (`workspaces.*`, `organisation_guardrails.*`, `audit_logs.list`, `secret_references.*`…) but not `completions.write`.',
+        note: 'Admin keys carry organisation scopes (`workspaces.*`, `organisation_guardrails.*`, `audit_logs.list`, `secret_references.*`…) but not `completions.write`. The same API Keys page says no gateway key is accepted on the Admin API, so it leaves open what an Admin key is for on an SCM tenant; the AB03 page says audit logs need one.',
       },
       { type: 'code', title: 'Create a service key with policy attached', text: 'The default config and metadata ride on the key; the rotation policy rotates its secret monthly with a one-day overlap.', tabs: [{ id: 'curl', lang: 'curl', code: KEY_CREATE }] },
       {
@@ -1053,9 +1167,9 @@ export const AIGW_GOVERNANCE = [
         columns: ['', 'Detail'],
         rows: [
           ['What changes', 'Only the secret — the key id, its budget, attribution and analytics stay.'],
-          ['Manual', '`POST /v2/api-keys/{id}/rotate` with an optional `key_transition_period_ms` (minimum 30 minutes). Both secrets work during the transition; at most two at a time.'],
-          ['Automatic', '`rotation_policy`: `weekly` (Monday 00:00 UTC), `monthly` (the 1st) or `rotation_period_days` 1–365. Email warnings 24 hours ahead.'],
-          ['Enforced', '`user_api_key_rotation_period` makes every user key in the organisation (or a workspace) rotate on a cadence.'],
+          ['Manual', '`POST https://api.apps.paloaltonetworks.com/ai_gw/v2/api-keys/{id}/rotate` (SCM token) with an optional `key_transition_period_ms` (minimum 30 minutes). Returns the new `key` and `key_transition_expires_at`. Both secrets work during the transition; at most two at a time, and no new rotation while one is running.'],
+          ['Automatic', '`rotation_policy`: `weekly` (Monday 00:00 UTC), `monthly` (the 1st) or `rotation_period_days` 1–365 — the last is on the rotation page but not in the API reference schema. Email warnings 24 hours ahead.'],
+          ['Enforced', '`user_api_key_rotation_period` (1–365 days) applies to newly created workspace user keys that have no policy of their own, organisation-wide or per workspace.'],
         ],
       },
       {
@@ -1065,9 +1179,9 @@ export const AIGW_GOVERNANCE = [
         minWidth: 640,
         rows: [
           ['Integration, per workspace', 'Integration → Workspace Provisioning → Edit Budget & Rate Limits', 'Cascades to every provider made from the integration. A rate limit of 0 disables the provider.'],
-          ['API key', 'The key → Add Budget Limit / rate limit', 'Email at the alert threshold; requests keep flowing until the limit.'],
+          ['API key', 'The key → Add Budget Limit / rate limit, when creating or editing it', 'Email at the alert threshold; requests keep flowing until the limit.'],
           ['Workspace', 'Workspace Control → **Budget Allocation**', 'Applies whichever key is used.'],
-          ['Policy', '`POST /v1/policies/usage-limits` or `/rate-limits`', 'Conditions plus `group_by` — e.g. one counter per user, per model or per key.'],
+          ['Policy', '`POST https://api.apps.paloaltonetworks.com/ai_gw/v2/policies/usage-limits` or `/rate-limits` (SCM token)', 'Conditions plus `group_by` — e.g. one counter per user, per model or per key.'],
           ['JWT', 'the `usage_limits` claim', 'Each distinct token is tracked separately.'],
         ],
       },
@@ -1076,14 +1190,30 @@ export const AIGW_GOVERNANCE = [
         title: 'How limits behave',
         columns: ['', 'Budget (usage limit)', 'Rate limit'],
         rows: [
-          ['Measured in', 'Cost in USD (min $1), tokens (min 100) or — in policies — requests', 'Requests or tokens per minute, hour or day (`rpm` / `rph` / `rpd`; policies add `rpw`)'],
-          ['Resets', 'Never, weekly, monthly, or every N days', 'Each window'],
+          ['Measured in', 'Cost in USD (min $1), tokens (min 100) or — in policies, per the product page — requests', 'Requests or tokens per minute, hour or day (`rpm` / `rph` / `rpd`); policies add `rpw`, and the API-key create schema also accepts `rps` and `rpw`'],
+          ['Resets', 'Integration and key: never, weekly or monthly. Workspace and policies: also every N days', 'Each window'],
           ['When exceeded', '**412** Precondition Failed', '**429** Too Many Requests'],
-          ['Editing', 'Immutable once set on an integration or key — duplicate the provider to change it', 'Same for integration-level limits'],
+          ['Editing', 'Integration-level: cannot be edited by anyone once set. API key: set or changed when creating or editing the key. Policy: `PUT` (conditions too, Backend 1.16.0+)', 'Same'],
         ],
-        note: 'A model with no pricing data logs 0 cents and does not count towards a cost budget. Policy alert thresholds write an audit-log event; the docs say emails for them are not sent yet.',
+        note: 'A model with no pricing data logs 0 cents and does not count towards a cost budget. Integration, key and workspace budgets email at the alert threshold; a policy\'s `alert_threshold` only writes an audit-log event — the docs say emails are not sent yet.',
       },
-      { type: 'code', title: 'Policies as code', tabs: POLICY_TABS },
+      { type: 'code', title: 'Policies as code', text: 'Bodies in the API reference\'s flat shape; required are `conditions`, `group_by`, `type` and `credit_limit` (usage) or `unit` and `value` (rate). Not run from this portal.', tabs: POLICY_TABS },
+      {
+        type: 'table',
+        title: 'How a policy matches and counts',
+        columns: ['', 'Rule'],
+        rows: [
+          ['Conditions', 'All conditions must match (AND); a `value` array matches any of its entries (OR); `"*"` is a wildcard; `excludes` carves values out.'],
+          ['Keys', '`api_key` and `metadata.*` (gateway 1.17.0+), `model` (2.0.0+, `@provider/*` wildcards, matched on the model name in the request), `virtual_key`, `provider`, `config`, `prompt`; `workspace_id` only in `group_by`; rate policies also `endpoint_type`. With `target: "mcp_tools"` (immutable; gateway 2.18.0+, Backend 1.24.0+): `mcp_server`, `mcp_tool`.'],
+          ['Counters', 'One per distinct `group_by` value. List them with `GET …/policies/usage-limits/{id}/entities`, reset one with `PUT …/entities/{entityId}/reset`.'],
+          ['Resets', '`periodic_reset` `weekly` or `monthly`, or `periodic_reset_days` 1–365 — mutually exclusive; `next_usage_reset_at` moves the next one.'],
+          ['Availability', 'The policies page opens with "Available on self-hosted deployments. Requires 1.17.0 or higher" — unclear whether that is a version gate or self-hosted only; the API reference lists the endpoints on the SaaS Admin API.'],
+        ],
+      },
+      {
+        type: 'callout', tone: 'docs', title: 'Two published shapes for a policy',
+        text: 'The policies product page posts `{ "type": "usage_limits", "policy": { …, "status": "active" } }` to `/v1/policies/usage-limits` with `x-portkey-api-key`, marks `name` required yet omits it in every use case, and adds `requests` as a usage type and `periodic_reset_days` on create. The API reference posts a flat body to `https://api.apps.paloaltonetworks.com/ai_gw/v2/policies/…` with an SCM token, has no `type` / `policy` wrapper and no `status`, makes `name` optional, and its usage `type` is only `cost` or `tokens` (`periodic_reset_days` appears on update). The tabs follow the reference — the Admin API introduction says to trust it where pages disagree.',
+      },
       {
         type: 'table',
         title: 'Enforced policy — what a caller cannot opt out of',
@@ -1092,7 +1222,7 @@ export const AIGW_GOVERNANCE = [
         rows: [
           ['Default config, override off', 'The key → Config, **Allow Config Override** off', '400 on any request that sends a different config'],
           ['Block Inline Configs', 'Admin Settings → Security → Data Plane Security Settings', '400 with a specific code (below) — only saved `pc-…` configs and `@slug` providers'],
-          ['Model provisioning', 'Integration → Model Provisioning: all models or an allow-list', 'A rejected request for any model outside the list'],
+          ['Model provisioning', 'Integration → Model Provisioning: all models or an allow-list', 'A rejected request for any model outside the list. Since gateway 2.27.0 a Bedrock allow-list also admits `us.*` inference profiles of an allowed base model, and application inference-profile ARNs.'],
           ['Workspace provisioning', 'Integration → Workspace Provisioning', 'The provider slug does not exist for other workspaces'],
           ['Metadata schema', 'Admin Settings → Organisation Properties → API Key / Workspace Metadata Schema', 'Checked when a key or workspace is created or updated — not per request'],
           ['Org / workspace guardrails', 'Admin Settings → Organisation Guardrails; the workspace → Edit', 'Guardrails on every request — see "Guardrail actions, verdicts and PII redaction"'],
@@ -1116,10 +1246,10 @@ export const AIGW_GOVERNANCE = [
         title: 'The Model Catalog',
         columns: ['Object', 'What it is'],
         rows: [
-          ['Integration', 'Stored provider credentials at organisation level. Bedrock: access key, assumed role or Bedrock API key; Vertex: service-account JSON, or workload identity on self-hosted.'],
+          ['Integration', 'Stored provider credentials at organisation level, shared into workspaces. Bedrock page: access key, assumed role or Bedrock API key. Vertex AI page: service-account JSON, project + region with the caller\'s own OAuth token, or workload identity where the gateway runs on Google Cloud. The Admin API schema knows only `aws_auth_type` `accessKey` | `assumedRole` and `vertex_auth_type` `basic` | `serviceAccount` — Bedrock API key and workload identity may be console-only.'],
           ['Provider (`@slug`)', 'What a workspace sees when an integration is shared with it. One integration can back `@openai-dev`, `@openai-prod`…'],
           ['Custom model', 'A fine-tuned or private model with a base model for API compatibility, optional custom pricing, host and headers.'],
-          ['Pricing adjustment', 'A multiplier per integration (`0.8` = 20% off) so cost tracking matches your negotiated rate.'],
+          ['Pricing adjustment', 'A multiplier per integration (`0.8` = 20% off) so cost tracking matches your negotiated rate. Since 2.22.0 also per model — a model-level adjustment replaces the integration\'s rather than merging.'],
           ['Secret reference', 'The credential stays in AWS Secrets Manager, Azure Key Vault or HashiCorp Vault; the data plane fetches it and caches it for 5 minutes.'],
         ],
       },
@@ -1132,7 +1262,10 @@ export const AIGW_GOVERNANCE = [
       },
       {
         type: 'callout', tone: 'docs', title: 'Where the docs disagree with themselves',
-        text: 'Weekly budgets reset on **Sunday** 00:00 UTC on the budget pages but **Monday** on the policies page. The Admin API is shown with an SCM token on `api.apps.paloaltonetworks.com/ai_gw/v2`, with `/ai_gw/admin/v2` for organisation guardrails, and with a gateway key on `aigw.portkey.ai/v1` for policies and secret references — confirm which your tenant accepts before scripting it.',
+        text: [
+          'Weekly budgets reset on **Sunday** 00:00 UTC on the budget-limit pages (integration, key, workspace) but **Monday** on the policies page — and weekly key rotation is Monday too.',
+          'For the Admin API the reference now states one rule: an SCM service-account token on every endpoint, served from `api.apps.paloaltonetworks.com/ai_gw/v2` or `/ai_gw/admin/v2` by resource; a gateway key gets 401 (`AB05`). The policies, secret-references, MCP-guardrails and feedback product pages still show `aigw.portkey.ai/v1/…` with a gateway key; the Admin API introduction says to trust the reference page where they disagree.',
+        ],
       },
     ],
   },
@@ -1142,13 +1275,13 @@ export const AIGW_GOVERNANCE = [
     group: 'gwgov',
     title: 'Org admin: workspaces, roles, SSO and directory sync',
     sub: 'Organisation → workspace → user, and how people get there',
-    minutes: 7,
+    minutes: 9,
     level: 'Setup',
-    docs: pick('agOrgMgmt', 'agWorkspaces', 'agRoles', 'agAccessCtl', 'agSso', 'agScim', 'agScimGroups', 'agCie', 'agAudit', 'agKms', 'agSecurity', 'agGatewayUrls', 'agGwRegister'),
+    docs: pick('agOrgMgmt', 'agWorkspaces', 'agRoles', 'agAccessCtl', 'agSso', 'agScim', 'agScimGroups', 'agCie', 'agAudit', 'agKms', 'agSecurity', 'agGatewayUrls', 'agGwRegister', 'arAdminIntro', 'arAdminAuth', 'arAdminErrors', 'arDeployments'),
     blocks: [
       {
         type: 'prose',
-        text: 'The tenancy model is **Organisation → Workspace → User or machine**. The organisation is the Strata Cloud Manager tenant; workspaces divide it and own integrations, configs, guardrails and keys; people and service keys act inside a workspace. A user must belong to the organisation before joining a workspace.',
+        text: 'The tenancy model is **Organisation → Workspace → User or machine**. The organisation is the Strata Cloud Manager tenant (one TSG is one organisation). Integrations — the provider credentials — are organisation-level and shared into workspaces; configs, providers, guardrails and keys live in a workspace, and people and service keys act inside one. A user must belong to the organisation before joining a workspace.',
       },
       {
         type: 'table',
@@ -1159,7 +1292,7 @@ export const AIGW_GOVERNANCE = [
           ['Organisation', 'Admin', 'Settings, workspaces, admin keys, roles, invitations, access permissions — and admin rights in every workspace'],
           ['Organisation', 'Member', 'Belong to workspaces'],
           ['Workspace', 'Admin / Manager', 'Invite organisation members, assign workspace roles, create workspace keys, manage resources (identical by default)'],
-          ['Workspace', 'Member', 'Read-only by default — the docs are not consistent on this; the access settings below decide'],
+          ['Workspace', 'Member', 'Read-only per the roles page; the access-control page lets members create configs and guardrails, and the SCIM page says "read and write" — the access settings below decide'],
         ],
       },
       {
@@ -1167,13 +1300,14 @@ export const AIGW_GOVERNANCE = [
         title: 'Access settings (Admin Settings → Security)',
         columns: ['Setting', 'Controls'],
         rows: [
-          ['Logs', 'Whether managers and members see logs, and logs metadata'],
+          ['Logs', 'Whether managers, members and organisation admins see logs, and logs metadata (all on by default)'],
           ['Analytics', 'Whether managers and members see analytics'],
-          ['Data visibility', 'Off: a role sees only logs and traces from its own keys; service-key traffic is hidden from it'],
+          ['Data visibility', 'Off: a role sees only logs, traces and analytics from its own keys; service-key and JWT-authenticated traffic is hidden from it'],
           ['API keys', 'Managers: service and user keys. Members: only their own user keys'],
-          ['Prompts · Guardrails · Integrations · Providers', 'View and write rights per role'],
+          ['Guardrails', 'Managers view and write, members view (defaults)'],
+          ['Integrations · Providers', 'Managers may write workspace integrations, MCP integrations and MCP servers (on by default); providers: both roles view, managers manage'],
         ],
-        note: 'Each section can allow a workspace-level override.',
+        note: 'Analytics, data visibility, guardrails, integrations and providers can allow a workspace-level override; the docs show none for logs or API keys, and no page for prompt permissions.',
       },
       {
         type: 'table',
@@ -1182,7 +1316,7 @@ export const AIGW_GOVERNANCE = [
         minWidth: 660,
         rows: [
           ['SSO', 'OIDC or SAML 2.0; first sign-in provisions the user', 'Only verified **Allowed Domains** are provisioned; auto-provisioning can be turned off.'],
-          ['SCIM', 'Entra ID or Okta push users and groups; a group maps to one or more workspaces with one role', 'Okta: SAML apps only, and groups must be pushed. Pattern mapping: `ws-{Workspace}-role-{admin|manager|member}`.'],
+          ['SCIM', 'Entra ID or Okta push users and groups; a group maps to one or more workspaces with one role across all of them', 'Okta: SAML apps only, and groups must be pushed. Pattern mapping defaults to `ws-{Workspace}-role-{admin|manager|member}`; prefix and separator are configurable (Admin Settings → Authentication Settings → SCIM Provisioning → Pattern Based SCIM Grouping). Deleting a mapping keeps its users in the workspace — cleanup happens only when the IdP deletes the group.'],
           ['**CIE Directory Sync**', 'Cloud Identity Engine pulls users and groups from Entra ID, Okta, Google or on-prem AD', 'SCM tenants only — it replaces SCIM there. Delta sync every 15 minutes.'],
         ],
       },
@@ -1199,7 +1333,7 @@ export const AIGW_GOVERNANCE = [
       },
       {
         type: 'callout', tone: 'warn', title: 'Disabling sync is destructive',
-        text: 'Turning Directory Sync off removes every CIE user from their workspaces and deletes all group mappings; turning it back on does not restore them. The docs also name no role for CIE-mapped users, unlike SCIM mappings.',
+        text: 'Turning Directory Sync off removes every CIE user from their workspaces and deletes all group mappings; turning it back on does not restore them. Deleting one CIE mapping removes its users at once — the opposite of SCIM, where they stay. The docs also name no role for CIE-mapped users, unlike SCIM mappings.',
       },
       {
         type: 'table',
@@ -1207,13 +1341,23 @@ export const AIGW_GOVERNANCE = [
         columns: ['Topic', 'Detail'],
         minWidth: 600,
         rows: [
-          ['Audit logs', 'Admin Settings → Audit Logs (owners and admins): who, what, which resource, status, client IP and country. Key rotations and invalid JWTs are recorded too.'],
+          ['Audit logs', 'Admin Settings → Audit Logs (owners and admins): who, what, which resource, status, client IP and country. Key rotations, invalid JWTs and every Admin API call are recorded too. The page claims indefinite retention; there is no audit-log endpoint in the API reference.'],
           ['Encryption', 'TLS 1.2+ in transit, AES-256 at rest. Provider keys are decrypted only in memory, in sandboxed workers.'],
           ['Bring your own key', 'AWS KMS only (envelope encryption) for configs, integration credentials, prompts, guardrails and SSO secrets.'],
-          ['Compliance claims', 'SOC 2, ISO 27001, GDPR, HIPAA.'],
           ['Gateway URLs', 'Settings → Organisation → General: the gateway and MCP gateway URLs shown in snippets — self-hosted deployments.'],
-          ['Hybrid data plane', 'Admin Settings → Gateway Registration → download `values.yaml` (shown once) → Helm.'],
+          ['Hybrid data plane', 'Admin Settings → Gateway Registration → download `values.yaml` (shown once) → Helm. Or the Admin API: `POST https://api.apps.paloaltonetworks.com/ai_gw/admin/v2/deployments` (`name`, `type`, `auth_settings` with `gateway_base_url` / `mcp_gateway_base_url`) returns `client_auth` and `credentials`; `GET …/deployments/{id}/ping` checks reachability.'],
         ],
+      },
+      {
+        type: 'table',
+        title: 'The Admin API — one credential, three base URLs',
+        columns: ['Base URL', 'Serves'],
+        rows: [
+          ['`https://api.apps.paloaltonetworks.com/ai_gw/v2`', 'Configs, workspace guardrails, providers, API keys, usage and rate-limit policies, MCP servers, analytics, feedback'],
+          ['`https://api.apps.paloaltonetworks.com/ai_gw/admin/v2`', 'Integrations, MCP integrations, secret references, deployments (hybrid data planes), organisation guardrails'],
+          ['`https://aigw.portkey.ai/v1`', 'Only `POST /logs` and `GET /logs/{logId}`'],
+        ],
+        note: 'Every Admin endpoint takes `Authorization: Bearer <scm-token>`: a 15-minute token from an SCM service account (`POST https://auth.apps.paloaltonetworks.com/oauth2/access_token`, `grant_type=client_credentials&scope=tsg_id:<tsg-id>`). The token names the tenant; a gateway API key gets 401 (`AB05`). Configs, integrations and providers are addressed by slug; guardrails, MCP servers, policies and keys by id; `workspace_id` goes in the query on GET, in the body on POST and PUT. The reference has no endpoints for workspaces, users and roles, SSO / SCIM / CIE or organisation settings — those stay in the console.',
       },
       {
         type: 'cards',

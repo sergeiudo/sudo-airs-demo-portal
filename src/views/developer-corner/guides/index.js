@@ -4,8 +4,10 @@ import { RUNTIME, AGENTS } from './runtime'
 import { GATEWAY, INTEGRATIONS } from './gateway'
 import { AIGW_GATEWAY, AIGW_GOVERNANCE } from './aigw'
 import { AIGW_HYBRID } from './hybrid'
+import { AIGW_REF } from './aigw-ref'
 import { MODELS, REDTEAM, NETWORK } from './models'
 import { LIBRARY } from './library'
+import { CATALOG } from './catalog'
 
 /**
  * The Developer Corner's table of contents. Rail order = reading order: start,
@@ -29,14 +31,14 @@ export const GROUPS = [
 // The gateway guides come from two files; this is their reading order, which
 // is also what Previous / Next follows.
 const GATEWAY_ORDER = [
-  'gw-overview', 'gw-connect', 'gw-universal', 'gw-routing', 'gw-guardrail', 'gw-guardrails',
+  'gw-overview', 'gw-connect', 'gw-providers', 'gw-universal', 'gw-inference-api', 'gw-routing', 'gw-guardrail', 'gw-guardrails',
   'gw-observability', 'gw-mcp', 'gw-agents', 'gw-coding', 'gw-hybrid',
-  'gw-governance', 'gw-jwt', 'gw-admin',
+  'gw-governance', 'gw-jwt', 'gw-admin', 'gw-admin-api',
 ]
-const gatewayPool = Object.fromEntries([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_HYBRID, ...AIGW_GOVERNANCE].map((g) => [g.id, g]))
+const gatewayPool = Object.fromEntries([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_HYBRID, ...AIGW_REF, ...AIGW_GOVERNANCE].map((g) => [g.id, g]))
 const GATEWAY_ALL = GATEWAY_ORDER.map((id) => gatewayPool[id])
 
-export const GUIDES = [...START, ...RUNTIME, ...AGENTS, ...GATEWAY_ALL, ...INTEGRATIONS, ...MODELS, ...REDTEAM, ...NETWORK, ...LIBRARY]
+export const GUIDES = [...START, ...RUNTIME, ...AGENTS, ...GATEWAY_ALL, ...INTEGRATIONS, ...MODELS, ...REDTEAM, ...NETWORK, ...LIBRARY.slice(0, 1), ...CATALOG, ...LIBRARY.slice(1)]
 
 export const GROUP_BY_ID = Object.fromEntries(GROUPS.map((g) => [g.id, g]))
 export const GUIDE_BY_ID = Object.fromEntries(GUIDES.map((g) => [g.id, g]))

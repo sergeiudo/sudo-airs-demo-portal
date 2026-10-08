@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Info, AlertTriangle, BookOpen, FlaskConical, GitBranch, ArrowRight, ExternalLink, ChevronDown, CheckCircle2, Eye,
+  Info, AlertTriangle, BookOpen, FlaskConical, GitBranch, ArrowRight, ExternalLink, ChevronDown, CheckCircle2, Eye, Search, X,
 } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { shade, bandBg } from '../home-2027/band'
@@ -12,7 +12,7 @@ import { CodeTabs } from './CodeTabs'
  * data (guides/*.js); these components render it. Inline markup is parsed
  * into React nodes, never set as HTML.
  *
- *   prose · steps · code · callout · table · facts · cards · links · repo · checklist · live
+ *   prose · steps · code · callout · table · facts · cards · links · repo · checklist · live · catalog
  *
  * A code block may carry `build(vars)` instead of `tabs`: the snippet is then
  * generated from the live panel's current inputs, so the code on the left is
@@ -263,7 +263,7 @@ function DecisionCard({ t, card, onGo }) {
 const SOURCE = {
   docs:   { label: 'docs.paloaltonetworks.com', key: 'live' },
   pandev: { label: 'pan.dev', key: 'live' },
-  aigw:   { label: 'docs.gw.prismaairs.com', key: 'live' },
+  aigw:   { label: 'portkey.ai/docs', key: 'live' },
   pypi:   { label: 'PyPI', key: 'pass' },
   npm:    { label: 'npm', key: 'pass' },
   github: { label: 'GitHub', key: 'idle' },
@@ -320,6 +320,84 @@ function Checklist({ t, tone, block }) {
   )
 }
 
+// ─── catalog: every page of a doc set, grouped and filterable ──────────────
+// block.catalog = { source, pages, generatedAt, groups: [{ title, area, pages: [[title, path, what, sub]] }] }
+const AREAS = [['', 'Everything'], ['product', 'Product'], ['api', 'API reference'], ['integrations', 'Integrations'], ['ops', 'Self-hosting'], ['docs', 'Start · changelog']]
+
+function Catalog({ t, tone, block }) {
+  const c = block.catalog
+  const [q, setQ] = useState('')
+  const [area, setArea] = useState('')
+  const [open, setOpen] = useState(() => new Set())
+  const needle = q.trim().toLowerCase()
+  const groups = useMemo(() => c.groups
+    .filter((g) => !area || g.area === area)
+    .map((g) => ({ ...g, hits: needle ? g.pages.filter((p) => `${p[0]} ${p[2]} ${p[3]} ${p[1]}`.toLowerCase().includes(needle)) : g.pages }))
+    .filter((g) => g.hits.length), [c, area, needle])
+  const shown = groups.reduce((n, g) => n + g.hits.length, 0)
+  const urlOf = (p) => (p.startsWith('/docs') ? `https://portkey.ai${p}` : `${c.source}${p}`)
+  const ink = t.isLight ? shade(tone, 0.25) : tone
+  const toggle = (title) => setOpen((s) => { const n = new Set(s); n.has(title) ? n.delete(title) : n.add(title); return n })
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 rounded-2xl px-3" style={{ height: 40, background: t.panel, border: `1px solid ${t.hairline}` }}>
+        <Search size={15} style={{ color: t.inkDim, flexShrink: 0 }} aria-hidden="true" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Filter ${c.pages} pages — titles and descriptions`} aria-label="Filter the doc pages"
+               ref={(el) => el?.style.setProperty('background-color', 'transparent', 'important')}
+               className="flex-1 min-w-0 outline-none" style={{ fontFamily: FONT.prose, fontSize: 13, color: t.ink, border: 'none' }} />
+        {q && <button type="button" onClick={() => setQ('')} aria-label="Clear the filter" className={`grid place-items-center rounded-full ${focusCls}`} style={{ width: 22, height: 22, color: t.inkDim }}><X size={13} /></button>}
+        <span className="flex-shrink-0" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkDim }}>{shown} of {c.pages}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Area">
+        {AREAS.map(([id, label]) => {
+          const on = area === id
+          return (
+            <button key={id || 'all'} type="button" role="radio" aria-checked={on} onClick={() => setArea(id)}
+                    className={`rounded-full px-3 ${focusCls}`}
+                    style={{ height: 28, fontFamily: FONT.prose, fontSize: 12, fontWeight: 600, color: on ? '#fff' : t.inkDim, background: on ? bandBg(tone) : t.panel, border: `1px solid ${on ? 'transparent' : t.hairline}`, boxShadow: on ? `0 4px 12px ${tone}40` : 'none' }}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+      {groups.length === 0 && <p className="px-2 py-4" style={{ fontFamily: FONT.prose, fontSize: 13, color: t.inkDim }}>No page title or description matches “{q}”. Ask the docs instead — top of the rail.</p>}
+      <div className="space-y-2">
+        {groups.map((g) => {
+          const isOpen = !!needle || open.has(g.title)
+          return (
+            <div key={g.title} className="rounded-2xl overflow-hidden" style={{ background: t.panel, border: `1px solid ${isOpen ? `${tone}55` : t.hairline}` }}>
+              <button type="button" onClick={() => toggle(g.title)} aria-expanded={isOpen} className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left ${focusCls}`}>
+                <span className="min-w-0 flex-1 truncate" style={{ fontFamily: FONT.display, fontSize: 13.5, fontWeight: 700, color: t.ink }}>{g.title}</span>
+                <span className="rounded-full px-2 flex-shrink-0" style={{ fontFamily: FONT.prose, fontSize: 11, fontWeight: 600, lineHeight: '20px', color: isOpen ? ink : t.inkDim, background: isOpen ? `${tone}17` : t.sunken }}>{needle ? `${g.hits.length} of ${g.pages.length}` : g.pages.length}</span>
+                <ChevronDown size={14} style={{ color: t.inkDim, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} aria-hidden="true" />
+              </button>
+              {isOpen && (
+                <div className="px-1.5 pb-1.5">
+                  {g.hits.map(([title, path, what, sub]) => (
+                    <a key={path} href={urlOf(path)} target="_blank" rel="noopener noreferrer"
+                       className={`flex items-start gap-2.5 rounded-xl px-2.5 py-1.5 ${focusCls}`}
+                       onMouseEnter={(e) => { e.currentTarget.style.background = t.sunken }} onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block" style={{ fontFamily: FONT.prose, fontSize: 12.5, fontWeight: 650, color: t.ink, lineHeight: 1.35 }}>
+                          {title}{sub ? <span style={{ fontWeight: 500, color: t.inkFaint }}> · {sub}</span> : null}
+                        </span>
+                        {what && <span className="block" style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.45, color: t.inkDim }}>{what}</span>}
+                      </span>
+                      <ExternalLink size={12} style={{ color: t.inkFaint, flexShrink: 0, marginTop: 3 }} aria-hidden="true" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p style={{ fontFamily: FONT.prose, fontSize: 11.5, color: t.inkFaint }}>Read from the official llms.txt indexes on {c.generatedAt}; descriptions are one line each. Regenerate with <code style={{ fontFamily: FONT.mono }}>node scripts/gen-aigw-catalog.mjs</code>.</p>
+    </div>
+  )
+}
+
 // ─── a runnable marker: points at the live panel ────────────────────────────
 function LiveHint({ t, block, onRun }) {
   const tone = t.live
@@ -358,6 +436,7 @@ export function Block({ t, tone, block, onGo, onRun, vars }) {
     case 'links': return <DocLinks t={t} block={block} />
     case 'checklist': return <Checklist t={t} tone={tone} block={block} />
     case 'live': return <LiveHint t={t} block={block} onRun={onRun} />
+    case 'catalog': return <Catalog t={t} tone={tone} block={block} />
     default: return null
   }
 }
