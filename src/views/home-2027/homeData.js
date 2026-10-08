@@ -1,11 +1,11 @@
-import { PILLARS, hl } from '../HomeViewV2'
+import { PILLARS, hl } from '../../data/pillars'
 import { ATTACK_CATEGORIES } from '../../data/mockData'
 import { MOH_ATTACKS } from '../../data/moh/attacks'
 
 /**
  * homeData.js — what the 2027 home knows about each pillar beyond PILLARS.
  *
- * PILLARS (in HomeViewV2) stays the single source of titles, copy and accent,
+ * PILLARS (src/data/pillars.js) stays the single source of titles, copy and accent,
  * so a rename still happens in one place. This file adds the layout facts the
  * old grid never needed: where a pillar sits in the run of show, which product
  * area it belongs to, and the one number worth putting on its tile.

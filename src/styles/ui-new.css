@@ -1,6 +1,7 @@
 /* ─── New design layer ──────────────────────────────────────────────────────
  *
- * Active only under html.ui-new (the Design switch, AppContext.uiMode). With
+ * Active under html.ui-new, which App.jsx always sets since the Classic design
+ * was retired (2026-10-08). With
  * Classic selected none of this applies and the portal is exactly as it was.
  *
  * Two halves:

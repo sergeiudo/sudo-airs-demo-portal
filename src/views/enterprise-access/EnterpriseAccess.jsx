@@ -60,7 +60,6 @@ function LoadError({ t, message, onRetry }) {
 
 export function EnterpriseAccess() {
   const { state } = useAppContext()
-  const isNew = state.uiMode === 'new'
   const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
   const tone = HOME_PILLARS.find((p) => p.id === 'enterpriseAccess').accent
   const a = useAccessSession()
@@ -141,10 +140,8 @@ export function EnterpriseAccess() {
         backgroundImage: `linear-gradient(${t.grid} 1px, transparent 1px), linear-gradient(90deg, ${t.grid} 1px, transparent 1px)`,
         backgroundSize: '44px 44px',
       }} />
-      {isNew && (
-        <PillarHeader pillarId="enterpriseAccess" warn={expired}
-                      actions={<AccessActions t={t} tone={tone} a={a} now={now} onOpenLifecycle={openLifecycle} />} />
-      )}
+      <PillarHeader pillarId="enterpriseAccess" warn={expired}
+                    actions={<AccessActions t={t} tone={tone} a={a} now={now} onOpenLifecycle={openLifecycle} />} />
       {content}
       <LifecycleDrawer t={t} tone={tone} a={a} open={drawer} onClose={closeLifecycle} />
     </div>

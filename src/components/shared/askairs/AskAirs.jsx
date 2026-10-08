@@ -8,50 +8,55 @@ import { shade, bandDots, bandGlass } from '../../../views/home-2027/band'
 import { deepBand } from '../../../views/runtime-launch/diagramKit'
 import { CopyIcon } from '../../../views/developer-corner/CodeTabs'
 import { Tip } from '../Tip'
-import { PILLAR_BY_ID } from '../../../data/assist-pillars'
+import { useWidgetFit, pillBox, pillClass } from '../headerFit'
 import { useAskStore, openAskAirs, closeAskAirs, askAirs, removeAsk, clearAsks, indexLine, requestAskView } from './askStore'
-import { ASK_TONE, focusCls, inkOn, AnswerBody, AnswerFoot, Pending, SourceRow, plainAnswer } from './AskParts'
+import { ASK_TONE, focusCls, inkOn, AnswerBody, AnswerFoot, ResearchSteps, SourceRow, plainAnswer } from './AskParts'
 
 /**
- * Ask AIRS — the docs helper on every pillar of the New design.
+ * Ask AIRS — a Prisma AIRS sidekick, one click away on every page of the New
+ * design. It is not about this portal: ask it anything about Prisma AIRS and
+ * Claude researches the official docs with tools (search, read the page, fetch
+ * a live official page) before answering, citing every source (assist-agent.js
+ * via /api/assist/ask). The research shows live.
  *
  * AskAirsButton sits in the pillar header (variant band) and the app bars
- * (variant bar); AskAirsDrawer is rendered once by App.jsx. The drawer does
- * not block the page — read an answer while you keep using the pillar. It
- * knows which pillar is open (its products rank first, its questions are
- * suggested); the server does the rest (/api/assist, assist-routes.js).
+ * (variant bar); AskAirsDrawer is rendered once by App.jsx and does not block
+ * the page. Nothing is saved (askStore.js).
  */
+
+export const ASK_SUGGESTIONS = [
+  'How do I configure the AI Gateway with Vertex AI?',
+  'Which detection services does an AIRS security profile have?',
+  'How do I add a target for AI Red Teaming?',
+  'Which model formats can AI Model Security scan?',
+  'How do I protect MCP tool calls with Prisma AIRS?',
+  'What is the difference between API intercept and network intercept?',
+]
 
 export function AskAirsButton({ t, variant = 'bar' }) {
   const band = variant === 'band'
+  const iconOnly = useWidgetFit() >= 4
   const [hot, setHot] = useState(false)
   return (
-    <Tip title="Ask AIRS" text="Ask the Prisma AIRS docs — admin guides, API reference, AI Gateway docs, release notes. Every answer cites its page.">
-      <button type="button" onClick={openAskAirs} onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)} aria-haspopup="dialog"
-              className={`inline-flex items-center gap-1.5 rounded-full flex-shrink-0 whitespace-nowrap ${band ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white' : focusCls}`}
-              style={band
-                ? { height: 30, padding: '0 12px 0 9px', fontFamily: FONT.prose, fontSize: 12.5, fontWeight: 600, ...bandGlass, background: hot ? 'rgba(0,0,0,0.34)' : bandGlass.background, transition: 'background 160ms ease' }
-                : { height: 38, padding: '0 14px 0 11px', fontFamily: FONT.prose, fontSize: 13, fontWeight: 600, color: t.ink, background: hot ? t.sunken : t.panel, border: `1px solid ${hot ? `${ASK_TONE}66` : t.hairline}`, transition: 'background 160ms ease, border-color 160ms ease' }}>
+    <Tip title="Ask AIRS" text="Your Prisma AIRS sidekick — it searches the official docs, reads the pages and answers with sources.">
+      <button type="button" onClick={openAskAirs} onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)} aria-haspopup="dialog" aria-label={iconOnly ? 'Ask AIRS' : undefined}
+              className={pillClass(band)} style={pillBox({ t, band, iconOnly, active: hot, border: hot ? `${ASK_TONE}66` : undefined })}>
         <MessageCircleQuestion size={14} style={{ color: band ? '#fff' : inkOn(t, ASK_TONE, 0.2) }} aria-hidden="true" />
-        Ask AIRS
+        {!iconOnly && 'Ask AIRS'}
       </button>
     </Tip>
   )
 }
 
-function Thread({ t, item, pillarId, status }) {
+function Thread({ t, item }) {
   const [showSources, setShowSources] = useState(false)
-  const askedOn = item.pillar && item.pillar !== pillarId ? PILLAR_BY_ID[item.pillar]?.title : null
   return (
     <article className="rounded-2xl overflow-hidden" style={{ background: t.panel, border: `1px solid ${t.glassEdge}`, boxShadow: t.shadowSm }}>
       <div className="flex items-start gap-2.5 px-3.5 pt-3">
         <span className="grid place-items-center rounded-lg flex-shrink-0" style={{ width: 26, height: 26, background: `${ASK_TONE}17`, color: inkOn(t, ASK_TONE, 0.25) }}>
           <MessageCircleQuestion size={13} aria-hidden="true" />
         </span>
-        <div className="min-w-0 flex-1">
-          <h3 style={{ fontFamily: FONT.display, fontSize: 14.5, fontWeight: 700, lineHeight: 1.35, color: t.ink, margin: '3px 0 0' }}>{item.question}</h3>
-          {askedOn && <span className="inline-block rounded-full px-2 mt-1" style={{ fontFamily: FONT.prose, fontSize: 10.5, lineHeight: '17px', color: t.inkDim, background: t.sunken }}>asked on {askedOn}</span>}
-        </div>
+        <h3 className="min-w-0 flex-1" style={{ fontFamily: FONT.display, fontSize: 14.5, fontWeight: 700, lineHeight: 1.35, color: t.ink, margin: '3px 0 0' }}>{item.question}</h3>
         {!item.pending && (
           <span className="flex items-center gap-0.5 flex-shrink-0">
             {item.answer && <span className="grid place-items-center rounded-full" style={{ width: 26, height: 26, color: t.inkDim }} title="Copy the answer with its sources"><CopyIcon text={plainAnswer(item)} light={t.isLight} size={12} /></span>}
@@ -60,7 +65,8 @@ function Thread({ t, item, pillarId, status }) {
         )}
       </div>
       <div className="px-3.5 pb-3 pt-2 space-y-2.5">
-        {item.pending ? <Pending t={t} status={status} /> : (
+        <ResearchSteps t={t} item={item} />
+        {!item.pending && (
           <>
             {item.answer && <AnswerBody t={t} item={item} size={13.5} />}
             <AnswerFoot t={t} item={item} />
@@ -71,7 +77,7 @@ function Thread({ t, item, pillarId, status }) {
                   <BookOpen size={12} aria-hidden="true" /> {showSources ? 'Hide' : 'Show'} the {item.sources.length} sources
                   <ChevronDown size={12} style={{ transform: showSources ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} aria-hidden="true" />
                 </button>
-                {showSources && <div className="space-y-1 mt-2">{item.sources.map((s) => <SourceRow key={s.n} t={t} s={s} compact />)}</div>}
+                {showSources && <div className="space-y-1 mt-2">{item.sources.map((s) => <SourceRow key={s.id} t={t} s={s} compact />)}</div>}
               </div>
             )}
           </>
@@ -85,7 +91,6 @@ export function AskAirsDrawer() {
   const { state, dispatch } = useAppContext()
   const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
   const ask = useAskStore()
-  const pillar = PILLAR_BY_ID[state.activeView] ?? null
   const [text, setText] = useState('')
   const inputRef = useRef(null)
   const ready = ask.status?.state === 'ready'
@@ -98,13 +103,9 @@ export function AskAirsDrawer() {
     return () => { clearTimeout(id); document.removeEventListener('keydown', onKey) }
   }, [ask.open])
 
-  const submit = (q = text) => { if (!q.trim() || !ready || ask.pending) return; askAirs(q, pillar?.id ?? state.activeView); setText('') }
-  const fullView = () => {
-    closeAskAirs()
-    requestAskView()
-    dispatch({ type: 'SET_VIEW', payload: 'developerCorner' })
-  }
-  const suggestions = (pillar?.questions ?? PILLAR_BY_ID.home.questions).filter((q) => !ask.items.some((i) => i.question === q))
+  const submit = (q = text) => { if (!q.trim() || !ready || ask.pending) return; askAirs(q); setText('') }
+  const fullView = () => { closeAskAirs(); requestAskView(); dispatch({ type: 'SET_VIEW', payload: 'developerCorner' }) }
+  const suggestions = ASK_SUGGESTIONS.filter((q) => !ask.items.some((i) => i.question === q))
 
   return createPortal(
     <AnimatePresence>
@@ -121,10 +122,10 @@ export function AskAirsDrawer() {
                 <MessageCircleQuestion size={19} style={{ color: '#fff' }} aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate" style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>Ask AIRS{pillar ? ` · ${pillar.title}` : ''}</div>
-                <div style={{ fontFamily: FONT.display, fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.15, marginTop: 2 }}>Ask the Prisma AIRS docs</div>
+                <div style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>Your Prisma AIRS sidekick</div>
+                <div style={{ fontFamily: FONT.display, fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.15, marginTop: 2 }}>Ask AIRS</div>
                 <div className="truncate" aria-live="polite" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>
-                  {ask.status?.state === 'building' && <Loader2 size={11} className="animate-spin inline mr-1" aria-hidden="true" />}{indexLine(ask.status)} · every answer cites its page
+                  {ask.status?.state === 'building' ? <><Loader2 size={11} className="animate-spin inline mr-1" aria-hidden="true" />{indexLine(ask.status)}</> : 'Searches the official docs, reads the pages, answers with sources'}
                 </div>
               </div>
               <button type="button" onClick={fullView} aria-label="Open the full view in the Developer Corner" title="Full view (Developer Corner)"
@@ -141,9 +142,9 @@ export function AskAirsDrawer() {
           <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3.5 space-y-3">
             <div className="flex items-end gap-2 rounded-2xl p-1.5" style={{ background: t.panel, border: `1.5px solid ${ASK_TONE}55`, boxShadow: `0 8px 20px ${ASK_TONE}14` }}>
               <textarea ref={(el) => { inputRef.current = el; el?.style.setProperty('background-color', 'transparent', 'important') }}
-                        value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={600}
+                        value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={800}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
-                        placeholder={pillar && pillar.id !== 'home' ? `Ask about ${pillar.title} — or anything in Prisma AIRS…` : 'Ask anything about Prisma AIRS…'}
+                        placeholder="Ask anything about Prisma AIRS — runtime, the AI Gateway, model security, red teaming, agents…"
                         aria-label="Your question for Ask AIRS"
                         className="flex-1 min-w-0 resize-none outline-none px-2 py-1.5" style={{ fontFamily: FONT.prose, fontSize: 13.5, lineHeight: 1.5, color: t.ink, border: 'none' }} />
               <button type="button" onClick={() => submit()} disabled={!ready || ask.pending || !text.trim()} aria-label="Ask"
@@ -155,9 +156,9 @@ export function AskAirsDrawer() {
 
             {suggestions.length > 0 && !ask.pending && (
               <div>
-                <div style={{ ...LBL, fontSize: 9, color: t.inkDim, margin: '0 4px 6px' }}>{pillar && pillar.id !== 'home' ? `Asked about ${pillar.title}` : 'Try asking'}</div>
+                <div style={{ ...LBL, fontSize: 9, color: t.inkDim, margin: '0 4px 6px' }}>Try asking</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {suggestions.slice(0, ask.items.length ? 2 : 4).map((q) => (
+                  {suggestions.slice(0, ask.items.length ? 2 : 6).map((q) => (
                     <button key={q} type="button" onClick={() => submit(q)} disabled={!ready}
                             className={`rounded-full px-3 text-left disabled:opacity-45 ${focusCls}`}
                             style={{ minHeight: 28, fontFamily: FONT.prose, fontSize: 12, color: t.ink, background: t.panel, border: `1px solid ${t.hairline}` }}
@@ -169,7 +170,7 @@ export function AskAirsDrawer() {
               </div>
             )}
 
-            {ask.items.map((item) => <Thread key={item.id} t={t} item={item} pillarId={pillar?.id} status={ask.status} />)}
+            {ask.items.map((item) => <Thread key={item.id} t={t} item={item} />)}
 
             {ask.items.length > 1 && !ask.pending && (
               <div className="flex justify-center">
@@ -180,7 +181,7 @@ export function AskAirsDrawer() {
               </div>
             )}
             <p className="px-1 pb-2" style={{ fontFamily: FONT.prose, fontSize: 11, lineHeight: 1.5, color: t.inkFaint }}>
-              Answers come only from the Prisma AIRS admin guides, the pan.dev API reference and its OpenAPI specs, the AI Gateway docs, the release notes and this portal&apos;s own guides — refreshed daily — and cite the passages they used. {pillar && pillar.id !== 'home' ? `On ${pillar.title}, its products rank first.` : ''} Check anything that matters on the page itself. Nothing is saved — the conversation is gone when you reload.
+              Claude researches the official Prisma AIRS docs — the admin guides, the pan.dev API reference and its specs, the AI Gateway docs, the release notes — and can open live pages on the official docs sites. Claims from the docs cite their source; anything from the model&apos;s own knowledge is marked “model knowledge” — verify it. Nothing is saved: the conversation is gone when you reload.
             </p>
           </div>
         </motion.aside>

@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { X, ArrowUpRight, Search, CornerDownLeft, Sun, Moon, FileText, Play, ChevronLeft, ChevronRight, Sparkles, Megaphone } from 'lucide-react'
 import { FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { deepBand } from '../runtime-launch/diagramKit'
-import { hl } from '../HomeViewV2'
+import { hl } from '../../data/pillars'
 import { shade, bandBg, bandDots, bandGlass, areaPill } from './band'
 import { ago } from './homeData'
 

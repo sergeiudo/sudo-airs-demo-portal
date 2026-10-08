@@ -8,7 +8,6 @@
  *               Chain Security, AI Agent Identity, AI Gateway (SCM)
  *   pandev      the Prisma AIRS API pages on pan.dev
  *   specs       the OpenAPI specs behind them (one page per endpoint and schema)
- *   portal      this portal's Developer Corner guides and pillar facts
  *   releases    the release notes the server already scrapes (set in-process)
  *
  * Each page is split at its headings into passages and indexed with BM25
@@ -36,8 +35,8 @@ export const COLLECTIONS = [
   { id: 'pdf:gateway', label: 'AI Gateway admin guide (SCM)', product: 'gateway', ttl: DAY },
   { id: 'pandev', label: 'pan.dev API reference', product: 'runtime', ttl: DAY },
   { id: 'specs', label: 'Prisma AIRS OpenAPI specs', product: 'runtime', ttl: DAY },
-  // The guides change with the code, so they are rebuilt on every start.
-  { id: 'portal', label: 'This portal', product: 'portal', ttl: 0 },
+  // A community site, not official docs — indexed because it carries field-tested procedures.
+  { id: 'impl', label: 'PAN implementation guides (community)', product: 'runtime', ttl: DAY },
 ]
 const BY_ID = Object.fromEntries(COLLECTIONS.map((c) => [c.id, c]))
 
@@ -52,7 +51,7 @@ const S = {
   startedAt: Date.now(),
 }
 let inflight = null
-let portalFresh = false
+let urlIndex = new Map() // page url → { collection, i } for readPage
 
 // ─── text → passages ─────────────────────────────────────────────────────────
 
@@ -121,6 +120,7 @@ export function tokens(s) {
 // Model Catalog ones; ~25 templated MCP-server pages and every other
 // integration page repeat "Using configs / Fallbacks / Guardrails" sections.
 function weightOf(pg) {
+  if (pg.collection === 'impl') return 0.9 // official docs win a tie
   if (pg.collection !== 'aigw') return 1
   if (/\/virtual-keys(\/|$)/.test(pg.url)) return 0.6
   if (/\/docs\/aigw\/integrations\/mcp-servers\//.test(pg.url)) return 0.65
@@ -153,6 +153,9 @@ function rebuild() {
     for (const [t, n] of tf) { if (!postings.has(t)) postings.set(t, []); postings.get(t).push([i, n]) }
   })
   const avg = lens.reduce((a, b) => a + b, 0) / Math.max(1, lens.length)
+  const idx = new Map()
+  for (const c of COLLECTIONS.map((x) => x.id).concat('releases')) (S.docs.get(c)?.pages ?? []).forEach((pg, i) => idx.set(pg.url, { collection: c, i }))
+  urlIndex = idx
   S.pages = pages
   S.passages = passages
   S.weights = pages.map(weightOf)
@@ -164,12 +167,30 @@ function rebuild() {
  * pillar the reader is on); `perPage` caps passages per page so one long
  * page cannot fill the answer.
  */
+// Shorthand people type → the words the docs use. Applied to queries only.
+const ALIASES = [
+  [/\bai[- ]?gw\b|\baigw\b/gi, 'AI Gateway'],
+  [/\bvertex ?ai\b|\bvertexai\b/gi, 'Vertex AI'],
+  [/\bscm\b/gi, 'Strata Cloud Manager SCM'],
+  [/\bairs\b/gi, 'AIRS'],
+  [/\bmcp gw\b/gi, 'MCP Gateway'],
+  [/\bred[- ]?team(ing)?\b/gi, 'Red Teaming'],
+  [/\bk8s\b/gi, 'Kubernetes'],
+  [/\bhf\b/gi, 'Hugging Face'],
+  [/\bdlp\b/gi, 'DLP data loss prevention sensitive data'],
+]
+export const expandQuery = (q) => ALIASES.reduce((s, [re, to]) => s.replace(re, to), String(q))
+
+// "What's new / latest / released" wants the release notes, whatever else it names.
+const WANTS_NEW = /\b(new|latest|recent(ly)?|release[ds]?|changelog|changed|added|since|this (month|week|year)|announce)/i
+
 export function search(query, { k = 8, perPage = 2, perSection = 2, perCollection = {}, boost = {}, collectionBoost = {} } = {}) {
   if (!S.index) return []
+  if (WANTS_NEW.test(query) && collectionBoost.releases == null) collectionBoost = { ...collectionBoost, releases: 2.2 }
   const { postings, lens, avg, n, titles } = S.index
   const scores = new Map()
   const idfs = new Map()
-  for (const t of new Set(tokens(query))) {
+  for (const t of new Set(tokens(expandQuery(query)))) {
     const list = postings.get(t)
     if (!list) continue
     const idf = Math.log(1 + (n - list.length + 0.5) / (list.length + 0.5))
@@ -245,12 +266,10 @@ export function ensureDocs({ force = false } = {}) {
   const now = Date.now()
   const stale = COLLECTIONS.filter((c) => {
     if (force) return true
-    if (c.id === 'portal') return !portalFresh
     const d = S.docs.get(c.id)
     return !d || now - (d.checkedAt ?? d.builtAt ?? 0) > c.ttl
   }).map((c) => c.id)
   if (!stale.length) return Promise.resolve()
-  portalFresh = true
   inflight = runWorker(stale).then(() => rebuild()).catch((e) => console.warn('[airs-docs]', e.message)).finally(() => { inflight = null })
   return inflight
 }
@@ -268,6 +287,22 @@ export function lookup(collection, title, section, max = 1) {
     collection, collectionLabel: BY_ID[collection]?.label ?? collection, product: pg.product, title: pg.title, section: pg.section,
     heading: p.heading, desc: pg.desc, url: pg.url, pageUrl: pg.url, text: p.text, score: 0, deprecated: false,
   }))
+}
+
+/**
+ * The full text of an indexed page, for the sidekick's read_page tool. A PDF
+ * page continues into the following pages of the same section, up to max.
+ */
+export function readPage(url, max = 9000) {
+  const at = urlIndex.get(url) ?? urlIndex.get(String(url).replace(/#(?!page=).*$/, ''))
+  if (!at) return null
+  const pages = S.docs.get(at.collection).pages
+  const pg = pages[at.i]
+  let text = clean(pg.md)
+  if (at.collection.startsWith('pdf:')) {
+    for (let j = at.i + 1; j < pages.length && text.length < max && pages[j].heading === pg.heading; j++) text += `\n\n${clean(pages[j].md)}`
+  }
+  return { collection: at.collection, label: BY_ID[at.collection]?.label ?? 'Release notes', product: pg.product ?? BY_ID[at.collection]?.product, title: pg.title, section: pg.section, heading: pg.heading ?? null, url: pg.url, text: text.slice(0, max), truncated: text.length > max }
 }
 
 /** The release notes, set in-process by server.js whenever it scrapes them. */

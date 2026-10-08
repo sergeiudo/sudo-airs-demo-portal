@@ -11,7 +11,6 @@ import { useOverview, useLiveStream, useWire, useLog } from './useTelemetry'
 import { TrafficFlow } from './TrafficFlow'
 import { Hero, Caught, Coverage, EnforcementPoints } from './Overview'
 import { TrafficChart, CostOfProtection } from './Charts'
-import { RegionsButton } from '../../components/shared/RegionsPanel'
 import { LiveWire } from './LiveWire'
 import { PromptLog } from './PromptLog'
 import { WINDOWS, TARGET_ORDER, targetMeta, inkOn } from './telemetryModel'
@@ -162,7 +161,6 @@ export function TelemetryLaunch() {
       <PillarHeader pillarId="observability"
                     actions={(
                       <>
-                        <RegionsButton t={t} />
                         <LiveActions t={t} tone={tone} status={status} paused={paused} onToggle={() => setPaused((p) => !p)} />
                       </>
                     )} />

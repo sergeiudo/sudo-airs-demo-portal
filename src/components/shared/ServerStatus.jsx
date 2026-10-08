@@ -8,6 +8,7 @@ import { FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
 import { shade, bandDots, bandGlass } from '../../views/home-2027/band'
 import { deepBand } from '../../views/runtime-launch/diagramKit'
 import { Tip } from './Tip'
+import { useWidgetFit, pillBox, pillClass } from './headerFit'
 
 /**
  * ServerStatus — this portal's server, in one place: which services are
@@ -407,26 +408,33 @@ function Popover({ t, st, anchor, onClose }) {
   )
 }
 
-/** The pill on an app bar: a dot in the verdict's colour, "Server · ready", and the card one click away. */
-export function ServerStatusButton({ t }) {
+/**
+ * The pill: a dot in the verdict's colour, "Server · ready", and the card one
+ * click away. `variant="bar"` = soft pill on a light app bar, `"band"` = white
+ * glass on a pillar's coloured header (HeaderWidgets places it).
+ */
+export function ServerStatusButton({ t, variant = 'bar' }) {
   const st = useServerStatus()
+  const fit = useWidgetFit()
+  const iconOnly = fit >= 4
   const [open, setOpen] = useState(false)
   const anchor = useRef(null)
   const tone = toneOf(t, st)
   const word = !st.loaded ? 'checking' : !st.h ? 'no answer' : st.warn ? 'check setup' : 'ready'
   const toggle = () => setOpen((o) => { if (!o && !st.sys && !st.sysBusy) st.readHost(); return !o })
   const close = useCallback(() => setOpen(false), [])
+  const band = variant === 'band'
 
   return (
     <>
       <Tip title="Server status" text="This portal's server: which services are configured on it, and its memory, disk, processes and last deploy">
         <button ref={anchor} type="button" onClick={toggle} aria-expanded={open} aria-haspopup="dialog" aria-label={`Server status: ${word}`}
-                className={`inline-flex items-center gap-2 rounded-full flex-shrink-0 whitespace-nowrap ${focusCls}`}
-                style={{ height: 38, padding: '0 14px 0 12px', fontFamily: FONT.prose, fontSize: 13, fontWeight: 600, color: t.ink, background: open ? t.sunken : t.panel, border: `1px solid ${open ? `${tone}66` : t.hairline}`, transition: 'background 160ms ease, border-color 160ms ease' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = t.sunken }}
-                onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = t.panel }}>
-          <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: tone, boxShadow: `0 0 0 3px ${tone}2e` }} aria-hidden="true" />
-          <span>Server <span style={{ fontWeight: 500, color: st.warn ? inkOn(t, t.warn, 0.42) : t.inkDim }}>· {word}</span></span>
+                className={pillClass(band)}
+                style={{ ...pillBox({ t, band, iconOnly, active: open, border: open ? `${tone}66` : undefined }), padding: iconOnly ? 0 : band ? '0 12px 0 10px' : '0 14px 0 12px', gap: 8 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = band ? 'rgba(0,0,0,0.34)' : t.sunken }}
+                onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = band ? bandGlass.background : t.panel }}>
+          <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: tone, boxShadow: band ? '0 0 0 2px rgba(255,255,255,0.55)' : `0 0 0 3px ${tone}2e` }} aria-hidden="true" />
+          {!iconOnly && <span>Server{fit < 3 && <span style={{ fontWeight: 500, color: band ? 'rgba(255,255,255,0.82)' : st.warn ? inkOn(t, t.warn, 0.42) : t.inkDim }}> · {word}</span>}</span>}
         </button>
       </Tip>
       <AnimatePresence>{open && <Popover key="server" t={t} st={st} anchor={anchor} onClose={close} />}</AnimatePresence>

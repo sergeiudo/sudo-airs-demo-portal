@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, ExternalLink, HelpCircle, Sun, Moon } from 'lucide-react'
+import { ArrowLeft, ExternalLink, HelpCircle } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
-import { DesignSwitch } from '../shared/DesignSwitch'
-import { AskAirsButton } from '../shared/askairs/AskAirs'
+import { HeaderWidgets, useHeaderFit } from '../shared/HeaderWidgets'
+import { tokens } from '../../views/api-intercept-2027/tokens'
 import { HelpDrawer } from './HelpDrawer'
 import { Tip } from '../shared/Tip'
 import { FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
@@ -19,8 +19,8 @@ import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
  *   middle the Prisma AIRS lockup with the author credit under it (the old
  *          top bar's arrangement)
  *   right  the pillar's own controls (`actions`), then the portal's: the SCM
- *          deep link once a scan has run, Classic | New, the demo guide and
- *          the theme toggle
+ *          deep link once a scan has run, the five header widgets
+ *          (HeaderWidgets) and the demo guide
  *
  * `actions` is pillar-specific because the status control differs per pillar
  * (a global AIRS switch on the runtime console; per-request guardrails on the
@@ -51,13 +51,16 @@ export function PillarHeader({ pillarId, warn = false, actions }) {
   const { state, dispatch } = useAppContext()
   const [helpOpen, setHelpOpen] = useState(false)
   const pillar = HOME_PILLARS.find((p) => p.id === pillarId)
+  const t = tokens(state.isDark === false)
+  // Measures the row: the brand goes first, then the widgets' words (HeaderWidgets).
+  const [rowRef, fit] = useHeaderFit([pillarId, state.scmUrl ? 1 : 0])
   if (!pillar) return null
   const Icon = pillar.icon
   const tone = pillar.legacy ? '#94a3b8' : pillar.accent
 
   return (
     <>
-    <header className="relative flex-shrink-0 overflow-hidden mx-3 mt-3 flex items-center gap-3 px-3"
+    <header ref={rowRef} className="relative flex-shrink-0 overflow-hidden mx-3 mt-3 flex items-center gap-3 px-3"
             style={{ height: 60, borderRadius: 20, background: bandBg(tone), boxShadow: `0 12px 30px ${tone}30, 0 3px 10px rgba(18,18,22,0.06)` }}>
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={bandDots} />
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none"
@@ -73,7 +76,7 @@ export function PillarHeader({ pillarId, warn = false, actions }) {
             style={{ position: 'absolute', right: 300, top: -46, width: 150, height: 150, color: '#fff', opacity: 0.1, transform: 'rotate(-10deg)', pointerEvents: 'none' }} />
 
       {/* ── left: where you are ── */}
-      <div className="relative flex items-center gap-3 flex-shrink-0 min-w-0">
+      <div data-fit className="relative flex items-center gap-3 flex-shrink-0 min-w-0">
         <button type="button" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'home' })}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 flex-shrink-0 ${focus}`}
                 style={{ height: 30, fontFamily: FONT.prose, fontSize: 12.5, fontWeight: 600, ...bandGlass }}>
@@ -93,18 +96,21 @@ export function PillarHeader({ pillarId, warn = false, actions }) {
         </div>
       </div>
 
-      {/* ── middle: the brand and the author ── */}
-      <div className="relative flex-1 min-w-0 hidden lg:flex flex-col items-center justify-center gap-1">
-        <img src={airsLogo} alt="Prisma AIRS" style={{ height: 17 }} />
-        <span className="whitespace-nowrap" style={{ fontFamily: FONT.prose, fontSize: 10.5, color: 'rgba(255,255,255,0.9)' }}>
-          <span style={{ fontWeight: 700 }}>Sergei (SUDO) Udovenko</span>
-          <span className="hidden 2xl:inline" style={{ opacity: 0.75 }}> · Systems Engineer · Palo Alto Networks</span>
-        </span>
+      {/* ── middle: the brand and the author, while there is room for them ── */}
+      <div className="relative flex-1 min-w-0 flex justify-center">
+        {fit < 2 && (
+          <div data-fit data-fit-pad="32" className="flex flex-col items-center gap-1" style={{ width: 'max-content' }}>
+            <img src={airsLogo} alt="Prisma AIRS" style={{ height: 17 }} />
+            <span className="whitespace-nowrap" style={{ fontFamily: FONT.prose, fontSize: 10.5, color: 'rgba(255,255,255,0.9)' }}>
+              <span style={{ fontWeight: 700 }}>Sergei (SUDO) Udovenko</span>
+              <span className="hidden 2xl:inline" style={{ opacity: 0.75 }}> · Systems Engineer · Palo Alto Networks</span>
+            </span>
+          </div>
+        )}
       </div>
-      <div className="flex-1 lg:hidden" />
 
       {/* ── right: the pillar's controls, then the portal's ── */}
-      <div className="relative flex items-center gap-2 flex-shrink-0">
+      <div data-fit className="relative flex items-center gap-2 flex-shrink-0">
         {actions}
         {actions && <span aria-hidden="true" style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.25)', margin: '0 2px' }} />}
         <AnimatePresence>
@@ -122,18 +128,11 @@ export function PillarHeader({ pillarId, warn = false, actions }) {
             </motion.a>
           )}
         </AnimatePresence>
-        <AskAirsButton variant="band" />
-        <DesignSwitch compact onBand />
-        <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: bandGlass.background, border: bandGlass.border }}>
+        <HeaderWidgets t={t} variant="band" fit={fit} />
+        <div className="flex items-center rounded-full p-0.5" style={{ background: bandGlass.background, border: bandGlass.border }}>
           <ChromeIcon label="Demo guide" onClick={() => setHelpOpen(true)}
                       tip={{ title: 'Demo guide', text: 'What this pillar shows, and how to run it in front of an audience' }}>
             <HelpCircle size={14} />
-          </ChromeIcon>
-          <ChromeIcon label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
-                      tip={state.isDark
-                        ? { title: 'Light mode', text: 'Switch the whole portal to the light theme' }
-                        : { title: 'Dark mode', text: 'Switch the whole portal to the dark theme' }}>
-            {state.isDark ? <Sun size={14} /> : <Moon size={14} />}
           </ChromeIcon>
         </div>
       </div>

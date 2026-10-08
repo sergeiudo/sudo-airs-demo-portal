@@ -10,7 +10,7 @@ import { shade, bandBg } from '../../views/home-2027/band'
 import { RUN_OF_SHOW, DEEP_DIVES, OPERATE, HOME_PILLARS, markOpened } from '../../views/home-2027/homeData'
 import { CommandPalette } from '../../views/home-2027/overlays'
 import { useServerStatus, ServerStatusCard } from '../shared/ServerStatus'
-import { NAV_ITEMS } from './Sidebar'
+import { NAV_ITEMS } from './navItems'
 
 /**
  * LaunchSidebar — the portal's pillar rail in the New design.

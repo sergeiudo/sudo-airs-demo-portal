@@ -8,6 +8,13 @@ import { AIGW_REF } from './aigw-ref'
 import { MODELS, REDTEAM, NETWORK } from './models'
 import { LIBRARY } from './library'
 import { CATALOG } from './catalog'
+// Built from the community implementation guides (jollymahn.github.io/pan-implementation-guides),
+// paraphrased, checked against the official docs, disagreements called out.
+import { IMPL_AIGW } from './impl-aigw'
+import { IMPL_AIGW_HYBRID } from './impl-aigw-hybrid'
+import { IMPL_AIRS } from './impl-airs'
+import { IMPL_INTEGRATIONS } from './impl-integrations'
+import { IMPL_MODELS } from './impl-models'
 
 /**
  * The Developer Corner's table of contents. Rail order = reading order: start,
@@ -31,14 +38,25 @@ export const GROUPS = [
 // The gateway guides come from two files; this is their reading order, which
 // is also what Previous / Next follows.
 const GATEWAY_ORDER = [
-  'gw-overview', 'gw-connect', 'gw-providers', 'gw-universal', 'gw-inference-api', 'gw-routing', 'gw-guardrail', 'gw-guardrails',
-  'gw-observability', 'gw-mcp', 'gw-agents', 'gw-coding', 'gw-hybrid',
-  'gw-governance', 'gw-jwt', 'gw-admin', 'gw-admin-api',
+  'gw-overview', 'gw-deploy-walkthrough', 'gw-connect', 'gw-flows', 'gw-providers', 'gw-universal', 'gw-inference-api', 'gw-routing',
+  'gw-guardrail', 'gw-guardrails', 'gw-observability', 'gw-mcp', 'gw-agents', 'gw-coding',
+  'gw-hybrid', 'gw-hybrid-k8s', 'gw-hybrid-serverless',
+  'gw-governance', 'gw-llm-keys', 'gw-jwt', 'gw-admin', 'gw-admin-api',
 ]
-const gatewayPool = Object.fromEntries([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_HYBRID, ...AIGW_REF, ...AIGW_GOVERNANCE].map((g) => [g.id, g]))
+const byId = (list) => Object.fromEntries(list.map((g) => [g.id, g]))
+const gatewayPool = byId([...GATEWAY, ...AIGW_GATEWAY, ...AIGW_HYBRID, ...IMPL_AIGW_HYBRID, ...AIGW_REF, ...AIGW_GOVERNANCE, ...IMPL_AIGW])
 const GATEWAY_ALL = GATEWAY_ORDER.map((id) => gatewayPool[id])
 
-export const GUIDES = [...START, ...RUNTIME, ...AGENTS, ...GATEWAY_ALL, ...INTEGRATIONS, ...MODELS, ...REDTEAM, ...NETWORK, ...LIBRARY.slice(0, 1), ...CATALOG, ...LIBRARY.slice(1)]
+// The other community-guide additions slot in beside the guide they extend.
+const impl = byId([...IMPL_AIRS, ...IMPL_MODELS])
+const START_ALL = [START[0], impl['airs-platform'], START[1], impl['airs-planner'], ...START.slice(2)]
+const NETWORK_ALL = NETWORK.flatMap((g) => (g.id === 'ni-deploy' ? [g, impl['net-deploy-cloud'], impl['net-deploy-k8s']] : [g]))
+
+export const GUIDES = [
+  ...START_ALL, ...RUNTIME, ...AGENTS, ...GATEWAY_ALL, ...INTEGRATIONS, ...IMPL_INTEGRATIONS,
+  ...MODELS, impl['ms-implement'], impl['mlops-lab'], ...REDTEAM, impl['rt-implement'], ...NETWORK_ALL,
+  ...LIBRARY.slice(0, 1), ...CATALOG, ...LIBRARY.slice(1),
+]
 
 export const GROUP_BY_ID = Object.fromEntries(GROUPS.map((g) => [g.id, g]))
 export const GUIDE_BY_ID = Object.fromEntries(GUIDES.map((g) => [g.id, g]))

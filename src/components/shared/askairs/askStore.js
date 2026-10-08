@@ -44,21 +44,49 @@ export function peekAskView() { return wantView }
 export function takeAskView() { const w = wantView; wantView = false; return w }
 export function closeAskAirs() { set({ open: false }) }
 
-export async function askAirs(question, pillar) {
+/**
+ * Ask one question. The server streams server-sent events while Claude
+ * researches (assist-agent.js): each research step, the sources so far, then
+ * the answer — the item updates live as they arrive.
+ */
+export async function askAirs(question) {
   const q = String(question || '').trim()
   if (!q) return
   const id = `${Date.now()}`
-  set((s) => ({ items: [{ id, question: q, pillar, pending: true, at: new Date().toISOString() }, ...s.items], selected: id }))
-  let res
+  set((s) => ({ items: [{ id, question: q, pending: true, steps: [], sources: [], at: new Date().toISOString() }, ...s.items], selected: id }))
+  const update = (patch) => set((s) => ({ items: s.items.map((i) => (i.id === id ? { ...i, ...(typeof patch === 'function' ? patch(i) : patch) } : i)) }))
   try {
-    const r = await fetch('/api/assist/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, pillar }) })
-    res = await r.json().catch(() => ({}))
-    if (!r.ok && !res.sources) res = { ...res, verdict: 'error', error: res.error || `HTTP ${r.status}`, sources: [] }
-  } catch (e) { res = { verdict: 'error', error: e.message, sources: [] } }
-  set((s) => ({
-    items: s.items.map((i) => (i.id === id ? { ...i, ...res, question: q, pillar, pending: false } : i)),
-    ...(res.status ? { status: res.status } : {}),
-  }))
+    const r = await fetch('/api/assist/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) })
+    if (!r.ok || !r.body || !String(r.headers.get('content-type')).includes('text/event-stream')) {
+      const j = await r.json().catch(() => ({}))
+      if (j.status) set({ status: j.status })
+      update({ pending: false, verdict: 'error', error: j.error || `HTTP ${r.status}` })
+      return
+    }
+    const reader = r.body.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += dec.decode(value, { stream: true })
+      let k
+      while ((k = buf.indexOf('\n\n')) >= 0) {
+        const line = buf.slice(0, k).split('\n').find((l) => l.startsWith('data: '))
+        buf = buf.slice(k + 2)
+        if (!line) continue
+        const e = JSON.parse(line.slice(6))
+        if (e.type === 'status') set({ status: e.status })
+        else if (e.type === 'step') update((i) => ({ steps: [...(i.steps ?? []), { kind: e.kind, label: e.label, product: e.product ?? null }] }))
+        else if (e.type === 'sources') update({ sources: e.sources })
+        else if (e.type === 'answer') update({ answer: e.text, model: e.model, usage: e.usage, elapsedMs: e.elapsedMs, calls: e.calls, verdict: 'answered', pending: false })
+        else if (e.type === 'error') update({ error: e.error, verdict: 'error', pending: false })
+      }
+    }
+    update((i) => (i.pending ? { pending: false, verdict: i.answer ? 'answered' : 'error', error: i.error ?? (i.answer ? null : 'The answer stream ended early.') } : {}))
+  } catch (e) {
+    update({ pending: false, verdict: 'error', error: e.message })
+  }
 }
 
 export function removeAsk(id) { set((s) => ({ items: s.items.filter((i) => i.id !== id) })) }

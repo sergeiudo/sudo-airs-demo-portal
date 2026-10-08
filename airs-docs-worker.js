@@ -16,13 +16,16 @@
  *             titled from the PDF's bookmark outline, cited as …pdf#page=N
  *   pandev    the Prisma AIRS API pages on pan.dev (sitemap → HTML → text) — prose pages
  *             read well; endpoint pages render their schemas in the browser, so…
+ *   impl      the Palo Alto Networks Implementation Guides (jollymahn.github.io, a
+ *             community site — not official docs): the AIRS, AI Gateway, integration,
+ *             Model Security, Red Teaming, lab and requirements pages, from its repo
  *   specs     …the same APIs' OpenAPI specs (pan.dev's GitHub repo), split by
  *             indentation into one page per endpoint and per schema — no YAML parser
- *   portal    this portal's Developer Corner guides (bundled with esbuild) + pillar facts
  */
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath, pathToFileURL } from 'url'
+import { fileURLToPath } from 'url'
+import { htmlToMd, titleOf } from './airs-text.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const [cacheDir, ...ids] = process.argv.slice(2)
@@ -160,27 +163,6 @@ async function buildPdf(id) {
 
 // ─── pan.dev ─────────────────────────────────────────────────────────────────
 
-const decode = (s) => s
-  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-  .replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'")
-  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-
-/** Docusaurus page → markdown-ish text: headings kept, lists dashed, tables piped. */
-function htmlToMd(html) {
-  const art = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i)?.[1] ?? html.match(/<main[^>]*>([\s\S]*?)<\/main>/i)?.[1] ?? ''
-  return decode(art
-    .replace(/<(script|style|svg|button|nav)[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/gi, (_, n, t) => `\n\n${'#'.repeat(Number(n))} ${t.replace(/<[^>]+>/g, '').replace(/​/g, '').trim()}\n\n`)
-    .replace(/<li[^>]*>/gi, '\n- ')
-    .replace(/<(br|hr)\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|pre|table|ul|ol|section|details|summary)>/gi, '\n')
-    .replace(/<t[dh][^>]*>/gi, ' | ')
-    .replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (_, c) => `\`${c.replace(/<[^>]+>/g, '')}\``)
-    .replace(/<[^>]+>/g, ''))
-    .split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).join('\n')
-    .replace(/\n{3,}/g, '\n\n').trim()
-}
-
 async function buildPandev(id) {
   const xml = (await get('https://pan.dev/sitemap.xml')).body
   const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).filter((u) => PANDEV_PRODUCTS.some(([re]) => re.test(u)))
@@ -190,7 +172,7 @@ async function buildPandev(id) {
   await pool(urls, 6, async (u) => {
     try {
       const html = (await get(u)).body
-      const title = decode(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, '') ?? html.match(/<title>([^<]+)<\/title>/i)?.[1] ?? u).replace(/\s*\|\s*Develop with Palo Alto Networks.*$/i, '').replace(/\p{Extended_Pictographic}\uFE0F?/gu, '').trim()
+      const title = titleOf(html) || u
       const [, product, label] = PANDEV_PRODUCTS.find(([re]) => re.test(u))
       const md = htmlToMd(html)
       if (md.length > 60) pages.push({ title, section: label, url: u, md, product })
@@ -256,61 +238,44 @@ async function buildSpecs(id) {
   return { pages, meta: { source: SPEC_VIEW } }
 }
 
-// ─── this portal ─────────────────────────────────────────────────────────────
+// ─── the community implementation guides ────────────────────────────────────
 
-/** A guide's blocks → plain markdown the index can read (code bodies included: they are the examples). */
-function guideToMd(g) {
-  const cell = (c) => String(c ?? '')
-  const out = [g.sub ?? '']
-  for (const b of g.blocks ?? []) {
-    const texts = (x) => (Array.isArray(x) ? x : [x]).filter(Boolean)
-    if (b.title) out.push(`## ${b.title}`)
-    if (b.type === 'prose' || b.type === 'callout') {
-      const lead = b.type === 'callout' ? (b.tone === 'observed' ? 'Observed on this portal\'s tenant (not in the official docs): ' : b.tone === 'docs' ? 'From the official docs: ' : '') : ''
-      for (const t of texts(b.text)) out.push(lead + t)
-    } else if (b.type === 'steps') {
-      b.steps.forEach((s, i) => { out.push(`${i + 1}. ${s.title}${s.path ? ` (${s.path.join(' → ')})` : ''}`); for (const t of texts(s.text)) out.push(t); if (s.note) out.push(s.note); for (const c of s.code ?? []) out.push('```\n' + c.code + '\n```') })
-    } else if (b.type === 'table') {
-      for (const r of b.rows ?? []) out.push(`- ${r.map((c, i) => (b.columns?.[i] ? `${b.columns[i]}: ${cell(c)}` : cell(c))).join(' · ')}`)
-      if (b.note) out.push(b.note)
-    } else if (b.type === 'facts') {
-      for (const f of b.items ?? []) out.push(`- ${f.label}: ${f.value}${f.sub ? ` — ${f.sub}` : ''}`)
-    } else if (b.type === 'cards') {
-      for (const c of b.items ?? []) out.push(`- ${c.title}: ${c.text}`)
-    } else if (b.type === 'checklist') {
-      for (const c of b.items ?? []) out.push(`- ${c}`)
-    } else if (b.type === 'code') {
-      for (const t of b.tabs ?? []) if (t.code) out.push('```\n' + t.code + '\n```')
-    }
-  }
-  return out.filter(Boolean).join('\n\n')
-}
+const IMPL_REPO = 'jollymahn/pan-implementation-guides'
+const IMPL_SITE = 'https://jollymahn.github.io/pan-implementation-guides'
+const IMPL_PRODUCT = [
+  // The trd/ pages are left out on purpose: they carry a "Palo Alto Networks
+  // Professional Services — Confidential" footer, public URL or not.
+  [/^guides\/ai-gateway\//, 'gateway', 'AI Gateway'],
+  [/^guides\/airs-model\/|^labs\/airs-mlops\//, 'supply', 'AI Model Security'],
+  [/^guides\/airs-red\//, 'redteam', 'AI Red Teaming'],
+  [/^guides\/airs-integrations\//, 'runtime', 'AIRS integrations'],
+  [/^guides\/airs(-planner)?\//, 'runtime', 'Prisma AIRS platform'],
+]
 
-async function buildPortal() {
+async function buildImpl(id) {
+  const tree = JSON.parse((await get(`https://api.github.com/repos/${IMPL_REPO}/git/trees/main?recursive=1`)).body)
+  const files = (tree.tree ?? []).map((x) => x.path).filter((p) => /\.(md|html)$/.test(p) && !/\/(es|pt)\//.test(p) && IMPL_PRODUCT.some(([re]) => re.test(p)) && !/SOURCES\.md$|diagrams\//.test(p))
+  // A page published from markdown has both files; read the markdown.
+  const md = new Set(files.filter((p) => p.endsWith('.md')).map((p) => p.slice(0, -3)))
+  const pick = files.filter((p) => !(p.endsWith('.html') && md.has(p.slice(0, -5))))
+  if (pick.length < 15) throw new Error(`only ${pick.length} AIRS pages in ${IMPL_REPO} — the layout changed`)
   const pages = []
-  // The guides are browser modules (extensionless imports, lucide icons): bundle them first.
-  const esbuild = await import('esbuild')
-  const bundle = path.join(cacheDir, 'guides.bundle.mjs')
-  fs.mkdirSync(cacheDir, { recursive: true })
-  await esbuild.build({
-    entryPoints: [path.join(HERE, 'src/views/developer-corner/guides/index.js')],
-    bundle: true, format: 'esm', platform: 'node', outfile: bundle, external: ['lucide-react'], logLevel: 'silent',
+  await pool(pick, 6, async (p) => {
+    try {
+      const raw = (await get(`https://raw.githubusercontent.com/${IMPL_REPO}/main/${p}`)).body
+      const [, product, label] = IMPL_PRODUCT.find(([re]) => re.test(p))
+      const text = p.endsWith('.md') ? raw.replace(/^---[\s\S]*?---\n/, '') : htmlToMd(raw)
+      const title = (p.endsWith('.md') ? raw.match(/^#\s+(.+)$/m)?.[1] : titleOf(raw)) || p.split('/').pop().replace(/\.(md|html)$/, '')
+      if (text.length > 200) pages.push({ title: title.trim(), section: `Implementation guides › ${label}`, url: `${IMPL_SITE}/${p.replace(/\.md$/, '.html')}`, md: text, product })
+    } catch { /* one page down is not a failed build */ }
   })
-  const { GUIDES, GROUP_BY_ID } = await import(`${pathToFileURL(bundle).href}?t=${Date.now()}`)
-  for (const g of GUIDES) {
-    if (!g || g.id === 'docs-aigw') continue // the catalog is a list of links, not knowledge
-    pages.push({ title: g.title, section: `Developer Corner › ${GROUP_BY_ID[g.group]?.title ?? g.group}`, url: `portal://guide/${g.id}`, md: guideToMd(g), product: 'portal' })
-  }
-  const { ASSIST_PILLARS } = await import(`${pathToFileURL(path.join(HERE, 'src/data/assist-pillars.js')).href}?t=${Date.now()}`)
-  for (const p of ASSIST_PILLARS) {
-    pages.push({ title: `${p.title} (this portal's pillar)`, section: 'This portal › Pillars', url: `portal://pillar/${p.id}`, md: `${p.demo}\n\n${p.howto ?? ''}`, product: 'portal' })
-  }
-  return { pages, meta: { guides: GUIDES.length } }
+  if (pages.length < pick.length * 0.8) throw new Error(`${pick.length - pages.length} of ${pick.length} pages did not answer`)
+  return { pages, meta: { source: `${IMPL_SITE}/`, repo: IMPL_REPO } }
 }
 
 // ─── run ─────────────────────────────────────────────────────────────────────
 
-const BUILDERS = { aigw: buildAigw, pandev: buildPandev, specs: buildSpecs, portal: buildPortal }
+const BUILDERS = { aigw: buildAigw, pandev: buildPandev, specs: buildSpecs, impl: buildImpl }
 for (const id of ids) {
   const t0 = Date.now()
   try {

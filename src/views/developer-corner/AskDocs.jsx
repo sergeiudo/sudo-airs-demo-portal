@@ -6,9 +6,9 @@ import { FONT, label as LBL, glass } from '../api-intercept-2027/tokens'
 import { shade, bandBg, bandDots, bandGlass } from '../home-2027/band'
 import { deepBand } from '../runtime-launch/diagramKit'
 import { CopyIcon } from './CodeTabs'
-import { PILLAR_BY_ID } from '../../data/assist-pillars'
 import { useAskStore, askAirs, removeAsk, clearAsks, selectAsk, indexLine } from '../../components/shared/askairs/askStore'
-import { ASK_TONE, focusCls, inkOn, AnswerBody, AnswerFoot, Pending, SourceRow, plainAnswer } from '../../components/shared/askairs/AskParts'
+import { ASK_TONE, focusCls, inkOn, AnswerBody, AnswerFoot, ResearchSteps, SourceRow, plainAnswer } from '../../components/shared/askairs/AskParts'
+import { ASK_SUGGESTIONS } from '../../components/shared/askairs/AskAirs'
 
 /**
  * Ask AIRS in the Developer Corner — the full-width view of the docs helper
@@ -18,15 +18,14 @@ import { ASK_TONE, focusCls, inkOn, AnswerBody, AnswerFoot, Pending, SourceRow, 
  */
 
 const SUGGESTIONS = [
-  ...PILLAR_BY_ID.developerCorner.questions,
+  ...ASK_SUGGESTIONS,
   'What HTTP status does an AI Gateway guardrail deny return?',
   'Which fields does the AIRS synchronous scan request take?',
-  'How do I add a target for AI Red Teaming?',
 ]
 
 export function useAskDocs() {
   const s = useAskStore()
-  return { ...s, setSelected: selectAsk, ask: (q) => askAirs(q, 'developerCorner'), remove: removeAsk, clear: clearAsks }
+  return { ...s, setSelected: selectAsk, ask: (q) => askAirs(q), remove: removeAsk, clear: clearAsks }
 }
 
 // ─── the rail entry ──────────────────────────────────────────────────────────
@@ -74,10 +73,10 @@ function AskBand({ t, status }) {
           <MessageCircleQuestion size={22} style={{ color: '#fff' }} aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <div style={{ ...LBL, fontSize: 10, color: 'rgba(255,255,255,0.86)' }}>Ask AIRS · the docs helper</div>
-          <h1 style={{ fontFamily: FONT.display, fontSize: 25, fontWeight: 700, color: '#fff', lineHeight: 1.18, margin: '4px 0 0' }}>Ask the Prisma AIRS docs</h1>
+          <div style={{ ...LBL, fontSize: 10, color: 'rgba(255,255,255,0.86)' }}>Your Prisma AIRS sidekick</div>
+          <h1 style={{ fontFamily: FONT.display, fontSize: 25, fontWeight: 700, color: '#fff', lineHeight: 1.18, margin: '4px 0 0' }}>Ask AIRS</h1>
           <p style={{ fontFamily: FONT.prose, fontSize: 13.5, color: 'rgba(255,255,255,0.92)', margin: '5px 0 0' }}>
-            Admin guides, the API reference and its specs, the AI Gateway docs, the release notes and this portal&apos;s guides. Answers come only from them, and every claim cites the page it came from. The same helper opens from every pillar — “Ask AIRS” in the header.
+            Ask anything about Prisma AIRS. Claude searches the official docs — admin guides, the API reference and its specs, the AI Gateway docs, the release notes — reads the pages, opens live official pages when it needs to, and answers with sources. The same sidekick opens from every page: “Ask AIRS” in the header.
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className="inline-flex items-center gap-1.5 rounded-full px-2.5" style={{ height: 26, ...bandGlass, fontFamily: FONT.prose, fontSize: 12, fontWeight: 600 }}>
@@ -112,8 +111,7 @@ function AskBox({ t, onAsk, disabled, pending }) {
   )
 }
 
-function AskItem({ t, item, selected, onSelect, status }) {
-  const asked = item.pillar && item.pillar !== 'developerCorner' ? PILLAR_BY_ID[item.pillar]?.title : null
+function AskItem({ t, item, selected, onSelect }) {
   return (
     <article onClick={onSelect} className="rounded-3xl overflow-hidden"
              style={{ background: t.panel, border: `1px solid ${selected ? `${ASK_TONE}66` : t.glassEdge}`, boxShadow: selected ? `0 12px 26px ${ASK_TONE}1a` : t.shadowSm, transition: 'border-color 160ms, box-shadow 200ms', cursor: selected ? 'default' : 'pointer' }}>
@@ -121,10 +119,7 @@ function AskItem({ t, item, selected, onSelect, status }) {
         <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 30, height: 30, background: `${ASK_TONE}17`, color: inkOn(t, ASK_TONE, 0.25) }}>
           <MessageCircleQuestion size={15} aria-hidden="true" />
         </span>
-        <div className="min-w-0 flex-1">
-          <h2 style={{ fontFamily: FONT.display, fontSize: 15.5, fontWeight: 700, lineHeight: 1.35, color: t.ink, margin: '4px 0 0' }}>{item.question}</h2>
-          {asked && <span className="inline-block rounded-full px-2 mt-1" style={{ fontFamily: FONT.prose, fontSize: 10.5, lineHeight: '17px', color: t.inkDim, background: t.sunken }}>asked on {asked}</span>}
-        </div>
+        <h2 className="min-w-0 flex-1" style={{ fontFamily: FONT.display, fontSize: 15.5, fontWeight: 700, lineHeight: 1.35, color: t.ink, margin: '4px 0 0' }}>{item.question}</h2>
         {!item.pending && (
           <span className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             {item.answer && <span className="grid place-items-center rounded-full" style={{ width: 28, height: 28, color: t.inkDim }} title="Copy the answer with its sources"><CopyIcon text={plainAnswer(item)} light={t.isLight} size={13} /></span>}
@@ -135,7 +130,8 @@ function AskItem({ t, item, selected, onSelect, status }) {
         )}
       </div>
       <div className="px-4 pb-4 pt-2.5 space-y-3" style={{ paddingLeft: 58 }}>
-        {item.pending ? <Pending t={t} status={status} /> : (
+        <ResearchSteps t={t} item={item} />
+        {!item.pending && (
           <>
             {item.answer && <AnswerBody t={t} item={item} />}
             <AnswerFoot t={t} item={item} />
@@ -170,7 +166,7 @@ export function AskView({ t, ask, onGo }) {
           </div>
         )}
         {items.map((item) => (
-          <AskItem key={item.id} t={t} item={item} status={status} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />
+          <AskItem key={item.id} t={t} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />
         ))}
         {items.length > 1 && !pending && (
           <div className="flex justify-center">
@@ -181,7 +177,7 @@ export function AskView({ t, ask, onGo }) {
           </div>
         )}
         <p className="px-1 pb-4" style={{ fontFamily: FONT.prose, fontSize: 11.5, lineHeight: 1.55, color: t.inkFaint }}>
-          Passages are ranked by keyword match (BM25), with the open pillar&apos;s products first; the model sees the best eight, this portal&apos;s own observations of its AI Gateway tenant (cited as “observed”) and the known contradictions between doc pages (“docs conflict”). Check anything that matters on the page itself — the chips open it. Nothing is saved: the conversation is gone when you reload.
+          Claude decides what to search and read; every claim from the docs cites its source, field notes from a live SCM tenant and known contradictions between doc pages are labelled, and anything from the model&apos;s own knowledge is marked “model knowledge”. Check anything that matters on the page itself — the chips open it. Nothing is saved: the conversation is gone when you reload.
           {onGo && <> Browse every AI Gateway page in <button type="button" onClick={() => onGo('docs-aigw')} className={`underline underline-offset-2 ${focusCls}`} style={{ color: inkOn(t, t.live, 0.2) }}>the catalog</button>.</>}
         </p>
       </div>
@@ -201,7 +197,7 @@ export function AskSources({ t, ask }) {
         <div className="relative px-4 py-3.5">
           <div style={{ ...LBL, fontSize: 9.5, color: 'rgba(255,255,255,0.85)' }}>Sources</div>
           <div style={{ fontFamily: FONT.display, fontSize: 17, fontWeight: 700, color: '#fff', marginTop: 2 }}>
-            {current ? (current.pending ? 'Finding the pages…' : `${sources.length} passage${sources.length === 1 ? '' : 's'} the answer drew on`) : 'Where answers come from'}
+            {current ? (current.pending ? `Researching… ${sources.length} source${sources.length === 1 ? '' : 's'} so far` : `${sources.length} source${sources.length === 1 ? '' : 's'} consulted`) : 'Where answers come from'}
           </div>
           <div className="truncate" style={{ fontFamily: FONT.prose, fontSize: 11.5, color: 'rgba(255,255,255,0.9)', marginTop: 1 }}>{current?.question ?? indexLine(status)}</div>
         </div>
@@ -221,9 +217,9 @@ export function AskSources({ t, ask }) {
             )}
             {[
               { icon: Library, title: 'The official docs, whole', sub: 'Five admin guides, the pan.dev API reference and its OpenAPI specs, the AI Gateway developer docs and the release notes — re-read daily.' },
-              { icon: Search, title: 'Ranked passages, not guesses', sub: 'Your question picks the eight best-matching passages; the model may use nothing else, and cites each one.' },
-              { icon: Layers, title: 'Aware of the pillar', sub: 'Asked from a pillar, that pillar\'s products rank first; "in this portal" questions lean on the portal\'s own guides.' },
-              { icon: Eye, title: 'This tenant, too', sub: 'What this portal has observed on its own AI Gateway tenant rides along, cited as “observed”.' },
+              { icon: Search, title: 'It researches first', sub: 'Claude searches in the docs\' own words, tries again when results are off, and reads whole pages before explaining a procedure.' },
+              { icon: Layers, title: 'Live pages when needed', sub: 'If the index lacks something, it can open a live page on the official docs sites — and only those.' },
+              { icon: Eye, title: 'Honest about where it comes from', sub: 'Docs claims cite their source; field notes, doc conflicts and the model\'s own knowledge are labelled as such.' },
             ].map((r) => (
               <div key={r.title} className="flex items-start gap-3 rounded-2xl px-3 py-2.5" style={{ background: t.panel, border: `1px solid ${t.hairline}` }}>
                 <span className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 30, height: 30, background: `${ASK_TONE}17`, color: inkOn(t, ASK_TONE, 0.25) }}><r.icon size={14} aria-hidden="true" /></span>
@@ -235,8 +231,8 @@ export function AskSources({ t, ask }) {
             ))}
           </>
         )}
-        {current?.pending && <p className="px-2 py-4" style={{ fontFamily: FONT.prose, fontSize: 12.5, color: t.inkDim }}><Sparkles size={12} className="inline mr-1" aria-hidden="true" />Ranking passages…</p>}
-        {sources.map((s) => <SourceRow key={s.n} t={t} s={s} />)}
+        {current?.pending && !sources.length && <p className="px-2 py-4" style={{ fontFamily: FONT.prose, fontSize: 12.5, color: t.inkDim }}><Sparkles size={12} className="inline mr-1" aria-hidden="true" />Researching…</p>}
+        {sources.map((s) => <SourceRow key={s.id} t={t} s={s} />)}
       </div>
     </div>
   )

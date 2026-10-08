@@ -1,19 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, Search, X, Sun, Moon, Megaphone, CalendarDays, Layers, SlidersHorizontal, Loader2, ExternalLink, Users, Sparkles, Check, AlertTriangle } from 'lucide-react'
+import { useReducedMotion } from 'framer-motion'
+import { ArrowLeft, Search, X, Megaphone, CalendarDays, Layers, SlidersHorizontal, Loader2, ExternalLink, Users, Sparkles, Check, AlertTriangle } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import { shade, bandBg, bandDots } from '../home-2027/band'
 import { deepBand } from '../runtime-launch/diagramKit'
 import { useReleaseFeed, NEUTRAL } from '../home-2027/useReleaseFeed'
 import { RefreshTile, useJustRefreshed, fetchedLabel, spanLabel } from '../home-2027/ReleaseWire'
-import { DesignSwitch } from '../../components/shared/DesignSwitch'
-import { Tip } from '../../components/shared/Tip'
 import { ReleaseCard } from './ReleaseCard'
 import { GatewayNotesDrawer } from './GatewayNotes'
 import { VisitorsDrawer } from './ServerHealth'
-import { ServerStatusButton } from '../../components/shared/ServerStatus'
-import { AskAirsButton } from '../../components/shared/askairs/AskAirs'
+import { HeaderWidgets, useHeaderFit } from '../../components/shared/HeaderWidgets'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 /**
@@ -91,6 +88,8 @@ export function ReleaseNotesLaunch() {
   const base = useMemo(() => tokens(state.isDark === false), [state.isDark])
   // Secondary text sits on the grey ground — the launcher's darker dim.
   const t = useMemo(() => (base.isLight ? { ...base, inkDim: '#55555D' } : base), [base])
+  // The app bar measures itself: the lockup goes first, then the widgets' words.
+  const [barRef, fit] = useHeaderFit()
   const { feed, refresh, refreshing, refreshError, loadError } = useReleaseFeed()
   const justRefreshed = useJustRefreshed(refreshing, refreshError)
   const [q, setQ] = useState('')
@@ -171,13 +170,13 @@ export function ReleaseNotesLaunch() {
 
       {/* ── app bar ── */}
       <header className="sticky top-0 z-30 flex-shrink-0" style={{ background: t.isLight ? 'rgba(233,233,235,0.86)' : 'rgba(21,21,23,0.86)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderBottom: `1px solid ${t.hairline}` }}>
-        <div className="mx-auto flex items-center gap-4 px-6 lg:px-10" style={{ maxWidth: 1560, height: 62 }}>
-          <button type="button" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'home' })}
+        <div ref={barRef} className="mx-auto flex items-center gap-4 px-6 lg:px-10" style={{ maxWidth: 1560, height: 62 }}>
+          <button data-fit type="button" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'home' })}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3.5 flex-shrink-0 ${focusCls}`}
                   style={{ height: 36, fontFamily: FONT.prose, fontSize: 13, fontWeight: 600, color: t.ink, background: t.panel, border: `1px solid ${t.hairline}`, boxShadow: t.shadowSm }}>
             <ArrowLeft size={14} aria-hidden="true" /> Home
           </button>
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div data-fit className="flex items-center gap-2.5 flex-shrink-0">
             <span className="grid place-items-center rounded-xl" style={{ width: 36, height: 36, background: bandBg(t.live), boxShadow: `0 5px 12px ${t.live}44` }}>
               <Megaphone size={16} style={{ color: '#fff' }} aria-hidden="true" />
             </span>
@@ -187,7 +186,7 @@ export function ReleaseNotesLaunch() {
             </div>
           </div>
 
-          <label className="hidden md:flex items-center gap-2.5 mx-auto rounded-full px-4"
+          <label data-fit data-fit-min="180" className="hidden md:flex items-center gap-2.5 mx-auto rounded-full px-4"
                  style={{ height: 40, flex: '0 1 460px', minWidth: 180, background: t.panel, border: `1px solid ${t.hairline}`, boxShadow: t.shadowSm }}>
             <Search size={15} style={{ color: t.inkDim, flexShrink: 0 }} aria-hidden="true" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search releases — titles, text, product areas…" aria-label="Search releases"
@@ -201,20 +200,13 @@ export function ReleaseNotesLaunch() {
             )}
           </label>
 
-          <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
-            <AskAirsButton t={t} />
-            <ServerStatusButton t={t} />
-            <DesignSwitch />
-            <Tip title={state.isDark ? 'Light mode' : 'Dark mode'} text={`Switch the whole portal to the ${state.isDark ? 'light' : 'dark'} theme`}>
-              <button type="button" onClick={() => dispatch({ type: 'TOGGLE_THEME' })} aria-label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                      className={`grid place-items-center rounded-full flex-shrink-0 ${focusCls}`}
-                      style={{ width: 38, height: 38, color: t.inkDim, background: t.panel, border: `1px solid ${t.hairline}` }}>
-                {state.isDark ? <Sun size={15} /> : <Moon size={15} />}
-              </button>
-            </Tip>
-            <span className="hidden xl:inline-flex items-center rounded-xl px-3" style={{ height: 38, background: t.isLight ? '#1f2430' : 'transparent' }}>
-              <img src={airsLogo} alt="Prisma AIRS" style={{ height: 22 }} />
-            </span>
+          <div data-fit className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <HeaderWidgets t={t} current="releaseNotes" fit={fit} />
+            {fit < 2 && (
+              <span className="inline-flex items-center rounded-xl px-3" style={{ height: 38, background: t.isLight ? '#1f2430' : 'transparent' }}>
+                <img src={airsLogo} alt="Prisma AIRS" style={{ height: 22 }} />
+              </span>
+            )}
           </div>
         </div>
       </header>

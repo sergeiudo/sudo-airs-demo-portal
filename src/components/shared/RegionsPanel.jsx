@@ -6,6 +6,7 @@ import { FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
 import { shade, bandDots, bandGlass } from '../../views/home-2027/band'
 import { deepBand } from '../../views/runtime-launch/diagramKit'
 import { Tip } from './Tip'
+import { useWidgetFit, pillBox, pillClass } from './headerFit'
 
 /**
  * RegionsPanel — "where AIRS answers from". Lives on the home app bar and the
@@ -349,6 +350,7 @@ function Panel({ t, probe, anchor, onClose }) {
  */
 export function RegionsButton({ t, variant = 'band' }) {
   const probe = useProbe()
+  const iconOnly = useWidgetFit() >= 4
   const [open, setOpen] = useState(false)
   const anchor = useRef(null)
   const s = summarize(probe.result)
@@ -357,25 +359,23 @@ export function RegionsButton({ t, variant = 'band' }) {
   const close = useCallback(() => setOpen(false), [])
   const a = s?.active
   const band = variant === 'band'
-  const rest = band ? bandGlass.background : t.panel
-  const hover = band ? 'rgba(0,0,0,0.34)' : t.sunken
+  const measured = !running && a && a.warm != null
 
   return (
     <>
       <Tip title="Where AIRS answers from" text="Round trip from this portal's server to each Prisma AIRS region — and which one it uses">
         <button ref={anchor} type="button" onClick={toggle} aria-expanded={open} aria-haspopup="dialog"
-                className={`inline-flex items-center gap-1.5 rounded-full flex-shrink-0 whitespace-nowrap ${band ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white' : focusCls}`}
-                style={band
-                  ? { height: 30, padding: '0 12px 0 8px', fontFamily: FONT.prose, fontSize: 12.5, fontWeight: 600, ...bandGlass, background: open ? hover : rest, transition: 'background 160ms ease' }
-                  : { height: 38, padding: '0 14px 0 11px', fontFamily: FONT.prose, fontSize: 13, fontWeight: 600, color: t.ink, background: open ? hover : rest, border: `1px solid ${open ? `${t.live}66` : t.hairline}`, transition: 'background 160ms ease, border-color 160ms ease' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = hover }}
-                onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = rest }}>
+                aria-label={iconOnly ? (running ? 'Probing AIRS regions' : measured ? `AIRS ${a.code} ${fmtMs(a.warm)}` : 'AIRS regions') : undefined}
+                className={pillClass(band)}
+                style={{ ...pillBox({ t, band, iconOnly, active: open, border: open ? `${t.live}66` : undefined }), padding: iconOnly ? 0 : band ? '0 12px 0 8px' : '0 14px 0 11px' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = band ? 'rgba(0,0,0,0.34)' : t.sunken }}
+                onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = band ? bandGlass.background : t.panel }}>
           {running
             ? <Loader2 size={14} className="animate-spin" style={{ color: band ? '#fff' : t.live }} aria-hidden="true" />
             : <Globe2 size={14} style={{ color: band ? '#fff' : t.live }} aria-hidden="true" />}
-          {running ? 'Probing regions…' : a && a.warm != null
+          {!iconOnly && (running ? 'Probing regions…' : measured
             ? <>AIRS {a.code} <span style={{ fontFamily: FONT.display, fontWeight: 700 }}>{fmtMs(a.warm)}</span></>
-            : 'AIRS regions'}
+            : 'AIRS regions')}
         </button>
       </Tip>
       <AnimatePresence>{open && <Panel key="regions" t={t} probe={probe} anchor={anchor} onClose={close} />}</AnimatePresence>

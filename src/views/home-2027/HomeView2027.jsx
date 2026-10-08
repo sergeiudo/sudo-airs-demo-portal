@@ -6,8 +6,7 @@ import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 import { HOME_PILLARS, RUN_OF_SHOW, DEEP_DIVES, OPERATE, WHATS_NEW, readLastOpened, markOpened } from './homeData'
 import { PillarTile } from './PillarTile'
-import { ServerStatusButton } from '../../components/shared/ServerStatus'
-import { AskAirsButton } from '../../components/shared/askairs/AskAirs'
+import { HeaderWidgets, useHeaderFit } from '../../components/shared/HeaderWidgets'
 import { LiveProof } from './LiveProof'
 import { DetailsSheet, CommandPalette } from './overlays'
 import { WhatsNew } from './WhatsNew'
@@ -32,18 +31,8 @@ import { WhatsNew } from './WhatsNew'
  *
  * Detail is one level down (a side sheet), never on the grid. Same token set
  * as the runtime console, so the front door looks like the rooms behind it.
- * Classic (HomeViewV2) is kept beside it; the global Design switch (Classic | New) picks one.
+ * Kept at /?home=hero; the tile launcher (HomeLauncher) is the default home.
  */
-
-function IconButton({ t, label, onClick, children }) {
-  return (
-    <button type="button" onClick={onClick} aria-label={label} title={label}
-            className="grid place-items-center rounded-full transition-colors"
-            style={{ width: 38, height: 38, color: t.inkDim, background: t.sunken, border: `1px solid ${t.hairline}` }}>
-      {children}
-    </button>
-  )
-}
 
 function SectionHead({ t, id, title, sub, right }) {
   return (
@@ -57,13 +46,15 @@ function SectionHead({ t, id, title, sub, right }) {
   )
 }
 
-export function HomeView2027({ homeSwitch }) {
+export function HomeView2027() {
   const { state, dispatch } = useAppContext()
   const base = useMemo(() => tokens(state.isDark === false), [state.isDark])
   // Secondary text sits directly on the grey ground here, where the console's
   // inkDim measures ~4.4:1 in light mode — just under WCAG AA. A darker dim
   // for this page only; panels keep the shared token.
   const t = useMemo(() => (base.isLight ? { ...base, inkDim: '#55555D' } : base), [base])
+  // The app bar measures itself: the lockup goes first, then the widgets' words.
+  const [barRef, fit] = useHeaderFit()
   const reduce = useReducedMotion()
   const [sheet, setSheet] = useState(null)
   const [palette, setPalette] = useState(false)
@@ -116,8 +107,8 @@ export function HomeView2027({ homeSwitch }) {
 
       {/* ── top bar ── */}
       <header className="sticky top-0 z-30" style={{ background: t.isLight ? 'rgba(233,233,235,0.82)' : 'rgba(21,21,23,0.82)', backdropFilter: 'blur(14px)', borderBottom: `1px solid ${t.hairline}` }}>
-        <div className="mx-auto flex items-center gap-4 px-6 lg:px-10" style={{ maxWidth: 1480, height: 64 }}>
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div ref={barRef} className="mx-auto flex items-center gap-4 px-6 lg:px-10" style={{ maxWidth: 1480, height: 64 }}>
+          <div data-fit className="flex items-center gap-2.5 flex-shrink-0">
             <span className="grid place-items-center rounded-xl" style={{ width: 36, height: 36, background: `${t.pass}18`, border: `1px solid ${t.pass}40` }}>
               <Shield size={18} style={{ color: t.pass }} aria-hidden="true" />
             </span>
@@ -127,31 +118,23 @@ export function HomeView2027({ homeSwitch }) {
             </div>
           </div>
 
-          <button type="button" onClick={() => setPalette(true)}
+          <button data-fit data-fit-min="160" type="button" onClick={() => setPalette(true)}
                   className="hidden md:flex items-center gap-2.5 mx-auto rounded-full px-4 transition-colors"
-                  style={{ height: 40, width: 'min(420px, 38vw)', background: t.panel, border: `1px solid ${t.hairline}`, boxShadow: t.shadowSm, color: t.inkDim }}
+                  style={{ height: 40, width: 'min(420px, 38vw)', minWidth: 160, background: t.panel, border: `1px solid ${t.hairline}`, boxShadow: t.shadowSm, color: t.inkDim }}
                   aria-label="Jump to a pillar">
             <Search size={15} aria-hidden="true" />
             <span className="flex-1 text-left" style={{ fontFamily: FONT.prose, fontSize: 13.5 }}>Jump to a pillar…</span>
             <kbd style={{ fontFamily: FONT.mono, fontSize: 11, border: `1px solid ${t.hairline}`, borderRadius: 6, padding: '1px 6px' }}>{kbd}</kbd>
           </button>
 
-          <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
-            <AskAirsButton t={t} />
-            <ServerStatusButton t={t} />
-            {homeSwitch}
-            <button type="button" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' })}
-                    className="hidden sm:inline-flex items-center gap-2 rounded-full px-3.5"
-                    style={{ height: 38, fontFamily: FONT.prose, fontSize: 13, fontWeight: 600, color: t.ink, background: t.panel, border: `1px solid ${t.hairline}` }}>
-              <FileText size={14} aria-hidden="true" /> Release notes
-            </button>
-            <IconButton t={t} label={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => dispatch({ type: 'TOGGLE_THEME' })}>
-              {state.isDark ? <Sun size={15} /> : <Moon size={15} />}
-            </IconButton>
+          <div data-fit className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <HeaderWidgets t={t} fit={fit} />
             {/* The lockup is white — on the light ground it needs a dark plate. */}
-            <span className="hidden lg:inline-flex items-center rounded-xl px-3" style={{ height: 38, background: t.isLight ? '#1f2430' : 'transparent' }}>
-              <img src={airsLogo} alt="Prisma AIRS" style={{ height: 22 }} />
-            </span>
+            {fit < 2 && (
+              <span className="inline-flex items-center rounded-xl px-3" style={{ height: 38, background: t.isLight ? '#1f2430' : 'transparent' }}>
+                <img src={airsLogo} alt="Prisma AIRS" style={{ height: 22 }} />
+              </span>
+            )}
           </div>
         </div>
       </header>

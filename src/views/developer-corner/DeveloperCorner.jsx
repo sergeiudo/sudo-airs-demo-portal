@@ -355,7 +355,6 @@ function GuideView({ t, guide, status, vars, onGo, onRun, lang, setLang }) {
 // ─── shell ───────────────────────────────────────────────────────────────────
 export function DeveloperCorner() {
   const { state, dispatch } = useAppContext()
-  const isNew = state.uiMode === 'new'
   const t = useMemo(() => tokens(state.isDark === false), [state.isDark])
   const status = useDevStatus()
 
@@ -420,7 +419,7 @@ export function DeveloperCorner() {
           backgroundImage: `linear-gradient(${t.grid} 1px, transparent 1px), linear-gradient(90deg, ${t.grid} 1px, transparent 1px)`,
           backgroundSize: '44px 44px',
         }} />
-        {isNew && <PillarHeader pillarId="developerCorner" actions={<LiveReadiness t={t} status={status} />} />}
+        <PillarHeader pillarId="developerCorner" actions={<LiveReadiness t={t} status={status} />} />
         <div className="relative flex-1 min-h-0 flex">
           <div className="relative flex-shrink-0 overflow-hidden py-3 pl-3" style={{ width: leftW }}>
             <GuideRail t={t} activeId={mode === 'guide' ? guideId : null} onPick={pick} query={query} setQuery={setQuery} matches={matches} ask={railAsk} />

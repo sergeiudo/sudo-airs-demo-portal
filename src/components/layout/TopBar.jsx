@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, HelpCircle, ChevronRight, Sun, Moon, ArrowLeft, ExternalLink } from 'lucide-react'
+import { HelpCircle, ChevronRight, ArrowLeft, ExternalLink } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { PulsingDot } from '../shared/PulsingDot'
 import { HelpDrawer } from './HelpDrawer'
-import { DesignSwitch } from '../shared/DesignSwitch'
-import { AskAirsButton } from '../shared/askairs/AskAirs'
+import { HeaderWidgets, useHeaderFit } from '../shared/HeaderWidgets'
 import { tokens } from '../../views/api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
@@ -48,6 +47,8 @@ export function TopBar() {
   const [helpOpen, setHelpOpen] = useState(false)
   const view = VIEW_LABELS[state.activeView] ?? VIEW_LABELS.apiIntercept
   const isLight = !state.isDark
+  // The sub-label goes first when the row is short, then the brand, then the widgets' words.
+  const [rowRef, fit] = useHeaderFit([state.activeView, state.scmUrl ? 1 : 0])
 
   /* The SCM link is navigation to a product, so it keeps PAN brand blue
      instead of the protection theme. scmUrl survives an AIRS toggle, and a
@@ -63,9 +64,10 @@ export function TopBar() {
   return (
     // data-ui-chrome: under the New design the theme layer paints this as the
     // portal's panel surface (its !important beats the inline classic colour).
-    <header data-ui-chrome="topbar" className="flex items-center h-16 px-6 border-b border-white/10 flex-shrink-0" style={{ background: '#13161f' }}>
+    <header ref={rowRef} data-ui-chrome="topbar" className="flex items-center h-16 px-6 border-b border-white/10 flex-shrink-0" style={{ background: '#13161f' }}>
       {/* Home + Breadcrumb */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-center flex-shrink-0">
+        <div data-fit className="flex items-center gap-3 flex-shrink-0" style={{ width: 'max-content' }}>
         <button
           onClick={() => dispatch({ type: 'SET_VIEW', payload: 'home' })}
           className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-400 hover:text-slate-200 transition-colors flex-shrink-0"
@@ -87,14 +89,21 @@ export function TopBar() {
             <span className={`text-sm font-semibold ${view.text || theme.primaryText} transition-colors duration-500`}>
               {view.label}
             </span>
-            <span className="hidden md:block text-xs text-slate-500">·</span>
-            <span className="hidden md:block text-xs text-slate-500">{view.sublabel}</span>
+            {fit === 0 && (
+              <>
+                <span className="hidden md:block text-xs text-slate-500">·</span>
+                <span className="hidden md:block text-xs text-slate-500">{view.sublabel}</span>
+              </>
+            )}
           </motion.div>
         </AnimatePresence>
+        </div>
       </div>
 
-      {/* Center: logo + author */}
-      <div className="flex flex-col items-center gap-1 mx-6">
+      {/* Center: logo + author, centred in the space between the two sides */}
+      <div className="flex-1 min-w-0 flex justify-center">
+      {fit < 2 && (
+      <div data-fit data-fit-pad="48" className="flex flex-col items-center gap-1 mx-6">
         <div className={state.isDark ? '' : 'bg-slate-600 px-3 py-1 rounded-lg'}>
           <img src={airsLogo} alt="Prisma AIRS" className="h-5 opacity-90" />
         </div>
@@ -104,11 +113,14 @@ export function TopBar() {
           <span className="text-[9px] text-slate-500">Systems Engineer · Palo Alto Networks</span>
         </div>
       </div>
+      )}
+      </div>
 
-      {/* Right cluster: verdict · SCM deep link · utilities. flex-1 on both
-          sides so the logo block is centred on the header, not on what is
-          left over after the breadcrumb. */}
-      <div className="flex flex-1 items-center justify-end gap-2.5">
+      {/* Right cluster: verdict · SCM deep link · the portal's widgets. Both
+          sides keep their natural width (they must, to be measured — see
+          useHeaderFit); the logo block centres in what is left between them. */}
+      <div className="flex items-center justify-end flex-shrink-0">
+        <div data-fit className="flex items-center gap-2.5 flex-shrink-0">
 
         {/* Status pill. The AI/LLM Gateway pillar ignores the global AIRS toggle
             (its guardrail is chosen per-request in the Live Demo), so showing
@@ -177,7 +189,7 @@ export function TopBar() {
                 ${theme.primaryBg2} ${theme.primaryBorder2} ${theme.primaryHoverBg2} ${theme.primaryText}`}
             >
               <PulsingDot size="xs" />
-              <span className="text-[10px] font-bold tracking-widest transition-colors duration-500">
+              <span className="text-[10px] font-bold tracking-widest whitespace-nowrap transition-colors duration-500">
                 {theme.statusLabel}
               </span>
               {/* switch track — makes the pill legible as a control without a
@@ -231,28 +243,15 @@ export function TopBar() {
           )}
         </AnimatePresence>
 
-        {/* Ask AIRS — the docs helper, New design only */}
-        {state.uiMode === 'new' && <AskAirsButton t={askT} />}
+        {/* The portal's widgets — the same five as on every page */}
+        <HeaderWidgets t={askT} fit={fit} />
 
-        {/* Classic | New for the whole portal — reachable from inside any pillar */}
-        <DesignSwitch compact />
-
-        {/* Utilities, as one segmented control rather than three loose icons */}
-        <div className="flex items-center gap-0.5 p-1 rounded-full"
+        <div className="flex items-center p-1 rounded-full"
              style={{ background: groupBg, border: `1px solid ${groupBorder}` }}>
-          <IconButton isLight={isLight} title="Notifications">
-            <Bell size={14} />
-          </IconButton>
           <IconButton isLight={isLight} onClick={() => setHelpOpen(true)} title="Demo guide">
             <HelpCircle size={14} />
           </IconButton>
-          <IconButton
-            isLight={isLight}
-            onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
-            title={state.isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {state.isDark ? <Sun size={14} /> : <Moon size={14} />}
-          </IconButton>
+        </div>
         </div>
       </div>
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />

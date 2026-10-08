@@ -715,7 +715,7 @@ JOB=$(curl -sS -X POST "$DP/v1/scan" -H "Authorization: Bearer $TOKEN" -H 'Conte
   }
 }' | jq -r .uuid)
 
-# 3 — poll: PENDING → IN_PROGRESS → COMPLETED (or FAILED / ABORTED)
+# 3 — poll: QUEUED → RUNNING → COMPLETED (or PARTIALLY_COMPLETE / FAILED / ABORTED)
 curl -sS "$DP/v1/scan/$JOB" -H "Authorization: Bearer $TOKEN" | jq '{status, total, score, asr}'
 
 # 4 — the report and the runtime profile it recommends
@@ -748,12 +748,12 @@ job = requests.post(f"{DP}/v1/scan", headers=H, timeout=30, json={
 
 while True:                                   # a typical scan takes minutes to hours
     s = requests.get(f"{DP}/v1/scan/{job['uuid']}", headers=H, timeout=30).json()
-    if s["status"] in ("COMPLETED", "FAILED", "ABORTED"):
-        break
+    if s["status"] in ("COMPLETED", "PARTIALLY_COMPLETE", "FAILED", "ABORTED"):
+        break                                 # every end state, or a partial run loops forever
     time.sleep(60)                            # the token lives 15 minutes — refresh it in a long loop
 
 print(s["status"], "risk score", s.get("score"), "ASR", s.get("asr"))
-sys.exit(0 if s["status"] == "COMPLETED" and (s.get("asr") or 0) < 5 else 1)` },
+sys.exit(0 if s["status"] == "COMPLETED" and (s.get("asr") or 0) < 5 else 1)   # a partial run fails the gate` },
         ],
       },
       {
@@ -815,10 +815,12 @@ export const NETWORK = [
         tabs: [{ id: 'bash', lang: 'bash', code: `# From the Helm chart SCM generates with your Terraform
 helm install ai-runtime-security helm --namespace kube-system --values helm/values.yaml
 
-# Send a namespace's traffic through the firewall…
+# VPC-level security: send a namespace's traffic through the firewall…
 kubectl annotate namespace payments paloaltonetworks.com/firewall=pan-fw
 
-# …and exempt specific pods if needed
+# …or namespace-level security with traffic steering. Despite the name, this
+# puts every pod in the protected state; which CIDRs are inspected or bypassed
+# is set in the custom resource (FIREWALL / BYPASS), not by this annotation
 kubectl annotate pods --all paloaltonetworks.com/subnetfirewall=ns-secure/bypassfirewall` }],
       },
       {

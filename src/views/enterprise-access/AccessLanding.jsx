@@ -168,7 +168,7 @@ export function AccessLanding({ t, tone, a, onOpenLifecycle }) {
               Real prompts, real models —<br />
               <span style={{ color: ink }}>routed by policy, not by trust.</span>
             </h2>
-            {/* Same words as the pillar's description on the portal home (PILLARS in HomeViewV2), split for reading. */}
+            {/* Same words as the pillar's description on the portal home (PILLARS in src/data/pillars.js), split for reading. */}
             {/* One wide paragraph, not two narrow ones — the hero has the full width since the pre-flight card went. */}
             <div style={{ fontFamily: FONT.prose, fontSize: 15, lineHeight: 1.65, color: t.inkDim, maxWidth: 1080, marginTop: 16 }}>
               <p style={{ margin: 0 }}>

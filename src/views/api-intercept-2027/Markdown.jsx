@@ -19,15 +19,15 @@ import { FONT } from './tokens'
 /**
  * **bold**, *italic*, `code`, [text](url) — flat, non-nesting, good enough.
  * With `cite` (the Developer Corner's docs answers): `[3]` / `[P]` render
- * (`[C]` too) through it as citation chips, and only http(s) links become anchors.
+ * (`[S3]`, `[C]`, `[K]` too) through it as citation chips, and only http(s) links become anchors.
  */
 const INLINE = /(\*\*[^*]+\*\*|(?<!\*)\*[^*\n]+\*(?!\*)|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
-const INLINE_CITE = /(\*\*[^*]+\*\*|(?<!\*)\*[^*\n]+\*(?!\*)|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[(?:\d{1,2}|P|C)\])/g
+const INLINE_CITE = /(\*\*[^*]+\*\*|(?<!\*)\*[^*\n]+\*(?!\*)|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[(?:\d{1,2}|S\d{1,3}|P|C|K)\])/g
 function inline(text, t, keyBase, cite) {
   const parts = String(text).split(cite ? INLINE_CITE : INLINE).filter(Boolean)
   return parts.map((p, i) => {
     const k = `${keyBase}-${i}`
-    if (cite && /^\[(?:\d{1,2}|P|C)\]$/.test(p)) return <React.Fragment key={k}>{cite(p.slice(1, -1))}</React.Fragment>
+    if (cite && /^\[(?:\d{1,2}|S\d{1,3}|P|C|K)\]$/.test(p)) return <React.Fragment key={k}>{cite(p.slice(1, -1))}</React.Fragment>
     if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={k} style={{ fontWeight: 700, color: t.ink }}>{p.slice(2, -2)}</strong>
     if (/^\*[^*]+\*$/.test(p)) return <em key={k}>{p.slice(1, -1)}</em>
     if (/^`[^`]+`$/.test(p)) {

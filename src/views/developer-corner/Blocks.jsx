@@ -264,6 +264,7 @@ const SOURCE = {
   docs:   { label: 'docs.paloaltonetworks.com', key: 'live' },
   pandev: { label: 'pan.dev', key: 'live' },
   aigw:   { label: 'portkey.ai/docs', key: 'live' },
+  impl:   { label: 'PAN implementation guides · community', key: 'model' },
   pypi:   { label: 'PyPI', key: 'pass' },
   npm:    { label: 'npm', key: 'pass' },
   github: { label: 'GitHub', key: 'idle' },

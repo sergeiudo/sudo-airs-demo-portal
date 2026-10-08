@@ -1,6 +1,5 @@
 import React from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Sidebar } from './Sidebar'
 import { LaunchSidebar } from './LaunchSidebar'
 import { TopBar } from './TopBar'
 import { useAppContext } from '../../context/AppContext'
@@ -27,8 +26,7 @@ export function MainLayout({ children, viewKey, hideTopBar = false }) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-base-950 grid-bg">
-      {/* Sidebar — the pillar rail in the New design, the original in Classic */}
-      {state.uiMode === 'new' ? <LaunchSidebar /> : <Sidebar />}
+      <LaunchSidebar />
 
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
