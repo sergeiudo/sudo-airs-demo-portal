@@ -6,6 +6,8 @@ import { useProtectionTheme } from '../../hooks/useProtectionTheme'
 import { PulsingDot } from '../shared/PulsingDot'
 import { HelpDrawer } from './HelpDrawer'
 import { DesignSwitch } from '../shared/DesignSwitch'
+import { AskAirsButton } from '../shared/askairs/AskAirs'
+import { tokens } from '../../views/api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 const VIEW_LABELS = {
@@ -41,6 +43,7 @@ function IconButton({ isLight, onClick, title, children }) {
 
 export function TopBar() {
   const { state, dispatch } = useAppContext()
+  const askT = tokens(state.isDark === false)
   const theme = useProtectionTheme()
   const [helpOpen, setHelpOpen] = useState(false)
   const view = VIEW_LABELS[state.activeView] ?? VIEW_LABELS.apiIntercept
@@ -227,6 +230,9 @@ export function TopBar() {
             </motion.a>
           )}
         </AnimatePresence>
+
+        {/* Ask AIRS — the docs helper, New design only */}
+        {state.uiMode === 'new' && <AskAirsButton t={askT} />}
 
         {/* Classic | New for the whole portal — reachable from inside any pillar */}
         <DesignSwitch compact />

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, ExternalLink, HelpCircle, Sun, Moon } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { DesignSwitch } from '../shared/DesignSwitch'
+import { AskAirsButton } from '../shared/askairs/AskAirs'
 import { HelpDrawer } from './HelpDrawer'
 import { Tip } from '../shared/Tip'
 import { FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
@@ -121,6 +122,7 @@ export function PillarHeader({ pillarId, warn = false, actions }) {
             </motion.a>
           )}
         </AnimatePresence>
+        <AskAirsButton variant="band" />
         <DesignSwitch compact onBand />
         <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: bandGlass.background, border: bandGlass.border }}>
           <ChromeIcon label="Demo guide" onClick={() => setHelpOpen(true)}

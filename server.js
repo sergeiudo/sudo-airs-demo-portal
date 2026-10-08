@@ -42,7 +42,8 @@ import mohRouter, {
 } from './moh-routes.js'
 import accessRouter from './access-routes.js'
 import devRouter from './dev-routes.js'
-import { ensureDocs } from './aigw-docs.js'
+import assistRouter from './assist-routes.js'
+import { ensureDocs, setReleasePages } from './airs-docs.js'
 
 const app = express()
 app.use(cors())
@@ -54,6 +55,7 @@ app.use('/api/moh', mohRouter)
 app.use('/api/access', accessRouter)
 // Developer Corner — "Run it live": the snippets' exact calls, keys masked in the echo.
 app.use('/api/dev', devRouter)
+app.use('/api/assist', assistRouter)
 
 const PORT = process.env.PROXY_PORT || 3001
 
@@ -382,7 +384,7 @@ export async function callVertexMaaS(prompt, modelId, location = 'us-central1') 
 // OpenAI-compatible endpoint — that 404s on anthropic/*. They take the Anthropic
 // wire format against :rawPredict instead, so this is a third call path rather
 // than a variation of the MaaS one. Same ADC credentials as the other two.
-export async function callVertexAnthropic(prompt, modelId, location = 'global') {
+export async function callVertexAnthropic(prompt, modelId, location = 'global', opts = {}) {
   const project = process.env.GCP_PROJECT_ID
   const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
   const model = modelId.replace(/^anthropic\//, '')
@@ -397,7 +399,9 @@ export async function callVertexAnthropic(prompt, modelId, location = 'global') 
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       anthropic_version: 'vertex-2023-10-16',
-      max_tokens: 1024,
+      max_tokens: opts.maxTokens ?? 1024,
+      ...(opts.system ? { system: opts.system } : {}),
+      ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -459,7 +463,7 @@ function makeBedrockRuntime() {
 // that is what the Bedrock catalogue lists and what the picker matches on.
 const NEEDS_PROFILE = new Set()
 
-export async function callBedrock(prompt, modelId) {
+export async function callBedrock(prompt, modelId, opts = {}) {
   const client = makeBedrockRuntime()
   const t0 = Date.now()
 
@@ -489,7 +493,8 @@ export async function callBedrock(prompt, modelId) {
       const cmd = new ConverseCommand({
         modelId: id,
         messages: [{ role: 'user', content: [{ text: prompt }] }],
-        inferenceConfig: { maxTokens: 1024 },
+        ...(opts.system ? { system: [{ text: opts.system }] } : {}),
+        inferenceConfig: { maxTokens: opts.maxTokens ?? 1024, ...(opts.temperature != null ? { temperature: opts.temperature } : {}) },
       })
       const response = await client.send(cmd)
       const latencyMs = Date.now() - t0
@@ -3006,6 +3011,7 @@ function scrapeReleaseNotes() {
         throw new Error(`docs.paloaltonetworks.com did not answer for ${failedMonths.join(', ')} — kept the last complete fetch`)
       }
       RN_CACHE.data = { months, indexUrl: RN_INDEX_URL, totalFeatures, failedMonths }
+      feedReleasePages()
       RN_CACHE.fetchedAt = Date.now()
       console.log(`[release-notes] Done. Months: ${months.length}, features: ${months.map(m => m.features.length).join(',')}${failedMonths.length ? ` · no answer for ${failedMonths.join(', ')}` : ''}`)
     })().finally(() => { RN_INFLIGHT = null })
@@ -3169,6 +3175,7 @@ function loadGatewayChangelog(force = false) {
         const releases = parseGatewayChangelog(await r.text())
         if (!releases.length) throw new Error('no releases parsed — the changelog changed format')
         Object.assign(GW_CACHE, { releases, fetchedAt: Date.now(), error: null })
+        feedReleasePages()
         console.log(`[release-notes] AI Gateway changelog: ${releases.length} releases, latest ${releases[0].feature.version}`)
       } catch (e) {
         GW_CACHE.error = `AI Gateway changelog: ${e?.message || e}`
@@ -3183,6 +3190,26 @@ function loadGatewayChangelog(force = false) {
 
 // The Developer Corner's Helm version check (/api/dev/helm/versions) reads the same releases.
 app.locals.gatewayChangelog = { load: loadGatewayChangelog, cache: GW_CACHE, url: GW_CHANGELOG_URL }
+// Ask AIRS calls models directly (a docs helper — nothing to scan).
+app.locals.models = { callBedrock, callVertexAnthropic }
+
+// The release notes are a source for Ask AIRS too: every PA feature and every
+// gateway release, filed under the product it belongs to.
+const RN_PRODUCT = { 'AI Model Security': 'supply', 'AI Red Teaming': 'redteam', 'AI Gateway': 'gateway' }
+function feedReleasePages() {
+  const pages = []
+  for (const m of RN_CACHE.data?.months ?? []) {
+    for (const f of m.features) {
+      if (f.source === 'gateway') continue
+      pages.push({ title: f.title, section: `Release notes › ${m.label} › ${f.category}`, url: f.url || m.url, md: [f.summary, ...(f.paragraphs ?? [])].filter((x, i, a) => x && a.indexOf(x) === i).join('\n\n'), product: RN_PRODUCT[f.category] ?? 'runtime' })
+    }
+  }
+  for (const { feature: f } of GW_CACHE.releases ?? []) {
+    const md = f.sections.map((s) => [s.heading ? `## ${s.heading}` : '', ...s.blocks.map((b) => (b.type === 'li' ? `- ${b.text}` : b.type === 'table' ? b.rows.map((r) => r.join(' | ')).join('\n') : b.type === 'links' ? '' : b.text))].filter(Boolean).join('\n')).join('\n\n')
+    pages.push({ title: `AI Gateway ${f.version} (${f.releaseDate})`, section: 'Release notes › AI Gateway changelog', url: f.url, md, product: 'gateway' })
+  }
+  setReleasePages(pages)
+}
 
 /** Folds the gateway releases inside the PA window (its oldest month onward) into the months. Never mutates the cache. */
 function rnWithGateway(payload) {

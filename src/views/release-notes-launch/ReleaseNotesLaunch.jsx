@@ -13,6 +13,7 @@ import { ReleaseCard } from './ReleaseCard'
 import { GatewayNotesDrawer } from './GatewayNotes'
 import { VisitorsDrawer } from './ServerHealth'
 import { ServerStatusButton } from '../../components/shared/ServerStatus'
+import { AskAirsButton } from '../../components/shared/askairs/AskAirs'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
 
 /**
@@ -201,6 +202,7 @@ export function ReleaseNotesLaunch() {
           </label>
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <AskAirsButton t={t} />
             <ServerStatusButton t={t} />
             <DesignSwitch />
             <Tip title={state.isDark ? 'Light mode' : 'Dark mode'} text={`Switch the whole portal to the ${state.isDark ? 'light' : 'dark'} theme`}>

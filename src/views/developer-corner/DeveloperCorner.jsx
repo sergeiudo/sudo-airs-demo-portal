@@ -11,6 +11,7 @@ import { Block, DocLinks } from './Blocks'
 import { LivePanel, useDevStatus } from './LivePanel'
 import { GROUPS, GUIDES, GROUP_BY_ID, GUIDE_BY_ID, guideHaystack } from './guides'
 import { useAskDocs, AskRailCard, AskView, AskSources } from './AskDocs'
+import { peekAskView, takeAskView } from '../../components/shared/askairs/askStore'
 
 /**
  * DeveloperCorner — the integration hub, in the launch design.
@@ -379,12 +380,21 @@ export function DeveloperCorner() {
     return new Set(GUIDES.filter((g) => words.every((w) => haystacks[g.id].includes(w))).map((g) => g.id))
   }, [query, haystacks])
 
-  const [mode, setMode] = useState('guide') // guide | ask
+  const [mode, setMode] = useState(() => (peekAskView() ? 'ask' : 'guide')) // guide | ask
+  useEffect(() => { takeAskView() }, [])
   const askDocs = useAskDocs()
   const pick = useCallback((id) => {
     if (!GUIDE_BY_ID[id]) return
     setGuideId(id); store(GUIDE_KEY, id); setVars({}); setPreset(null); setMode('guide')
   }, [])
+  // Ask AIRS elsewhere in the portal can open the full view or a cited guide here.
+  useEffect(() => {
+    const onAsk = () => { takeAskView(); setMode('ask') }
+    const onGuide = (e) => pick(e.detail)
+    window.addEventListener('sudo-airs:open-ask', onAsk)
+    window.addEventListener('sudo-airs:open-guide', onGuide)
+    return () => { window.removeEventListener('sudo-airs:open-ask', onAsk); window.removeEventListener('sudo-airs:open-guide', onGuide) }
+  }, [pick])
   const railAsk = useMemo(() => ({
     active: mode === 'ask', status: askDocs.status,
     open: () => setMode('ask'),

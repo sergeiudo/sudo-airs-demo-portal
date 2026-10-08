@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Shield, Search, Pin, PinOff, Activity, ChevronRight, Sun, Moon, FileText } from 'lucide-react'
+import { MessageCircleQuestion } from 'lucide-react'
+import { openAskAirs } from '../shared/askairs/askStore'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
 import { shade, bandBg } from '../../views/home-2027/band'
@@ -179,6 +181,7 @@ export function LaunchSidebar() {
   const actions = useMemo(() => [
     { id: 'home', label: 'Home — all pillars', icon: Shield, run: () => dispatch({ type: 'SET_VIEW', payload: 'home' }) },
     { id: 'theme', label: state.isDark ? 'Switch to light theme' : 'Switch to dark theme', icon: state.isDark ? Sun : Moon, run: () => dispatch({ type: 'TOGGLE_THEME' }) },
+    { id: 'ask', label: 'Ask AIRS — answers from the Prisma AIRS docs', icon: MessageCircleQuestion, run: openAskAirs },
     { id: 'notes', label: 'Prisma AIRS release notes', icon: FileText, run: () => dispatch({ type: 'SET_VIEW', payload: 'releaseNotes' }) },
   ], [dispatch, state.isDark])
 

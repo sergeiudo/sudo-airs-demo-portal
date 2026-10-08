@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Shield, ShieldCheck, Search, Sun, Moon, FileText, Play, Megaphone } from 'lucide-react'
+import { MessageCircleQuestion } from 'lucide-react'
+import { openAskAirs } from '../../components/shared/askairs/askStore'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, FONT, label as LBL } from '../api-intercept-2027/tokens'
 import airsLogo from '../../../prisma-AIRS_RGB_logo_Lockup_Negative.png'
@@ -9,6 +11,7 @@ import { LauncherTile, LauncherRow } from './LauncherTile'
 import { Tip } from '../../components/shared/Tip'
 import { RegionsButton } from '../../components/shared/RegionsPanel'
 import { ServerStatusButton } from '../../components/shared/ServerStatus'
+import { AskAirsButton } from '../../components/shared/askairs/AskAirs'
 
 // Literal class names, so Tailwind's scan finds every one it may need.
 const ROW_COLS = { 5: 'xl:grid-cols-5', 6: '2xl:grid-cols-6' }
@@ -99,6 +102,7 @@ export function HomeLauncher({ homeSwitch }) {
     { id: 'start', label: 'Start the demo — step 1', icon: Play, run: () => launch(RUN_OF_SHOW[0].id) },
     { id: 'theme', label: state.isDark ? 'Switch to light theme' : 'Switch to dark theme', icon: state.isDark ? Sun : Moon, run: () => dispatch({ type: 'TOGGLE_THEME' }) },
     ...(feed ? [{ id: 'latest', label: `What's new in Prisma AIRS — ${feed.items[0].title}`, icon: Megaphone, run: () => setRelease(0) }] : []),
+    { id: 'ask', label: 'Ask AIRS — answers from the Prisma AIRS docs', icon: MessageCircleQuestion, run: openAskAirs },
     { id: 'notes', label: 'Prisma AIRS release notes', icon: FileText, run: openNotes },
   ], [launch, dispatch, state.isDark, feed, openNotes])
 
@@ -139,6 +143,7 @@ export function HomeLauncher({ homeSwitch }) {
           </button>
 
           <div className="ml-auto md:ml-0 flex items-center gap-2 flex-shrink-0">
+            <AskAirsButton t={t} />
             <RegionsButton t={t} variant="bar" />
             <ServerStatusButton t={t} />
             {homeSwitch}

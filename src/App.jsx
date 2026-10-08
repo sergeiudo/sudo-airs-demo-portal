@@ -20,6 +20,7 @@ import { DeveloperCornerView } from './views/DeveloperCornerView'
 import { DeveloperCorner } from './views/developer-corner/DeveloperCorner'
 import { ReleaseNotesView } from './views/ReleaseNotesView'
 import { ReleaseNotesLaunch } from './views/release-notes-launch/ReleaseNotesLaunch'
+import { AskAirsDrawer } from './components/shared/askairs/AskAirs'
 import { McpSecurityView } from './views/McpSecurityView'
 import { RagSecurityView } from './views/RagSecurityView'
 import { LlmGatewayView } from './views/LlmGatewayView'
@@ -111,10 +112,18 @@ function AppContent() {
   )
 }
 
+// Ask AIRS — the docs helper drawer, once for the whole New design (home and
+// release notes render outside MainLayout, so it cannot live there).
+function AskAirsMount() {
+  const { state } = useAppContext()
+  return state.uiMode === 'new' ? <AskAirsDrawer /> : null
+}
+
 export default function App() {
   return (
     <AppProvider>
       <AppContent />
+      <AskAirsMount />
     </AppProvider>
   )
 }

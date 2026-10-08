@@ -7,7 +7,7 @@
  *   node scripts/gen-aigw-catalog.mjs --what <dir>    # also read <dir>/*-catalog.tsv
  *
  * Pages, titles and sections come from the official llms.txt indexes (via the
- * same corpus aigw-docs.js keeps in .cache/aigw-docs). The one-line "what it
+ * 'aigw' collection airs-docs.js keeps in .cache/airs-docs). The one-line "what it
  * is" per page comes, in order of preference, from: a TSV given with --what
  * (`path<TAB>title<TAB>what`, path after /docs/aigw), the catalog file this
  * script wrote last time (so curated lines survive a refresh), then the
@@ -16,7 +16,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { ensureDocs, docsCatalog, docsStatus } from '../aigw-docs.js'
+import { ensureDocs, docsCatalog, docsStatus } from '../airs-docs.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = path.join(ROOT, 'src/views/developer-corner/guides/aigw-catalog.js')
@@ -85,7 +85,7 @@ if (status.state !== 'ready') throw new Error(`docs corpus not ready: ${status.e
 const shorten = (s) => { const t = s.replace(/\s+/g, ' ').replace(/…$/, '').trim(); return t.length > 150 ? `${t.slice(0, 147).replace(/\s+\S*$/, '')}…` : t }
 const groups = new Map(GROUPS.map(([key, title, area]) => [title, { title, area, pages: [] }]))
 const other = { title: 'Other pages', area: 'docs', pages: [] }
-for (const p of docsCatalog()) {
+for (const p of docsCatalog('aigw')) {
   const segs = p.section.split(' › ')
   const rel = p.url.replace(/^https:\/\/portkey\.ai\/docs\/aigw/, '').replace(/^https:\/\/portkey\.ai/, '')
   const match = GROUPS.find(([key]) => key === segs.slice(0, 2).join(' › ')) ?? GROUPS.find(([key]) => key === segs[0])
