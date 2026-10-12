@@ -3,9 +3,10 @@
  *
  *   GET  /status   the docs index (airs-docs.js): collections, pages, passages
  *   GET  /search   one keyword search, no model (scripts/eval-assist.mjs uses it)
- *   POST /ask      { question } → a stream of server-sent events while Claude
- *                  researches the official docs with tools (assist-agent.js):
- *                  step… sources… answer | error
+ *   POST /ask      { question, history? } → a stream of server-sent events while
+ *                  Claude researches the official docs with tools
+ *                  (assist-agent.js): step… sources… answer | error
+ *                  history = the tab's earlier exchanges, so follow-ups have context
  *
  * A docs helper: nothing is scanned, nothing is stored, no question is logged.
  */
@@ -52,6 +53,11 @@ router.post('/ask', async (req, res) => {
   ensureDocs()
   const question = String(req.body?.question || '').trim().slice(0, 800)
   if (!question) return res.status(400).json({ error: 'Ask a question.' })
+  // The tab's earlier exchanges (askStore.js), bounded like the question. Sent
+  // with each ask and kept nowhere here.
+  const history = (Array.isArray(req.body?.history) ? req.body.history : []).slice(-3)
+    .map((h) => ({ question: String(h?.question || '').trim().slice(0, 800), answer: String(h?.answer || '').trim().slice(0, 4000) }))
+    .filter((h) => h.question && h.answer)
   const status = docsStatus()
   if (status.state !== 'ready') {
     return res.status(503).json({ status, error: status.state === 'building' ? 'The docs are being indexed — about two minutes after a first start.' : 'The docs index is not available yet.' })
@@ -66,7 +72,7 @@ router.post('/ask', async (req, res) => {
   const beat = setInterval(() => { if (open) res.write(': ping\n\n') }, 10000)
   send({ type: 'status', status })
   try {
-    await runSidekick(question, send)
+    await runSidekick(question, send, history)
   } catch (e) {
     send({ type: 'error', error: String(e?.message || e).slice(0, 400) })
   } finally {

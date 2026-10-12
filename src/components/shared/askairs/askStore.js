@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * and the docs index status. A module store with listeners, so every surface
  * shows the same thread.
  *
+ * Follow-ups have context: each question carries the last three answered
+ * exchanges, so the conversation reads as one thread. Removing a question or
+ * clearing the conversation takes it out of that context too.
+ *
  * Nothing is kept: the conversation lives in this tab's memory only — it
  * follows you from pillar to pillar and is gone on reload. It is a shared demo
  * portal; one presenter's questions must not greet the next. (The server keeps
@@ -53,10 +57,12 @@ export async function askAirs(question) {
   const q = String(question || '').trim()
   if (!q) return
   const id = `${Date.now()}`
+  // Items are newest first; the server wants the earlier exchanges oldest first.
+  const history = state.items.filter((i) => i.answer && !i.pending).slice(0, 3).reverse().map((i) => ({ question: i.question, answer: i.answer }))
   set((s) => ({ items: [{ id, question: q, pending: true, steps: [], sources: [], at: new Date().toISOString() }, ...s.items], selected: id }))
   const update = (patch) => set((s) => ({ items: s.items.map((i) => (i.id === id ? { ...i, ...(typeof patch === 'function' ? patch(i) : patch) } : i)) }))
   try {
-    const r = await fetch('/api/assist/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) })
+    const r = await fetch('/api/assist/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, history }) })
     if (!r.ok || !r.body || !String(r.headers.get('content-type')).includes('text/event-stream')) {
       const j = await r.json().catch(() => ({}))
       if (j.status) set({ status: j.status })

@@ -73,6 +73,7 @@ Research before you answer:
 2. For how-to and configuration questions, read_page the best match before answering — excerpts are partial.
 3. If the indexed docs do not have it, fetch_official an official page you know or saw linked (docs.paloaltonetworks.com, pan.dev, portkey.ai/docs, github.com/PaloAltoNetworks).
 4. Stop when you can answer well; at most ${MAX_TOOL_CALLS} tool calls. Do not research what you already have.
+5. Earlier exchanges of the conversation may come before the question. Read a follow-up ("and for Bedrock?", "show me the config for that") in their light, but research it afresh: their source ids do not carry over, so cite only sources from this research.
 
 Then answer:
 - Lead with the direct answer, then details: numbered steps for procedures, fenced code for JSON, config and commands, exact names (fields, headers, endpoints, settings, UI paths) in backticks.
@@ -246,13 +247,15 @@ const firstProvider = () => ORDER.find((p) => Date.now() >= downUntil[p] && (p !
 // ─── the run ─────────────────────────────────────────────────────────────────
 
 /**
- * Research and answer one question. onEvent receives, in order:
+ * Research and answer one question. history is the earlier exchanges of the
+ * conversation, oldest first ({ question, answer }), so a follow-up has
+ * something to refer to. onEvent receives, in order:
  *   { type: 'step', kind: 'think'|'search'|'read'|'fetch', label }   as each happens
  *   { type: 'sources', sources }                                     after each tool
  *   { type: 'answer', text, model, usage, elapsedMs, calls }         at the end
  * Throws only on a total failure (both providers).
  */
-export async function runSidekick(question, onEvent) {
+export async function runSidekick(question, onEvent, history = []) {
   const t0 = performance.now()
   const sources = []                 // { id, title, heading, section, source, product, url }
   const byKey = new Map()            // url → id (one id per page/section)
@@ -326,7 +329,13 @@ export async function runSidekick(question, onEvent) {
     return `Unknown tool ${name}.`
   }
 
-  const msgs = [{ role: 'user', parts: [{ text: question }] }]
+  // Earlier exchanges ride as plain turns. Their [S#] citations belonged to
+  // earlier runs and would collide with this run's ids, so they are dropped.
+  const prior = history.flatMap((h) => [
+    { role: 'user', parts: [{ text: h.question }] },
+    { role: 'assistant', parts: [{ text: h.answer.replace(/\s?\[S\d+(?:\s*,\s*S\d+)*\]/g, '') }] },
+  ])
+  const msgs = [...prior, { role: 'user', parts: [{ text: question }] }]
   for (let step = 0; step < MAX_STEPS; step++) {
     const r = await turn(msgs)
     usage.in += r.usage.in
