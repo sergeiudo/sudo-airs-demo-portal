@@ -296,6 +296,76 @@ export const GLANCE = {
   concede: 'LiteLLM is stronger on provider breadth, time to first call and release pace, and even on routing — concede those. Don\'t lead with latency: its own four-instance benchmark beats our quoted p99.',
 }
 
+// ─── the customer overview — the pillar's front page ─────────────────────────
+// The answer to "why AIRS AI Gateway and not LiteLLM?" for a customer, on one
+// or two screens: three numbers drawn as marks (one dot per real CVE, one
+// square per real package), one story, one checklist, one question. Only what
+// survived the claim check — no latency, no routing, no "guardrails are paid".
+// The CVE marks are read live; the rest was measured or verified on AS_OF.
+export const PITCH = {
+  eyebrow: 'Why AIRS AI Gateway · vs LiteLLM',
+  title: 'Both route your AI traffic. Only one is built to be trusted with it.',
+  sub: 'An AI gateway sits in front of every agent, every model and every provider key. If it is compromised, so is everything behind it — so the first question is not features. It is whether it is safe to put there.',
+  sides: {
+    airs: 'Part of the Prisma AIRS security platform',
+    litellm: 'An open-source Python proxy you run, patch and secure yourself',
+  },
+  reasons: {
+    safe: {
+      n: '01', eyebrow: 'Safe in the request path', unit: 'CVEs on record',
+      take: 'And in March 2026 LiteLLM published credential-stealing malware to PyPI — under its own name.',
+      foot: 'Every dot is one CVE, live from OSV.dev',
+      // Shown only when OSV cannot be reached — OSV on AS_OF, by severity.
+      snapshot: { litellm: { critical: 6, high: 16, moderate: 8, low: 9 }, gateway: { moderate: 1 } },
+    },
+    lean: {
+      n: '02', eyebrow: 'Small by design', unit: 'packages it runs on',
+      take: 'Every package is someone else\'s code in your request path. The size of that tree is an architecture decision, not bad luck.',
+      foot: 'Every square is one package (npm · pip)',
+    },
+    broad: {
+      n: '03', eyebrow: 'Secures more than the gateway', unit: 'AI control points',
+      take: 'LiteLLM covers one of them: the gateway. Every other layer is another product to buy, run and patch.',
+      foot: 'One policy, one console. Click one to see it live.',
+    },
+  },
+  story: {
+    eyebrow: 'March 2026',
+    title: 'The day the gateway was the attack',
+    sub: 'LiteLLM\'s own release pipeline, turned against everyone who installed it.',
+    steps: [
+      { when: 'Mar 19', title: 'Attackers poison Trivy', text: 'A security scanner LiteLLM\'s build pipeline ran unpinned.' },
+      { when: 'Mar 24 · 10:39', title: 'litellm 1.82.7 goes live on PyPI', text: 'Published with LiteLLM\'s own stolen token. It looked like any release.', hot: true },
+      { when: '13 min later', title: '1.82.8 follows', text: 'Runs a credential stealer every time Python starts.', hot: true },
+      { when: '~3 hours later', title: 'PyPI quarantines the project', text: 'Harvested by then: SSH keys, cloud tokens, Kubernetes secrets.' },
+      { when: 'August', title: '153 GB of stolen credentials surface', text: '2,500+ organisations exposed across the campaign (Hudson Rock).' },
+    ],
+    quote: 'Anyone who has installed and run the project should assume any credentials available to litellm environment may have been exposed.',
+    quoteBy: 'PYSEC-2026-2, the official advisory',
+    quoteSource: 'osvMalware',
+  },
+  ready: {
+    title: 'Ready for enterprise production',
+    sub: 'What a security team asks for on day one.',
+    // mark: how LiteLLM's side reads — 'no' (missing) or 'paid' (Enterprise licence).
+    rows: [
+      { topic: 'Who runs it', airs: 'Managed control plane; prompts stay in your VPC', litellm: 'You run and patch all of it', mark: 'no' },
+      { topic: 'SSO, SCIM, audit logs', airs: 'Built in (Strata Cloud Manager)', litellm: 'SSO free for 5 users, then paid', mark: 'paid' },
+      { topic: 'Policy by department', airs: 'Org → department → team → user', litellm: 'Keys and teams only', mark: 'no' },
+      { topic: 'Stateless at scale', airs: 'No database on the request path', litellm: 'Postgres on the request path', mark: 'no' },
+      { topic: 'Custom guardrails', airs: 'Run outside the gateway (webhook)', litellm: 'Run inside the proxy — sandbox escaped', mark: 'no' },
+      { topic: 'Support', airs: 'One Palo Alto Networks contract', litellm: 'Community, unless you pay', mark: 'paid' },
+    ],
+  },
+  close: {
+    eyebrow: 'The question that decides it',
+    q: 'What happens to our company if your gateway is compromised — and what else do you secure?',
+    note: 'Ask it of any AI gateway vendor.',
+    fair: 'LiteLLM is excellent at provider breadth and a ten-minute start. The question is what you put in front of every agent.',
+    already: 'Prisma AIRS plugs into it today, through LiteLLM\'s native guardrail. That protects the traffic — nothing in it protects LiteLLM itself.',
+  },
+}
+
 // ─── the three questions (the brief's overview) ──────────────────────────────
 export const OVERVIEW = {
   lead: 'LiteLLM is the most widely used open-source AI gateway. In March 2026 it also published credential-stealing malware to PyPI under its own name. **Lead with that, not with features:** a gateway sits in front of every agent and every provider key a customer has, so the first question is whether it is safe to put there.',
@@ -400,15 +470,15 @@ export const PAYLOAD = [
 // ─── 02 · what else it secures ───────────────────────────────────────────────
 // `portal`: where this portal demonstrates it; `rel` says how closely.
 export const CONTROLS = [
-  { title: 'AI Gateway', status: 'GA', icon: Waypoints, airs: 'Identity, budget, model access, guardrails and routing are decided in one policy check on every request.', litellm: 'This is the one it covers.', covered: true, portal: 'apiIntercept', rel: 'demo', relText: 'The SCM AI Gateway target fronts Bedrock and Vertex with one guardrail' },
-  { title: 'Runtime Guardrails', status: 'GA', icon: ShieldCheck, airs: '50+ checks on input and output, including prompt injection, DLP, toxicity and hallucination. Each can block, redact, log or fall back.', litellm: 'Several built-in guardrails and per-team guardrails are Enterprise. CVE-2026-40217 was a sandbox escape in its custom guardrails.', claim: 'guardrailsPaid', portal: 'apiIntercept', rel: 'demo', relText: 'Fire the 142-payload library with AIRS on and off' },
-  { title: 'Agent Identity', status: 'Coming', icon: Fingerprint, airs: 'Inventory agent identities, assign owners and enforce least privilege, so an agent holds only the access its task needs.', litellm: 'No agent identity model. Virtual keys only.', portal: 'enterpriseAccess', rel: 'closest', relText: 'User identity, not agent identity: Entra ID → signed JWT → routing' },
-  { title: 'Agent & MCP Gateway', status: 'GA registry', icon: Network, airs: 'Agent Registry with A2A, MCP Registry with tool-level access control, and full logs of agent and MCP calls.', litellm: 'Has an MCP gateway. CVE-2026-42271 allowed authenticated command execution through its MCP stdio test endpoints, and CVE-2026-59822 bypassed MCP authentication.', portal: 'apiIntercept', rel: 'demo', relText: 'MCP tool calls through the SCM AI Gateway' },
-  { title: 'AI Model Security', status: 'GA', icon: ScanSearch, airs: 'Scans model files for backdoors, arbitrary code execution and vulnerable libraries before they reach production.', litellm: 'None.', portal: 'modelScanning', rel: 'demo', relText: 'Real model scans, and your SCM scan history' },
-  { title: 'AI Artifact Scanning', status: 'GA', icon: Boxes, airs: 'Scans the agent codebase (skills, tools, MCP servers, orchestration) for attack chains that cross component boundaries.', litellm: 'None.', portal: 'modelScanning', rel: 'closest', relText: 'Skill scans, as seen in SCM' },
-  { title: 'AI Red Teaming', status: 'GA', icon: Swords, airs: 'Profiles the target, then runs attacks written for it against models, apps and agent tool calls. Runs continuously rather than as a one-off test.', litellm: 'None.', portal: 'redTeaming', rel: 'demo', relText: 'Live campaigns and reports' },
-  { title: 'Agent Endpoint Security', status: 'GA', icon: Laptop, airs: 'Koi. Finds and governs agents, skills, MCP servers, extensions and models on the laptops where Claude Code and Cursor run.', litellm: 'None. This layer catches a poisoned package before it reaches a runner.', portal: 'claudeHooks', rel: 'related', relText: 'AIRS hooks in Claude Code — related, but not the Koi product' },
-  { title: 'Browser for Agentic AI', status: 'GA', icon: Globe, airs: 'Governs agents that work in the browser: the permissions they inherit, unsafe actions against enterprise systems, and commands run without approval.', litellm: 'None.' },
+  { title: 'AI Gateway', short: 'AI Gateway', status: 'GA', icon: Waypoints, airs: 'Identity, budget, model access, guardrails and routing are decided in one policy check on every request.', litellm: 'This is the one it covers.', covered: true, portal: 'apiIntercept', rel: 'demo', relText: 'The SCM AI Gateway target fronts Bedrock and Vertex with one guardrail' },
+  { title: 'Runtime Guardrails', short: 'Runtime guardrails', status: 'GA', icon: ShieldCheck, airs: '50+ checks on input and output, including prompt injection, DLP, toxicity and hallucination. Each can block, redact, log or fall back.', litellm: 'Several built-in guardrails and per-team guardrails are Enterprise. CVE-2026-40217 was a sandbox escape in its custom guardrails.', claim: 'guardrailsPaid', portal: 'apiIntercept', rel: 'demo', relText: 'Fire the 142-payload library with AIRS on and off' },
+  { title: 'Agent Identity', short: 'Agent identity', status: 'Coming', icon: Fingerprint, airs: 'Inventory agent identities, assign owners and enforce least privilege, so an agent holds only the access its task needs.', litellm: 'No agent identity model. Virtual keys only.', portal: 'enterpriseAccess', rel: 'closest', relText: 'User identity, not agent identity: Entra ID → signed JWT → routing' },
+  { title: 'Agent & MCP Gateway', short: 'Agents & MCP', status: 'GA registry', icon: Network, airs: 'Agent Registry with A2A, MCP Registry with tool-level access control, and full logs of agent and MCP calls.', litellm: 'Has an MCP gateway. CVE-2026-42271 allowed authenticated command execution through its MCP stdio test endpoints, and CVE-2026-59822 bypassed MCP authentication.', portal: 'apiIntercept', rel: 'demo', relText: 'MCP tool calls through the SCM AI Gateway' },
+  { title: 'AI Model Security', short: 'Model security', status: 'GA', icon: ScanSearch, airs: 'Scans model files for backdoors, arbitrary code execution and vulnerable libraries before they reach production.', litellm: 'None.', portal: 'modelScanning', rel: 'demo', relText: 'Real model scans, and your SCM scan history' },
+  { title: 'AI Artifact Scanning', short: 'Artifact scanning', status: 'GA', icon: Boxes, airs: 'Scans the agent codebase (skills, tools, MCP servers, orchestration) for attack chains that cross component boundaries.', litellm: 'None.', portal: 'modelScanning', rel: 'closest', relText: 'Skill scans, as seen in SCM' },
+  { title: 'AI Red Teaming', short: 'Red teaming', status: 'GA', icon: Swords, airs: 'Profiles the target, then runs attacks written for it against models, apps and agent tool calls. Runs continuously rather than as a one-off test.', litellm: 'None.', portal: 'redTeaming', rel: 'demo', relText: 'Live campaigns and reports' },
+  { title: 'Agent Endpoint Security', short: 'Agent endpoints', status: 'GA', icon: Laptop, airs: 'Koi. Finds and governs agents, skills, MCP servers, extensions and models on the laptops where Claude Code and Cursor run.', litellm: 'None. This layer catches a poisoned package before it reaches a runner.', portal: 'claudeHooks', rel: 'related', relText: 'AIRS hooks in Claude Code — related, but not the Koi product' },
+  { title: 'Browser for Agentic AI', short: 'Agentic browser', status: 'GA', icon: Globe, airs: 'Governs agents that work in the browser: the permissions they inherit, unsafe actions against enterprise systems, and commands run without approval.', litellm: 'None.' },
 ]
 
 // ─── 03 · in production ──────────────────────────────────────────────────────

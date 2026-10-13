@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Radio } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Radio, Sparkles, BookOpen } from 'lucide-react'
 import { useAppContext } from '../../context/AppContext'
 import { tokens, glass, FONT } from '../api-intercept-2027/tokens'
 import { shade, bandBg, bandGlass } from '../home-2027/band'
@@ -10,10 +10,16 @@ import { PillarHeader } from '../../components/layout/PillarHeader'
 import { GROUPS, SECTIONS, BRIEF, AS_OF } from './content'
 import { focusCls } from './parts'
 import { LiveRecord, useRecord } from './LiveRecord'
+import { Overview } from './Overview'
 import { Glance, Questions, Safe, Compromise, Scope, Production, Objections, Strengths, Discovery, Coexist, Claims, MathSection, Sources } from './sections'
 
 /**
- * VsLitellm — the AI-GW vs LiteLLM deep dive, in the launch design.
+ * VsLitellm — AI-GW vs LiteLLM, in the launch design. Two modes, switched in
+ * the header:
+ *
+ *   Overview    the front page, for the customer (Overview.jsx). The pillar
+ *               always opens here.
+ *   Full brief  the seller's deep dive:
  *
  *   left   the brief's sections, then how to sell it, then the proof
  *   middle the section: a band, then cards — every figure with its source
@@ -128,6 +134,27 @@ function PrevNext({ t, id, onPick }) {
   return <div className="flex gap-3">{card(SECTIONS[i - 1], 'prev')}{card(SECTIONS[i + 1], 'next')}</div>
 }
 
+// ─── header: overview or the full brief ──────────────────────────────────────
+const MODES = [['overview', 'Overview', Sparkles], ['brief', 'Full brief', BookOpen]]
+
+function ModeSwitch({ mode, setMode, tone }) {
+  return (
+    <div role="radiogroup" aria-label="View" className="inline-flex items-center rounded-full p-0.5 flex-shrink-0"
+         style={{ height: 30, background: bandGlass.background, border: bandGlass.border }}>
+      {MODES.map(([id, label, Icon]) => {
+        const on = mode === id
+        return (
+          <button key={id} type="button" role="radio" aria-checked={on} onClick={() => setMode(id)}
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                  style={{ height: 24, fontFamily: FONT.prose, fontSize: 12, fontWeight: on ? 700 : 600, color: on ? shade(tone, 0.45) : '#fff', background: on ? 'rgba(255,255,255,0.94)' : 'transparent', transition: 'background 140ms' }}>
+            <Icon size={12} aria-hidden="true" /> {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── shell ───────────────────────────────────────────────────────────────────
 export function VsLitellm() {
   const { state, dispatch } = useAppContext()
@@ -135,6 +162,7 @@ export function VsLitellm() {
   const accent = HOME_PILLARS.find((p) => p.id === 'vsLitellm')?.accent ?? GROUPS[0].tone
   const reduce = useReducedMotion()
 
+  const [mode, setMode] = useState('overview')       // not stored: a customer demo opens on the overview
   const [section, setSection] = useState(stored)
   const [focus, setFocus] = useState(null)          // a claim to open at
   const scrollRef = useRef(null)
@@ -157,6 +185,7 @@ export function VsLitellm() {
       try { localStorage.setItem(DEV_GUIDE_KEY, target.slice(6)) } catch { /* private mode */ }
       return dispatch({ type: 'SET_VIEW', payload: 'developerCorner' })
     }
+    setMode('brief')                                  // every other target is a place in the brief
     if (target.startsWith('claim:')) {
       const id = target.slice(6)
       pick('claims'); setFocus(id); pending.current = `claim-${id}`
@@ -191,7 +220,12 @@ export function VsLitellm() {
         backgroundImage: `linear-gradient(${t.grid} 1px, transparent 1px), linear-gradient(90deg, ${t.grid} 1px, transparent 1px)`,
         backgroundSize: '44px 44px',
       }} />
-      <PillarHeader pillarId="vsLitellm" actions={<RecordPill t={t} />} />
+      <PillarHeader pillarId="vsLitellm" actions={<>{mode === 'brief' && <RecordPill t={t} />}<ModeSwitch mode={mode} setMode={setMode} tone={accent} /></>} />
+      {mode === 'overview' ? (
+        <div className="relative flex-1 min-h-0 overflow-y-auto">
+          <Overview t={t} onGo={go} onBrief={() => setMode('brief')} />
+        </div>
+      ) : (
       <div className="relative flex-1 min-h-0 flex">
         <div className="relative flex-shrink-0 overflow-hidden py-3 pl-3" style={{ width: leftW }}>
           <Rail t={t} active={section} onPick={pick} />
@@ -210,6 +244,7 @@ export function VsLitellm() {
           <LiveRecord t={t} accent={accent} onGo={go} />
         </div>
       </div>
+      )}
     </div>
   )
 }
