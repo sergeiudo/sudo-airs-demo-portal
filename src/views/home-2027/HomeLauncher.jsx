@@ -11,9 +11,13 @@ import { LauncherTile, LauncherRow } from './LauncherTile'
 import { HeaderWidgets, useHeaderFit } from '../../components/shared/HeaderWidgets'
 
 // Literal class names, so Tailwind's scan finds every one it may need.
-const ROW_COLS = { 5: 'xl:grid-cols-5', 6: '2xl:grid-cols-6' }
-const ROW_SPAN = { 1: 'xl:col-span-1 2xl:col-span-1', 2: 'xl:col-span-2 2xl:col-span-2', 3: 'xl:col-span-3 2xl:col-span-3', 4: 'xl:col-span-4 2xl:col-span-4', 5: 'xl:col-span-5 2xl:col-span-5' }
-const ROW_HEAD = DEEP_DIVES.length + OPERATE.length > 5 ? '2xl:block' : 'xl:block'
+// Seven rows (six deep dives + telemetry) only fit one line from ~2300px —
+// at 1920 the text squeezed to two words; below that they wrap, four per
+// line from xl, three under it.
+const ROW_COLS = { 5: 'xl:grid-cols-5', 6: '2xl:grid-cols-6', 7: 'xl:grid-cols-4 min-[2300px]:grid-cols-7' }
+const ROW_SPAN = { 1: 'xl:col-span-1 2xl:col-span-1', 2: 'xl:col-span-2 2xl:col-span-2', 3: 'xl:col-span-3 2xl:col-span-3', 4: 'xl:col-span-4 2xl:col-span-4', 5: 'xl:col-span-5 2xl:col-span-5', 6: 'min-[2300px]:col-span-6' }
+const ROW_N = DEEP_DIVES.length + OPERATE.length
+const ROW_HEAD = ROW_N > 6 ? 'min-[2300px]:block' : ROW_N > 5 ? '2xl:block' : 'xl:block'
 import { ReleaseWire } from './ReleaseWire'
 import { useReleaseFeed } from './useReleaseFeed'
 
@@ -209,10 +213,10 @@ export function HomeLauncher() {
         {/* ── go deeper ── */}
         <section aria-label="Deep dives and tools" className="mt-6">
           {/* One line on wide screens, the headings spanning their own groups.
-              Six compact rows (five deep dives + telemetry) need 2xl — at xl
-              a sixth column squeezes the text to ~60px — so below it the
-              rows wrap in threes and the group headings step aside. */}
-          <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${ROW_COLS[DEEP_DIVES.length + OPERATE.length] ?? ''}`}>
+              Seven compact rows (six deep dives + telemetry) need ~2300px —
+              narrower columns squeeze the text — so below it the rows wrap
+              (four at xl, three under) and the group headings step aside. */}
+          <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${ROW_COLS[ROW_N] ?? ''}`}>
             <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[DEEP_DIVES.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Deep dives</h2>
             <h2 className={`hidden ${ROW_HEAD} ${ROW_SPAN[OPERATE.length] ?? ''} -mb-2`} style={{ ...LBL, fontSize: 10, color: t.inkDim }}>Operate</h2>
             {[...DEEP_DIVES, ...OPERATE].map((p, i) => (

@@ -20,6 +20,7 @@ const VIEW_LABELS = {
   ragSecurity:     { label: 'RAG Security',                 sublabel: 'Retrieval-Augmented Generation pipeline protection', text: 'text-amber-400', color: '#F59E0B' },
   llmGateway:      { label: 'AI/LLM Gateway',               sublabel: 'Portkey gateway + Prisma AIRS guardrail',           text: 'text-pink-400',   color: '#EC4899' },
   ministryHealth:  { label: 'Ministry of Health',           sublabel: 'בריאות.AI — bilingual HE/EN health assistant demo', text: 'text-sky-400',    color: '#0EA5E9' },
+  vsLitellm:       { label: 'AI-GW vs LiteLLM',             sublabel: 'Competitive deep dive — traced and live',     text: 'text-amber-400',  color: '#B7862F' },
   enterpriseAccess: { label: 'Enterprise AI Access',         sublabel: 'Entra ID sign-in → RS256 JWT → identity-routed AI Gateway', text: 'text-violet-400', color: '#8B5CF6' },
 }
 

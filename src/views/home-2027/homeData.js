@@ -34,6 +34,7 @@ const META = {
   modelScanning:   { run: 2, area: 'AI Supply Chain',      aka: 'model scan scanning skills hugging face pickle supply', stats: ['models + skills', 'SCM history'] },
   llmGateway:      { group: 'deep', area: 'Gateway · legacy',     aka: 'portkey legacy gateway lanes llm', stats: ['3 lanes side by side'] },
   ministryHealth:  { group: 'deep', area: 'Customer scenario',    aka: 'moh briut health hebrew rfi israel', stats: [`${MOH_SCENARIOS} scenarios`, 'HE / EN'] },
+  vsLitellm:       { group: 'deep', area: 'AI-GW · Competitive',  aka: 'litellm competitive competition competitor battlecard battle card vs versus compare comparison rival cve pypi trivy teampcp supply chain objections discovery', stats: ['claims traced', 'live record'] },
   redTeaming:      { run: 3, area: 'AI Red Teaming',       aka: 'red team redteam adversarial campaign', stats: ['automated campaigns'] },
   mcpSecurity:     { group: 'deep', area: 'Runtime · MCP',        aka: 'mcp tools tool poisoning owasp', stats: ['10 OWASP scenarios'] },
   ragSecurity:     { group: 'deep', area: 'Runtime · RAG',        aka: 'rag retrieval vector documents', stats: ['upstream + downstream'] },

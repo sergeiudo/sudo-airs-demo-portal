@@ -43,6 +43,7 @@ import mohRouter, {
 import accessRouter from './access-routes.js'
 import devRouter from './dev-routes.js'
 import assistRouter from './assist-routes.js'
+import competitiveRouter from './competitive-routes.js'
 import { ensureDocs, setReleasePages } from './airs-docs.js'
 
 const app = express()
@@ -56,6 +57,8 @@ app.use('/api/access', accessRouter)
 // Developer Corner — "Run it live": the snippets' exact calls, keys masked in the echo.
 app.use('/api/dev', devRouter)
 app.use('/api/assist', assistRouter)
+// AI-GW vs LiteLLM — the public security and release record, read live (OSV, PyPI, npm).
+app.use('/api/competitive', competitiveRouter)
 
 const PORT = process.env.PROXY_PORT || 3001
 

@@ -11,5 +11,6 @@ export const NAV_ITEMS = [
   { id: 'mcpSecurity', sublabel: 'Live MCP tool protection demo' },
   { id: 'ragSecurity', sublabel: 'Retrieval pipeline protection' },
   { id: 'ministryHealth', sublabel: 'משרד הבריאות — bilingual RFI demo' },
+  { id: 'vsLitellm', sublabel: 'Competitive brief — traced and live' },
   { id: 'enterpriseAccess', sublabel: 'Entra ID → JWT → identity routing' },
 ]

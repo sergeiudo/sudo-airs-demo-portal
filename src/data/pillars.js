@@ -1,4 +1,4 @@
-import { BarChart2, Code2, Crosshair, Database, Fingerprint, HeartPulse, Network, ScanSearch, Swords, Terminal, Waypoints } from 'lucide-react'
+import { BarChart2, Code2, Crosshair, Database, Fingerprint, HeartPulse, Network, Scale, ScanSearch, Swords, Terminal, Waypoints } from 'lucide-react'
 
 // The portal's pillars: titles, copy, highlights, icons and accents — the
 // single source both home pages and the pillar headers read (via homeData).
@@ -107,6 +107,24 @@ export const PILLARS = [
     accent: '#0ea5e9',
     glow: 'rgba(14,165,233,0.32)',
     dim: 'rgba(14,165,233,0.08)',
+  },
+  {
+    id: 'vsLitellm',
+    icon: Scale,
+    title: 'AI-GW vs LiteLLM',
+    tag: 'Competitive',
+    summary: 'The competitive deep dive: is it safe in the request path, what else does it secure, how does it hold up in production.',
+    description: 'The October 2026 competitive brief against LiteLLM, the most widely used open-source AI gateway: its security record — dozens of CVEs and a malicious PyPI release in March 2026 — the nine control points Prisma AIRS runs under one policy, and thirteen production rows. Every claim is traced to its primary source (five turned out stale, selective or overstated), with the objections you will hear, discovery questions, the land play for customers already on LiteLLM, and a live record read from OSV, PyPI and npm.',
+    highlights: [
+      { t: 'Claim check — every number in the brief traced to its source', tag: 'NEW' },
+      { t: 'Live record — CVEs and releases read from OSV, PyPI and npm', tag: 'NEW' },
+      'The March 2026 PyPI compromise, step by step',
+      'Nine control points against one',
+      'Objections, discovery questions and the land play',
+    ],
+    accent: '#b7862f',
+    glow: 'rgba(183,134,47,0.32)',
+    dim: 'rgba(183,134,47,0.08)',
   },
   {
     id: 'claudeHooks',

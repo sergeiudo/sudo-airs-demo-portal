@@ -19,6 +19,7 @@ import { LlmGatewayView } from './views/LlmGatewayView'
 import { MinistryHealthView } from './views/MinistryHealthView'
 import { BriutStandalone } from './views/moh/BriutApp'
 import { EnterpriseAccess } from './views/enterprise-access/EnterpriseAccess'
+import { VsLitellm } from './views/vs-litellm/VsLitellm'
 
 // The portal has no router, so the chrome-free citizen app is selected by
 // query string instead: /?app=briut. Keeping the path at "/" means nothing
@@ -76,6 +77,7 @@ function AppContent() {
       case 'llmGateway':       return <LlmGatewayView />
       case 'ministryHealth':   return <MinistryHealthView />
       case 'enterpriseAccess': return <EnterpriseAccess />
+      case 'vsLitellm':        return <VsLitellm />
       default:                 return intercept
     }
   }
@@ -88,6 +90,7 @@ function AppContent() {
     state.activeView === 'redTeaming' ||
     state.activeView === 'enterpriseAccess' ||
     state.activeView === 'developerCorner' ||
+    state.activeView === 'vsLitellm' ||
     state.activeView === 'observability'
   )
 
