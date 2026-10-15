@@ -277,7 +277,63 @@ def build_slack_blocks(month_label, month_url, features, earlier, scraped_at):
         "\U0001F41B <%s|Known Issues>\n"
         "✅ <%s|Addressed Issues>" % (INDEX_URL, KNOWN_ISSUES_URL, ADDRESSED_ISSUES_URL)
     )}})
+
+    # Copy-paste block for WhatsApp: copying the post above loses every URL.
+    wa = build_whatsapp_text(month_label, month_url, features, earlier)
+    wa = wa.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    blocks.append({"type": "divider"})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                   "text": "*Copy for WhatsApp* (links written out)\n```%s```" % wa}})
     return blocks
+
+
+# Category marker in the WhatsApp text; anything unlisted (General, Core, new ones) gets 🔹.
+CATEGORY_EMOJI = {
+    "AI Red Teaming": "🎯", "AI Runtime Firewall": "🧱", "AI Runtime API": "🔌",
+    "AI Model Security": "🔍", "AI Agent Security": "🤖",
+    "AI Runtime Security Network Intercept": "🌐",
+}
+
+
+def build_whatsapp_text(month_label, month_url, features, earlier, limit=2800):
+    """Plain text in WhatsApp's own syntax (*bold*, _italic_, > quote) with full URLs,
+    since WhatsApp has no labelled links. Kept to one Slack section: summaries go
+    first, then titles past the limit."""
+    n = len(features)
+    head = ["🛡️ *Prisma AIRS — What's New*",
+            "📅 *%s* · %d new feature%s" % (month_label, n, "" if n == 1 else "s"), ""]
+    tail = ["👉 *All %s features*" % month_label, month_url]
+    if earlier:
+        tail += ["", "🗂️ Earlier: " + " · ".join("%s (%d)" % (m["label"], len(m["features"])) for m in earlier)]
+    tail += ["", "📄 New features by date: %s" % INDEX_URL,
+             "🐛 Known issues: %s" % KNOWN_ISSUES_URL,
+             "✅ Addressed issues: %s" % ADDRESSED_ISSUES_URL]
+
+    def render(shown, with_summary):
+        lines = list(head)
+        for f in shown:
+            cat = f.get("category") or "General"
+            lines.append("%s *%s*" % (CATEGORY_EMOJI.get(cat, "🔹"), f["title"]))
+            meta = [] if cat == "General" else [cat]
+            if f.get("updated") and f["updated"] != f.get("release"):
+                meta.append("updated %s" % f["updated"])
+            if meta:
+                lines.append("_%s_" % " · ".join(meta))
+            summary = summarize(f["summary"]) if with_summary else ""
+            if summary:
+                lines.append("> " + summary)
+            lines.append("")
+        if len(shown) < n:
+            lines += ["…and %d more" % (n - len(shown)), ""]
+        return "\n".join(lines + tail)
+
+    text = render(features, True)
+    shown = list(features)
+    while len(text) > limit and shown:
+        text = render(shown, False)
+        if len(text) > limit:
+            shown.pop()
+    return text
 
 
 def post_to_slack(blocks):
