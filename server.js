@@ -3087,6 +3087,16 @@ function gwSections(body) {
       push({ type: 'code', text: code.join('\n') })
       continue
     }
+    // "> [!NOTE]" / "> [!WARNING]" blockquote callouts (the post-Nov-2026 .md)
+    if (s.startsWith('>')) {
+      const quoted = [s]
+      while (i + 1 < lines.length && lines[i + 1].trim().startsWith('>')) quoted.push(lines[++i].trim())
+      const inner = quoted.map((q) => q.replace(/^>\s?/, '')).join(' ')
+      const kind = inner.match(/^\s*\[!(\w+)\]/)?.[1]?.toUpperCase()
+      const text = gwInline(inner.replace(/^\s*\[!\w+\]/, '').replace(/\s+/g, ' '))
+      if (text) push({ type: 'note', tone: kind === 'WARNING' || kind === 'CAUTION' ? 'warning' : 'note', text })
+      continue
+    }
     const callout = s.match(/^<(Note|Warning|Info|Tip|Check)>/)
     if (callout) {
       const close = `</${callout[1]}>`
@@ -3115,20 +3125,40 @@ function gwSections(body) {
       continue
     }
     if (/^<\/?[A-Za-z][^>]*>$/.test(s)) continue // any other MDX component's own tag line
-    push({ type: 'p', text: gwInline(s) })
+    const text = gwInline(s)
+    const inlineNote = text.match(/^\[!(\w+)\]\s*/) // "\[!NOTE] …" written inline under a list item
+    if (inlineNote) { push({ type: 'note', tone: /^(WARNING|CAUTION)$/i.test(inlineNote[1]) ? 'warning' : 'note', text: text.slice(inlineNote[0].length) }); continue }
+    push({ type: 'p', text })
   }
   return sections.filter((x) => x.blocks.length || x.kind === 'feature')
 }
 
-function parseGatewayChangelog(md) {
-  const out = []
-  const re = /<Update\b([^>]*)>([\s\S]*?)<\/Update>/g
+// Two shapes seen. Until Nov 2026 the .md kept Mintlify's tags —
+// <Update label="2.27.0" description="2026-10-06">…</Update>. Since then each
+// release opens with "**2.33.1**", a blank line, "2026-11-06", then "## v2.33.1",
+// and runs to the next such marker. Both are read; the tag form wins if present.
+function gwReleaseBlocks(md) {
+  const blocks = []
+  const tag = /<Update\b([^>]*)>([\s\S]*?)<\/Update>/g
   let m
-  while ((m = re.exec(md)) !== null) {
+  while ((m = tag.exec(md)) !== null) {
     const version = m[1].match(/\blabel="([^"]+)"/)?.[1]
     const date = m[1].match(/\bdescription="(\d{4})-(\d{2})-(\d{2})"/)
-    if (!version || !date) continue
-    const sections = gwSections(m[2])
+    if (version && date) blocks.push({ version, date, body: m[2] })
+  }
+  if (blocks.length) return blocks
+  const marks = [...md.matchAll(/^\*\*(\d+\.\d+\.\d+(?:\.\.\.\d+\.\d+\.\d+)?)\*\*[ \t]*\n\s*\n(\d{4})-(\d{2})-(\d{2})[ \t]*$/gm)]
+  marks.forEach((x, i) => {
+    const end = i + 1 < marks.length ? marks[i + 1].index : md.length
+    blocks.push({ version: x[1], date: [x[0], x[2], x[3], x[4]], body: md.slice(x.index + x[0].length, end) })
+  })
+  return blocks
+}
+
+function parseGatewayChangelog(md) {
+  const out = []
+  for (const { version, date, body } of gwReleaseBlocks(md)) {
+    const sections = gwSections(body)
     const top = (k) => sections.filter((x) => x.kind === k).flatMap((x) => x.blocks.filter((b) => b.type === 'li' && !b.depth))
     const highlights = sections.filter((x) => x.kind === 'feature').map((x) => x.heading)
     const providers = top('providers')
