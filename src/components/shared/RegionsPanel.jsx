@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { Globe2, Loader2, RefreshCw, X, Server, Zap, Check } from 'lucide-react'
+import { Globe2, Loader2, RefreshCw, X, Server, Zap, Check, LayoutGrid } from 'lucide-react'
 import { FONT, label as LBL } from '../../views/api-intercept-2027/tokens'
 import { shade, bandDots, bandGlass } from '../../views/home-2027/band'
 import { deepBand } from '../../views/runtime-launch/diagramKit'
 import { Tip } from './Tip'
 import { useWidgetFit, pillBox, pillClass } from './headerFit'
+import { PRODUCTS, REGIONS as AVAIL, SNAPSHOT } from '../../data/airsRegions'
 
 /**
  * RegionsPanel — "where AIRS answers from". Lives on the home app bar and the
@@ -224,12 +225,110 @@ function RankRow({ t, r, i, max, fastestMs }) {
   )
 }
 
+// ─── product availability (committed GA snapshot, src/data/airsRegions.js) ──
+
+const AV_COLS = `minmax(0, 1fr) repeat(${PRODUCTS.length}, 50px)`
+const fmtDate = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+
+function AvailCell({ t, state, product, region }) {
+  const what = state === 'ga' ? 'generally available' : state === 'partial' ? `generally available, ${region.note ?? 'some features missing'}` : 'not available today'
+  return (
+    <span className="grid place-items-center" role="cell" aria-label={`${product.name} in ${region.name}: ${what}`}>
+      {state === 'ga' ? (
+        <span className="grid place-items-center rounded-full" style={{ width: 22, height: 22, background: t.pass, boxShadow: `0 3px 8px ${t.pass}40` }}>
+          <Check size={12} strokeWidth={3} style={{ color: '#fff' }} aria-hidden="true" />
+        </span>
+      ) : state === 'partial' ? (
+        <span className="grid place-items-center rounded-full" style={{ width: 22, height: 22, background: `${t.warn}1f`, border: `1.5px solid ${t.warn}` }}>
+          <Check size={11} strokeWidth={3} style={{ color: inkOn(t, t.warn, 0.4) }} aria-hidden="true" />
+        </span>
+      ) : (
+        <span className="rounded-full" style={{ width: 10, height: 2, background: t.hairline }} aria-hidden="true" />
+      )}
+    </span>
+  )
+}
+
+function Availability({ t, s }) {
+  const live = new Map((s?.regions ?? []).map((r) => [r.id, r]))
+  return (
+    <div role="table" aria-label="Prisma AIRS products generally available by region">
+      <div role="row" className="grid items-end gap-1 px-3 pb-1.5" style={{ gridTemplateColumns: AV_COLS }}>
+        <span role="columnheader" style={{ ...LBL, fontSize: 9.5, color: t.inkDim }}>Region</span>
+        {PRODUCTS.map((p) => (
+          <span key={p.id} role="columnheader" aria-label={p.name} className="text-center leading-tight"
+                style={{ fontFamily: FONT.prose, fontSize: 10.5, fontWeight: 600, color: t.inkDim }}>
+            {p.short[0]}<br />{p.short[1]}
+          </span>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {AVAIL.map((r) => {
+          const probed = r.probe ? live.get(r.probe) : null
+          const ga = PRODUCTS.filter((p) => r.cells[p.id]).length
+          return (
+            <div key={r.id} role="row" className="grid items-center gap-1 rounded-2xl px-3 py-2"
+                 style={{ gridTemplateColumns: AV_COLS, background: probed?.active ? `${t.live}12` : t.panel, border: `1px solid ${probed?.active ? `${t.live}55` : t.hairline}` }}>
+              <div role="rowheader" className="flex items-center gap-2 min-w-0">
+                <span style={{ fontSize: 18 }} aria-hidden="true">{r.flag}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate" style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: t.ink }}>{r.name}</span>
+                    {probed?.active && <span className="rounded-full px-1.5 flex-shrink-0" style={{ fontFamily: FONT.prose, fontSize: 10, fontWeight: 700, lineHeight: '16px', color: '#fff', background: t.live }}>in use</span>}
+                  </div>
+                  <div className="truncate" style={{ fontFamily: FONT.prose, fontSize: 11, color: r.note ? inkOn(t, t.warn, 0.4) : t.inkDim }}>
+                    {r.note ?? `${ga} of ${PRODUCTS.length} products`}
+                    {probed?.warm != null && <span style={{ color: t.inkDim }}> · {fmtMs(probed.warm)}</span>}
+                  </div>
+                </div>
+              </div>
+              {PRODUCTS.map((p) => <AvailCell key={p.id} t={t} state={r.cells[p.id]} product={p} region={r} />)}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 px-1" style={{ fontFamily: FONT.prose, fontSize: 11, color: t.inkDim }}>
+        <span className="inline-flex items-center gap-1.5"><span className="rounded-full" style={{ width: 10, height: 10, background: t.pass }} /> generally available</span>
+        <span className="inline-flex items-center gap-1.5"><span className="rounded-full" style={{ width: 10, height: 10, background: `${t.warn}1f`, border: `1.5px solid ${t.warn}` }} /> available, some features missing</span>
+        <span className="inline-flex items-center gap-1.5"><span className="rounded-full" style={{ width: 10, height: 2, background: t.inkFaint }} /> not available today</span>
+      </div>
+      <p style={{ fontFamily: FONT.prose, fontSize: 11, lineHeight: 1.5, color: t.inkFaint, marginTop: 10 }}>
+        What is generally available as of {fmtDate(SNAPSHOT)}. A dash means not available today, not "never" — confirm
+        a region with your Palo Alto Networks team before committing to it.
+      </p>
+    </div>
+  )
+}
+
+function ViewPills({ t, view, setView }) {
+  const items = [{ id: 'latency', label: 'Round trip', Icon: Zap }, { id: 'avail', label: 'Products by region', Icon: LayoutGrid }]
+  return (
+    <div role="tablist" aria-label="Regions view" className="flex items-center gap-1.5 mb-3">
+      {items.map(({ id, label, Icon }) => {
+        const on = view === id
+        return (
+          <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setView(id)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 ${focusCls}`}
+                  style={{
+                    height: 30, fontFamily: FONT.prose, fontSize: 12, fontWeight: 600,
+                    color: on ? '#fff' : t.inkDim, background: on ? deepBand(t.live) : t.sunken,
+                    border: `1px solid ${on ? 'transparent' : t.hairline}`, boxShadow: on ? `0 4px 12px ${t.live}40` : 'none',
+                  }}>
+            <Icon size={12} aria-hidden="true" /> {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── the panel and its pill ──────────────────────────────────────────────────
 
-function Panel({ t, probe, anchor, onClose }) {
+function Panel({ t, probe, anchor, onClose, view, setView }) {
   const reduce = useReducedMotion()
   const ref = useRef(null)
   const [pos, setPos] = useState(null)
+  const avail = view === 'avail'
   const s = summarize(probe.result)
   const running = probe.state === 'running'
 
@@ -254,8 +353,9 @@ function Panel({ t, probe, anchor, onClose }) {
   }, [onClose, anchor])
 
   const max = Math.max(1, ...(s?.ranked ?? []).map((r) => Math.max(r.cold_ms ?? 0, r.warm ?? 0)))
-  const title = running ? 'Probing four regions…' : s?.fastest ? 'Where AIRS answers fastest' : probe.state === 'error' ? 'The probe failed' : 'Four AIRS regions'
-  const sub = running ? 'Four plain requests to each endpoint, in parallel — about 3 seconds'
+  const title = avail ? 'Which AIRS products run where' : running ? 'Probing four regions…' : s?.fastest ? 'Where AIRS answers fastest' : probe.state === 'error' ? 'The probe failed' : 'Four AIRS regions'
+  const sub = avail ? `${PRODUCTS.length} products across ${AVAIL.length} regions · generally available as of ${fmtDate(SNAPSHOT)}`
+    : running ? 'Four plain requests to each endpoint, in parallel — about 3 seconds'
     : probe.state === 'error' ? probe.error
     : probe.result?.at ? `Measured at ${new Date(probe.result.at).toLocaleTimeString()} from this portal's server`
     : 'Network round trip from this portal to each endpoint'
@@ -283,12 +383,12 @@ function Panel({ t, probe, anchor, onClose }) {
             <div className="truncate" style={{ fontFamily: FONT.display, fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1.15, marginTop: 2 }} aria-live="polite">{title}</div>
             <div className="truncate" title={sub} style={{ fontFamily: FONT.prose, fontSize: 11.5, color: 'rgba(255,255,255,0.9)', marginTop: 1 }}>{sub}</div>
           </div>
-          <button type="button" onClick={probe.run} disabled={running}
+          {!avail && <button type="button" onClick={probe.run} disabled={running}
                   className="inline-flex items-center gap-1.5 rounded-full px-3 flex-shrink-0 disabled:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                   style={{ height: 30, fontFamily: FONT.prose, fontSize: 12, fontWeight: 700, color: shade(t.live, 0.45), background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
             {running ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={12} aria-hidden="true" />}
             {running ? 'Probing' : probe.result ? 'Probe again' : 'Probe'}
-          </button>
+          </button>}
           <button type="button" onClick={onClose} aria-label="Close"
                   className="grid place-items-center rounded-full flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                   style={{ width: 30, height: 30, ...bandGlass }}>
@@ -298,6 +398,8 @@ function Panel({ t, probe, anchor, onClose }) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-4 pb-4" style={{ scrollbarGutter: 'stable' }}>
+        <ViewPills t={t} view={view} setView={setView} />
+        {avail ? <Availability t={t} s={s} /> : <>
         {s?.fastest && s.active && !running && (
           <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: s.active.id === s.fastest.id ? '1fr' : '1fr 1fr' }}>
             {s.active.id !== s.fastest.id && <AnswerTile t={t} kind="fastest" r={s.fastest} />}
@@ -337,6 +439,7 @@ function Panel({ t, probe, anchor, onClose }) {
           from your browser. The first request opens a connection; the rest reuse it, as a long-running app does. Every AIRS scan from
           this portal pays the warm round trip to the region in use.
         </p>
+        </>}
       </div>
     </motion.div>,
     document.body,
@@ -352,6 +455,7 @@ export function RegionsButton({ t, variant = 'band' }) {
   const probe = useProbe()
   const iconOnly = useWidgetFit() >= 4
   const [open, setOpen] = useState(false)
+  const [view, setView] = useState('latency')
   const anchor = useRef(null)
   const s = summarize(probe.result)
   const running = probe.state === 'running'
@@ -363,7 +467,7 @@ export function RegionsButton({ t, variant = 'band' }) {
 
   return (
     <>
-      <Tip title="Where AIRS answers from" text="Round trip from this portal's server to each Prisma AIRS region — and which one it uses">
+      <Tip title="Where AIRS answers from" text="Round trip from this portal's server to each Prisma AIRS region, which one it uses, and which AIRS products are available in each">
         <button ref={anchor} type="button" onClick={toggle} aria-expanded={open} aria-haspopup="dialog"
                 aria-label={iconOnly ? (running ? 'Probing AIRS regions' : measured ? `AIRS ${a.code} ${fmtMs(a.warm)}` : 'AIRS regions') : undefined}
                 className={pillClass(band)}
@@ -378,7 +482,7 @@ export function RegionsButton({ t, variant = 'band' }) {
             : 'AIRS regions')}
         </button>
       </Tip>
-      <AnimatePresence>{open && <Panel key="regions" t={t} probe={probe} anchor={anchor} onClose={close} />}</AnimatePresence>
+      <AnimatePresence>{open && <Panel key="regions" t={t} probe={probe} anchor={anchor} onClose={close} view={view} setView={setView} />}</AnimatePresence>
     </>
   )
 }
