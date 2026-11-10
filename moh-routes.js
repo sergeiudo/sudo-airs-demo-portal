@@ -84,7 +84,9 @@ const REPLAY_FILE = 'moh-replay.json'
 // SCM tenant's key would be sent to the wrong gateway and 401.
 // strictOpenAiCompliance:false is what makes hook_results (the AIRS guardrail
 // verdict) appear on ALLOWED responses too, not just blocks.
-function buildAigwClient(configId, { metadata, cacheForceRefresh = true } = {}) {
+// traceId → x-portkey-trace-id. Sent by the caller so several prompts of one
+// chat session group under one trace; omitted, the gateway mints one per request.
+function buildAigwClient(configId, { metadata, cacheForceRefresh = true, traceId = null } = {}) {
   if (!ENV.apiKey) throw new Error('AIGW_API_KEY not set')
   const opts = {
     apiKey: ENV.apiKey,
@@ -94,6 +96,7 @@ function buildAigwClient(configId, { metadata, cacheForceRefresh = true } = {}) 
   if (configId) opts.config = configId
   if (cacheForceRefresh) opts.cacheForceRefresh = true
   if (metadata) opts.metadata = metadata // v3.x: constructor option, no .withOptions()
+  if (traceId) opts.traceID = traceId    // SDK option name is traceID (capital ID)
   return new Portkey(opts)
 }
 

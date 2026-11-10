@@ -975,8 +975,13 @@ app.post('/api/chat', async (req, res) => {
     // handing the attack library a set of live tools by default would change
     // what every other payload in the pillar does.
     mcpEnabled = false, mcpServer = 'auto',
+    // One id per console chat session, sent as x-portkey-trace-id on the AI-GW
+    // backend so every prompt of the session groups under one gateway trace.
+    sessionTraceId = null,
   } = req.body
   if (!message) return res.status(400).json({ error: 'message is required' })
+  // Header value from the browser: keep it to a plain token of sane length.
+  const gwTraceId = typeof sessionTraceId === 'string' && /^[A-Za-z0-9._:-]{8,100}$/.test(sessionTraceId) ? sessionTraceId : null
   // t0 for the whole request — the drawer's total is this clock, not a sum.
   const tl = new Timeline()
 
@@ -1033,6 +1038,7 @@ app.post('/api/chat', async (req, res) => {
             const { configId } = resolveAigwConfig(airsEnabled)
             const client = buildAigwClient(configId, {
               metadata: { demo: 'api-intercept-mcp', _user: 'sudo-airs-demo-portal', lane: airsEnabled ? 'airs' : 'none' },
+              traceId: gwTraceId,
             })
             // No server routed → a plain turn. An empty tools array with
             // tool_choice set is a request some providers reject outright.
@@ -1136,7 +1142,7 @@ app.post('/api/chat', async (req, res) => {
     }
 
     try {
-      const g = await tl.span('gateway_call', 'SCM AI-GW call', () => callScmGateway(llmInput, resolvedModelId, airsEnabled),
+      const g = await tl.span('gateway_call', 'SCM AI-GW call', () => callScmGateway(llmInput, resolvedModelId, airsEnabled, gwTraceId),
         { lane: airsEnabled ? 'protected' : 'unprotected' })
       // What happened inside the gateway, from its own hook timestamps.
       for (const seg of g.gateway?.breakdown?.segments ?? []) {
@@ -1703,11 +1709,12 @@ app.get('/api/redteam/scan/:id/attack/:attackId', async (req, res) => {
 //
 // On this tenant a blocked request returns HTTP 200 with the content replaced,
 // so the verdict is read from the hook results rather than caught as an error.
-async function callScmGateway(prompt, modelId, airsEnabled) {
+async function callScmGateway(prompt, modelId, airsEnabled, traceId = null) {
   const model = modelId || `${SCM_ENV.bedrockSlug}/${SCM_MODELS[0].id}`
   const { configId, mode } = resolveAigwConfig(airsEnabled)
   const client = buildAigwClient(configId, {
     metadata: { demo: 'api-intercept', _user: 'sudo-airs-demo-portal', lane: airsEnabled ? 'airs' : 'none' },
+    traceId,
   })
 
   const t0 = Date.now()

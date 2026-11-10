@@ -27,6 +27,16 @@ function makeErrorMessage(blockReason) {
   }
 }
 
+// One conversation id per chat session, W3C-shaped (32 hex) so the gateway's
+// OpenTelemetry export keeps it. Sent on every /api/chat call; the AI-GW
+// backend forwards it as x-portkey-trace-id, so all prompts of a session group
+// under one gateway trace. clearChat (New session, target switch) mints a new one.
+function newSessionTraceId() {
+  const b = new Uint8Array(16)
+  crypto.getRandomValues(b)
+  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+}
+
 const WELCOME = {
   id: 'welcome',
   role: 'system',
@@ -40,6 +50,7 @@ export function useAttackSimulator() {
   const [messages, setMessages] = useState([WELCOME])
   const [activeTelemetry, setActiveTelemetry] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [sessionTraceId, setSessionTraceId] = useState(newSessionTraceId)
 
   // /api/chat answers before the AIRS report is fetched — the report is
   // display-only, and waiting for it made a block take 2-3x longer than the
@@ -98,6 +109,7 @@ export function useAttackSimulator() {
           attackMeta: attackMeta ?? null,
           mcpEnabled,
           mcpServer,
+          sessionTraceId,
         }),
       })
 
@@ -144,7 +156,7 @@ export function useAttackSimulator() {
     } finally {
       setIsLoading(false)
     }
-  }, [isProtected, hydrateReports])
+  }, [isProtected, hydrateReports, sessionTraceId])
 
   // MCP attacks route through /api/mcp/invoke → real MCP server + real AIRS two-stage scan
   const sendMcpAttack = useCallback(async (attack, backend, modelId) => {
@@ -263,7 +275,8 @@ export function useAttackSimulator() {
   const clearChat = useCallback(() => {
     setMessages([{ ...WELCOME, timestamp: new Date().toISOString() }])
     setActiveTelemetry(null)
+    setSessionTraceId(newSessionTraceId())
   }, [])
 
-  return { messages, activeTelemetry, isLoading, sendAttack, sendMessage, clearChat }
+  return { messages, activeTelemetry, isLoading, sendAttack, sendMessage, clearChat, sessionTraceId }
 }
