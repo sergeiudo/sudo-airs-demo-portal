@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronRight, FileText, ShieldCheck, ShieldX, AlertTriangle, Brain, Wrench,
-  Route, ListTree, Server, Globe, Copy, Check, Activity, Ban, Crosshair, ChevronDown,
+  Route, ListTree, Server, Globe, Copy, Check, Activity, Ban, Crosshair, ChevronDown, ExternalLink,
 } from 'lucide-react'
 import { Languages, RotateCcw, Loader2 } from 'lucide-react'
 import { FONT, label as LBL, SEVERITY, VERDICT_META, verdictOf, glass, bloom } from './tokens'
@@ -159,12 +159,24 @@ const FAULT_REMEDIES = [
   },
   {
     id: 'bedrock-sts',
-    match: /security token included in the request is invalid|ExpiredToken|InvalidClientTokenId|UnrecognizedClientException/i,
+    // "is expired" is the message an aged-out key actually returns; "is invalid"
+    // is a mangled or revoked one. Both mean: mint a fresh set.
+    match: /security token included in the request is (invalid|expired)|ExpiredToken|InvalidClientTokenId|UnrecognizedClientException/i,
     title: 'AWS credentials have expired',
     local: {
-      why: 'The AWS keys in .env are ASIA… STS credentials, which are short-lived. All three values must be refreshed together.',
-      cmd: 'AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN',
-      after: 'Paste a fresh set into .env and restart the Express server.',
+      why: 'The AWS keys in .env are temporary (ASIA…) credentials from the AWS console and last about one hour. No long-lived key can be created in this account, so mint a fresh set from CloudShell — all three values are replaced together.',
+      // Steps instead of one command: the keys are minted in the browser
+      // (CloudShell) and land in .env on the laptop via the clipboard, so a
+      // secret never passes through a chat or the shell history.
+      link: { label: 'Open AWS CloudShell (us-west-2)', href: 'https://us-west-2.console.aws.amazon.com/cloudshell/home?region=us-west-2' },
+      steps: [
+        { label: 'In CloudShell — print the keys, then select and copy the 4 lines', cmd: 'aws configure export-credentials --format env-no-export' },
+        { label: 'On the laptop, from the portal root — write them into .env from the clipboard and test one Bedrock call', cmd: 'bash .claude/skills/ec2-deploy/scripts/aws-temp-creds.sh --test' },
+        { label: 'Restart Express — it reads .env only at startup', cmd: 'lsof -ti tcp:3001 | xargs kill -9; npm run dev' },
+      ],
+      // The quick path: export in a laptop terminal and start the portal from it.
+      alt: { label: 'Or — terminal export: run this in CloudShell, paste the 4 export lines into the laptop terminal, and start npm run dev from that terminal', cmd: 'aws configure export-credentials --format env' },
+      after: 'Exported keys beat .env (dotenv never overwrites), so when they expire, unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN or open a fresh terminal. EC2 never needs this — it uses its instance role.',
     },
     remote: {
       why: 'This host uses its IAM instance role for Bedrock rather than keys, so an expired-token error points at the role or its trust policy, not at .env.',
@@ -221,16 +233,32 @@ function FaultNotice({ t, reason }) {
           <p style={{ fontFamily: FONT.prose, fontSize: 11, lineHeight: 1.55, color: t.inkDim }}>
             {fix.why}
           </p>
-          <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl"
-               style={{ background: t.codeBg, border: `1px solid ${t.hairline}` }}>
-            <span className="flex-1 min-w-0" style={{
-              fontFamily: FONT.mono, fontSize: 11.5, color: t.ink,
-              wordBreak: 'break-all', userSelect: 'all',
-            }}>
-              {fix.cmd}
-            </span>
-            <Copyable t={t} text={fix.cmd} />
-          </div>
+          {fix.link && (
+            <a href={fix.link.href} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-full"
+               style={{ fontFamily: FONT.prose, fontSize: 11, fontWeight: 600, color: t.ink, background: t.codeBg, border: `1px solid ${t.hairline}` }}>
+              {fix.link.label}<ExternalLink size={11} aria-hidden="true" />
+            </a>
+          )}
+          {[...(fix.steps ?? [{ cmd: fix.cmd }]), ...(fix.alt ? [{ ...fix.alt, alt: true }] : [])].map((step, i, all) => (
+            <div key={i} className={step.alt ? 'mt-3' : 'mt-2'}>
+              {step.label && (
+                <p className="mb-1" style={{ fontFamily: FONT.prose, fontSize: 10.5, lineHeight: 1.45, color: t.inkDim }}>
+                  {step.alt ? '' : all.filter((x) => !x.alt).length > 1 ? `${i + 1}. ` : ''}{step.label}
+                </p>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                   style={{ background: t.codeBg, border: `1px solid ${t.hairline}` }}>
+                <span className="flex-1 min-w-0" style={{
+                  fontFamily: FONT.mono, fontSize: 11.5, color: t.ink,
+                  wordBreak: 'break-all', userSelect: 'all',
+                }}>
+                  {step.cmd}
+                </span>
+                <Copyable t={t} text={step.cmd} />
+              </div>
+            </div>
+          ))}
           <p className="mt-1.5" style={{ fontFamily: FONT.prose, fontSize: 10, lineHeight: 1.5, color: t.inkFaint }}>
             {fix.after}
           </p>

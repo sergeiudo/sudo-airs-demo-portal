@@ -57,6 +57,17 @@ const hueOf = (name) => {
 
 const slugOf = (s) => /(@[\w-]+)/.exec(String(s || ''))?.[1] ?? null
 const ADC_LOGIN_CMD = 'gcloud auth application-default login'
+// Local Bedrock runs on temporary console keys (~1 h); no long-lived key can be
+// created in the account. Minted in CloudShell, moved to .env via the clipboard.
+const AWS_CLOUDSHELL_URL = 'https://us-west-2.console.aws.amazon.com/cloudshell/home?region=us-west-2'
+const AWS_RENEW_STEPS = [
+  { label: 'In CloudShell — print the keys, copy the 4 lines:', cmd: 'aws configure export-credentials --format env-no-export' },
+  { label: 'On the laptop, from the portal root — write them into .env and test:', cmd: 'bash .claude/skills/ec2-deploy/scripts/aws-temp-creds.sh --test' },
+  { label: 'Restart Express — it reads .env only at startup:', cmd: 'lsof -ti tcp:3001 | xargs kill -9; npm run dev' },
+]
+// The quick path: 4 `export` lines pasted into a laptop terminal. Exported vars
+// beat .env, so npm run dev started from that terminal uses them directly.
+const AWS_EXPORT_CMD = 'aws configure export-credentials --format env'
 const focusCls = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
 
 // ─── pieces ──────────────────────────────────────────────────────────────────
@@ -322,6 +333,37 @@ export function LaunchModelPicker({ t, backend, model, onModelChange, target }) 
             Credentials login; EC2 uses Workload Identity Federation off its instance role and never expires.
             <CopyCmd t={t} cmd={ADC_LOGIN_CMD} />
             <span className="block mt-1.5" style={{ fontSize: 10.5 }}>Then restart the Express server — GoogleAuth caches its client.</span>
+          </Footnote>
+        </div>
+      )}
+
+      {backend === 'bedrock' && (
+        <div className="mt-2">
+          <Footnote t={t} icon={KeyRound} tone="#FF9900" title="Auth → 1-hour AWS keys · renew if FAULT">
+            Local uses temporary keys from the AWS console (ASIA…, about 1 hour) — the account allows no
+            long-lived key. EC2 uses its IAM instance role and never expires.
+            <a href={AWS_CLOUDSHELL_URL} target="_blank" rel="noopener noreferrer"
+               className={`flex w-fit items-center gap-1 mt-1.5 font-semibold ${focusCls}`}
+               style={{ color: t.isLight ? shade('#FF9900', 0.35) : '#FF9900' }}>
+              Open AWS CloudShell (us-west-2) <ArrowUpRight size={11} aria-hidden="true" />
+            </a>
+            {AWS_RENEW_STEPS.map((s, i) => (
+              <div key={i} className="mt-1.5">
+                <span className="block" style={{ fontSize: 10.5 }}>{i + 1}. {s.label}</span>
+                <CopyCmd t={t} cmd={s.cmd} />
+              </div>
+            ))}
+            <span className="block mt-2.5 font-semibold" style={{ fontSize: 10.5 }}>
+              Or — terminal export (quick, this terminal only)
+            </span>
+            <span className="block mt-1" style={{ fontSize: 10.5 }}>
+              In CloudShell, then paste the 4 export lines into the laptop terminal and start npm run dev from it:
+            </span>
+            <CopyCmd t={t} cmd={AWS_EXPORT_CMD} />
+            <span className="block mt-1.5" style={{ fontSize: 10.5 }}>
+              Exported keys beat .env, so when they expire, unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+              or open a fresh terminal.
+            </span>
           </Footnote>
         </div>
       )}
