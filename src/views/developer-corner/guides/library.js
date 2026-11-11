@@ -29,8 +29,8 @@ export const LIBRARY = [
       { type: 'links', title: 'AI Gateway developer docs — guardrails and observability', items: pick('agGuardrails', 'gwDevGuard', 'agGuardCaps', 'agGuardList', 'agPii', 'agByo', 'agOrgGuard', 'agLogs', 'agTraces', 'agMetadata', 'agFeedback', 'agLogsExport', 'agOtel', 'agOtelExport') },
       { type: 'links', title: 'AI Gateway developer docs — MCP, agents and coding agents', items: pick('agMcp', 'agMcpQuick', 'gwDevMcp', 'agMcpRegistry', 'agMcpAuth', 'agMcpCas', 'agMcpGuard', 'agMcpRegApi', 'agAgentGw', 'agAgentQuick', 'agCoding', 'agClaudeCode', 'agCodex', 'agCursor', 'agOpenaiAgents', 'agLanggraph') },
       { type: 'links', title: 'AI Gateway developer docs — governance and admin', items: pick('agKeys', 'agKeyRotation', 'gwDevJwt', 'agBudget', 'agRate', 'agPolicies', 'agDefaultCfg', 'agSavedOnly', 'agCatalog', 'agSecretRefs', 'agRoles', 'agSso', 'agScim', 'agCie', 'agAudit', 'agKms') },
-      { type: 'links', title: 'AI Model Security', items: pick('msInstall', 'msScanning', 'msApi', 'msSdk', 'msListScans', 'msErrors', 'scmTokens') },
-      { type: 'links', title: 'AI Red Teaming', items: pick('rtmIntro', 'rtmOverview', 'rtmCreateTgt', 'rtmCreateScan', 'rtmChannels', 'rtmErrors', 'ghRtClient') },
+      { type: 'links', title: 'AI Model Security', items: pick('msInstall', 'msScanning', 'msApi', 'msSdk', 'msListScans', 'msErrors', 'scmTokens', 'aimsRelNotes') },
+      { type: 'links', title: 'AI Red Teaming', items: pick('rtmIntro', 'rtmOverview', 'rtmCreateTgt', 'rtmCreateScan', 'rtmChannels', 'rtmErrors', 'rtmAdapters', 'airtRelNotes', 'ghRtClient') },
       { type: 'links', title: 'Integrations and samples', items: pick('ghIntegrations', 'litellm', 'kong', 'ghN8n', 'ghNemo', 'ghRag') },
       {
         type: 'callout', tone: 'warn', title: 'Links that no longer work',

@@ -464,7 +464,7 @@ export const IMPL_INTEGRATIONS = [
     sub: 'Hooks that scan prompts and tool calls on the laptop, and what each client can actually block',
     minutes: 13,
     level: 'Build',
-    docs: pick('imIntClaude', 'imIntCodex', 'imIntIde', 'imIntIndex', 'ghIntAnthropic', 'ghIntCodex', 'ghIntCline', 'ghIntCursor', 'ghIntWindsurf', 'ghIntHooks', 'ghIntHooksSec', 'ccHooksRef', 'ccMcpRef', 'codexHooksRef', 'cursorHooksRef', 'cascadeHooksRef', 'pdfRuntimeAes'),
+    docs: pick('imIntClaude', 'imIntCodex', 'imIntIde', 'imIntIndex', 'ghIntAnthropic', 'ghIntCodex', 'ghIntCline', 'ghIntCursor', 'ghIntWindsurf', 'ghIntHooks', 'ghIntHooksSec', 'ccHooksRef', 'ccMcpRef', 'codexHooksRef', 'cursorHooksRef', 'cascadeHooksRef', 'devinLocalCustom', 'pdfRuntimeAes'),
     blocks: [
       {
         type: 'prose',
@@ -589,7 +589,8 @@ export const IMPL_INTEGRATIONS = [
             ] },
           { title: 'Windsurf: .windsurf/hooks.json',
             text: 'Five scripts. Only the pre-hooks can stop anything (exit 2). `post_mcp_tool_use` and `post_cascade_response` log the verdict and, with `show_output: true`, show it in the Cascade panel; the model never sees it, and stopping a bad MCP result needs an MCP proxy. Missing credentials make the pre-hooks block and the post-hooks exit 1. Scans are grouped per Cascade `trajectory_id`.',
-            code: [{ id: 'json', lang: 'json', file: '.windsurf/hooks.json', code: WINDSURF_JSON }] },
+            code: [{ id: 'json', lang: 'json', file: '.windsurf/hooks.json', code: WINDSURF_JSON }],
+            note: 'Checked 2026-11-11: Windsurf\'s editor is now Devin Desktop, Cascade is labelled the legacy agent, and the Cascade hooks page redirects away. The new Devin Local agent takes hooks in Claude Code\'s shape (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`; exit 2 blocks) from `.devin/hooks.v1.json`, and also picks up hooks from `.claude/settings.json` — so the Claude Code scripts above are the likelier starting point there. The `.windsurf/hooks.json` file applies to Cascade; not tested from this portal.' },
         ],
       },
       {
