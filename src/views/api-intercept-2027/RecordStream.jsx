@@ -158,6 +158,17 @@ const FAULT_REMEDIES = [
     },
   },
   {
+    // Must sit BEFORE bedrock-sts: same AWS wording, different culprit. Through
+    // the SCM AI-GW, Portkey wraps the provider's answer as "bedrock error: …"
+    // with "provider":"bedrock" — that is the gateway's @sudo-bedrock
+    // integration being rejected by AWS. The gateway key is fine (the guardrail
+    // already ran), and neither .env keys nor the instance role are involved.
+    id: 'aigw-bedrock-integration',
+    match: /(bedrock error:[^"]*(security token|ExpiredToken|InvalidClientTokenId|UnrecognizedClient|AccessDenied|not authorized))|("provider"\s*:\s*"bedrock"[\s\S]*security token)/i,
+    title: 'The AI Gateway\'s Bedrock integration was rejected by AWS',
+    local: null, // same remedy on every host — filled in below
+  },
+  {
     id: 'bedrock-sts',
     // "is expired" is the message an aged-out key actually returns; "is invalid"
     // is a mangled or revoked one. Both mean: mint a fresh set.
@@ -185,6 +196,21 @@ const FAULT_REMEDIES = [
     },
   },
 ]
+
+// The gateway-side remedy is identical on the laptop and on EC2: the fix is in
+// AWS IAM and the SCM console, not on the host that made the call.
+const AIGW_BEDROCK_FIX = {
+  why: 'This failed inside the SCM AI Gateway, not on this host: the gateway\'s @sudo-bedrock integration presented AWS credentials that AWS refused. Your gateway API key is fine — the AIRS guardrail ran before the model call. Refreshing .env keys or the instance role will not help, and Vertex models on the same gateway are unaffected.',
+  link: { label: 'Open AWS CloudShell (us-west-2)', href: 'https://us-west-2.console.aws.amazon.com/cloudshell/home?region=us-west-2' },
+  steps: [
+    { label: 'Does the integration\'s role still exist?', cmd: 'aws iam get-role --role-name AirsGwBedrockInvokeRole --query Role.Arn --output text' },
+    { label: 'Anything attached that revokes its sessions?', cmd: 'aws iam list-attached-role-policies --role-name AirsGwBedrockInvokeRole' },
+    { label: 'Who changed it recently (IAM events are logged in us-east-1)', cmd: 'aws cloudtrail lookup-events --region us-east-1 --lookup-attributes AttributeKey=ResourceName,AttributeValue=AirsGwBedrockInvokeRole --max-results 20 --query "Events[].[EventTime,EventName,Username]" --output table' },
+  ],
+  after: 'Role missing or revoked → restore it (trust 039293892788:role/AirsGwEnterpriseRole + the External ID). Role intact → the gateway stopped refreshing its STS session (no new AssumeRole in us-west-2 CloudTrail). Proven fix: add a second External ID to the role\'s trust policy, set it on the sudo-bedrock integration in SCM and save — that forces a fresh AssumeRole — then drop the old ID. Recreating the integration is the fallback.',
+}
+FAULT_REMEDIES.find((r) => r.id === 'aigw-bedrock-integration').local = AIGW_BEDROCK_FIX
+FAULT_REMEDIES.find((r) => r.id === 'aigw-bedrock-integration').remote = AIGW_BEDROCK_FIX
 
 function FaultNotice({ t, reason }) {
   const text = String(reason || '').trim()
