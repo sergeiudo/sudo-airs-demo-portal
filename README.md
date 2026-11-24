@@ -162,7 +162,7 @@ FINOPS_BUDGET_TOKEN_CAP=1000                     # per-model token cap for the B
 ```
 > **`PORTKEY_ADMIN_API_KEY`** is a separate **admin/org service key** (distinct from `PORTKEY_API_KEY`, which is a workspace chat key). Create it in the Portkey console under Organization → API Keys with analytics-read and API-key-management scopes. Without it the Budget tab shows a setup screen. `FINOPS_BUDGET_TOKEN_CAP` sets each model's token cap (default 1000); the dev-chat console fires real Vertex/Bedrock calls so cap exposure is predictable and bounded.
 > **Multi-provider gateway:** set `PORTKEY_BEDROCK_SLUG` to a Bedrock integration (the demo uses **AWS Assumed Role** auth, region `us-west-2`) to add selectable Bedrock models — Claude, DeepSeek, Qwen, Kimi, Nemotron — alongside Vertex Gemini. The same native/AIRS guardrail configs route to whichever provider the picked model belongs to (the model id is sent as `@integration/model`). Each model must be provisioned on the integration in Portkey **and** granted in *AWS Bedrock → Model access*.
-> The MCP Registry tab also needs an MCP server registered in your Portkey **MCP Registry** (the demo uses CoinGecko). A full annotated walkthrough — integration, keys, guardrails, configs, the 3 flows, and the MCP flow — lives in [`docs/portkey-setup-deck.html`](docs/portkey-setup-deck.html) (open in a browser).
+> The MCP Registry tab also needs an MCP server registered in your Portkey **MCP Registry** (the demo uses CoinGecko).
 
 #### Model Scanner *(optional)*
 ```
